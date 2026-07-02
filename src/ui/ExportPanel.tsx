@@ -1,16 +1,19 @@
 /**
  * Excel/Bundle 產出面板 + 憲章 #6 + #9 release gate
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Menu, Order } from "../domain/models";
 import { checkReleaseGate } from "../domain/release-gate";
 import { writeStatsExcel } from "../output/stats-excel";
 import { writeOverviewExcel } from "../output/overview-excel";
 import { writePayoutExcel } from "../output/payout-excel";
+import { writePeriodSummaryExcel } from "../output/period-summary-excel";
 import { buildBundleZip } from "../output/bundle";
 import { downloadBlob, ordersForOutput } from "../output/utils";
 import { extractLabels } from "../output/label-data";
 import { renderLabelsToPDF } from "../output/label-renderer";
+import { filterByPeriod, periodLabel, type Period } from "../domain/period";
+import { PeriodPicker } from "./PeriodPicker";
 
 export function ExportPanel({
   orders,
@@ -20,46 +23,59 @@ export function ExportPanel({
   menu: Menu;
 }) {
   const gate = checkReleaseGate(orders);
-  const eligibleOrders = ordersForOutput(orders);
+  const [period, setPeriod] = useState<Period>({ type: "all" });
   const [busy, setBusy] = useState<string | null>(null);
 
+  const filtered = useMemo(() => filterByPeriod(orders, period), [orders, period]);
+  const eligibleOrders = ordersForOutput(filtered);
+  const label = periodLabel(period);
   const today = new Date().toISOString().slice(0, 10);
+  const suffix = period.type === "all" ? today : label;
 
   async function handleStats() {
     setBusy("stats");
-    const buf = writeStatsExcel(orders, menu);
-    downloadBlob(buf, `出爐統計_${today}.xlsx`);
+    const buf = writeStatsExcel(filtered, menu);
+    downloadBlob(buf, `出爐統計_${suffix}.xlsx`);
     setBusy(null);
   }
   async function handleOverview() {
     setBusy("overview");
-    const buf = writeOverviewExcel(orders, menu);
-    downloadBlob(buf, `出貨總覽_${today}.xlsx`);
+    const buf = writeOverviewExcel(filtered, menu);
+    downloadBlob(buf, `出貨總覽_${suffix}.xlsx`);
     setBusy(null);
   }
   async function handlePayout() {
     setBusy("payout");
-    const buf = writePayoutExcel(orders, menu);
-    downloadBlob(buf, `分潤統計_${today}.xlsx`);
+    const buf = writePayoutExcel(filtered, menu);
+    downloadBlob(buf, `分潤統計_${suffix}.xlsx`);
+    setBusy(null);
+  }
+  async function handlePeriodSummary() {
+    setBusy("period");
+    const buf = writePeriodSummaryExcel(filtered, menu, period);
+    downloadBlob(buf, `期間摘要_${suffix}.xlsx`);
     setBusy(null);
   }
   async function handleLabels() {
     setBusy("labels");
-    const labels = extractLabels(orders, menu);
+    const labels = extractLabels(filtered, menu);
     const pdf = renderLabelsToPDF(labels);
-    downloadBlob(new Uint8Array(pdf), `標籤_${today}.pdf`, "application/pdf");
+    downloadBlob(new Uint8Array(pdf), `標籤_${suffix}.pdf`, "application/pdf");
     setBusy(null);
   }
   async function handleBundle() {
     setBusy("bundle");
-    const zip = await buildBundleZip(orders, menu);
-    downloadBlob(zip, `narcos-oven-${today}.zip`, "application/zip");
+    const zip = await buildBundleZip(filtered, menu);
+    downloadBlob(zip, `narcos-oven-${suffix}.zip`, "application/zip");
     setBusy(null);
   }
 
   return (
     <section className="mb-6">
-      <h2 className="text-xl font-bold mb-2">📊 產出 Excel</h2>
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+        <h2 className="text-xl font-bold">📊 產出 Excel</h2>
+        <PeriodPicker orders={orders} period={period} onChange={setPeriod} />
+      </div>
 
       {!gate.can_release && (
         <div className="mb-3 bg-red-100 border-2 border-red-500 rounded p-3 text-sm text-red-900">
@@ -79,7 +95,7 @@ export function ExportPanel({
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
         <ExportButton
           disabled={!gate.can_release}
           busy={busy === "stats"}
@@ -102,6 +118,19 @@ export function ExportPanel({
           hint="總+淨營收並列"
         />
         <ExportButton
+          disabled={!gate.can_release || period.type === "all"}
+          busy={busy === "period"}
+          onClick={handlePeriodSummary}
+          label="期間摘要"
+          hint={
+            period.type === "month"
+              ? "每天一列"
+              : period.type === "quarter" || period.type === "year"
+              ? "每月一列"
+              : "選期間才可用"
+          }
+        />
+        <ExportButton
           disabled={!gate.can_release}
           busy={busy === "labels"}
           onClick={handleLabels}
@@ -119,7 +148,9 @@ export function ExportPanel({
       </div>
 
       <div className="mt-2 text-xs text-gray-500">
-        本次可入 Excel 的訂單：{eligibleOrders.length} 筆（confirmed + 有 batchDate）
+        {period.type === "all"
+          ? `本次可入 Excel 的訂單：${eligibleOrders.length} 筆（confirmed + 有 batchDate）`
+          : `期間 ${label} 內符合條件：${eligibleOrders.length} 筆 / 全域 ${orders.length} 筆`}
       </div>
     </section>
   );
