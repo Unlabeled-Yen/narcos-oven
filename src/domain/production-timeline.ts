@@ -1,22 +1,29 @@
 /**
- * Stage 11：製作時程回推
- * 對應 docs/spec.md §11.2 + R3-3 (雇主待補 lead_time_days)
+ * Stage 11：製作時程回推 (M6.5 修正版)
  *
  * 對某個 batch_date、依 items 中每個 atom 的 lead_time_days
  * 產生「哪天要開始做什麼」的行事曆。
+ *
+ * 邏輯升級（M6.5、Yen 反映）：
+ *   - lead_time_days = 0 **不是「現貨」**、是「當天可製作、不需提前」
+ *   - 用 production_time_formula 判斷是否真的是副產品（時間 = 0）
+ *   - 副產品 (例：瑕疵小脆捲) 才是「無需製作」
+ *   - 香料堅果醬 lead=0 但仍需 2 hr 製作、應顯示「當日製作」+ 估計時間
  */
 import type { Menu, Order } from "./models";
+import { batchesAndHoursForAtom } from "./production-time";
 
 export type ProductionStep = {
-  date: string;                    // YYYY-MM-DD
-  action: string;                  // 「開始做 X」「烤 Y」
+  date: string;
+  action: string;
   atomId: string;
   quantity: number;
+  estimated_hours?: number;
 };
 
 export type ProductionTimeline = {
   batch_date: string;
-  steps: ProductionStep[];         // 依日期升序
+  steps: ProductionStep[];
 };
 
 export function productionTimeline(
@@ -25,8 +32,8 @@ export function productionTimeline(
   menu: Menu
 ): ProductionTimeline {
   const leadTimes = menu.product_lead_time ?? {};
+  const timeFormula = menu.production_time_formula ?? {};
 
-  // 收集該批的 atom 累積
   const atomTotals = new Map<string, number>();
   for (const o of orders) {
     if (o.batchDate !== batchDate) continue;
@@ -42,23 +49,55 @@ export function productionTimeline(
   const steps: ProductionStep[] = [];
 
   for (const [atomId, qty] of atomTotals) {
+    const formula = timeFormula[atomId];
+    // 用 production_time_formula 精確計算該 atom 需要的時間
+    const { hours: productionHours } = formula
+      ? batchesAndHoursForAtom(atomId, qty, menu)
+      : { hours: 0 };
+
+    // 判斷是否為副產品（時間公式為 0、例：瑕疵小脆捲）
+    const isBySideProduct = formula
+      ? Object.values(formula.hours_by_batch_count).every((h) => h === 0)
+      : false;
+
+    if (isBySideProduct) {
+      // 副產品、只顯示出貨、無需製作
+      steps.push({
+        date: batchDate,
+        action: `出貨 ${atomId}（副產品、無需獨立製作）`,
+        atomId,
+        quantity: qty,
+      });
+      continue;
+    }
+
     const lead = leadTimes[atomId] ?? 1;
-    // 出貨日 D → 開始做 D-lead
-    const start = new Date(batch);
-    start.setDate(start.getDate() - lead);
-    steps.push({
-      date: fmt(start),
-      action:
-        lead === 0
-          ? `準備 ${atomId}（現貨或當日）`
-          : `開始製作 ${atomId}（出貨前 ${lead} 天）`,
-      atomId,
-      quantity: qty,
-    });
-    // 出貨當日
+    if (lead === 0) {
+      // 當日製作、但仍需製作步驟
+      steps.push({
+        date: batchDate,
+        action: `⏰ 當日製作 ${atomId}（出貨當天上午、估 ${productionHours.toFixed(1)} hr）`,
+        atomId,
+        quantity: qty,
+        estimated_hours: productionHours,
+      });
+    } else {
+      // 出貨前 N 天開始做
+      const start = new Date(batch);
+      start.setDate(start.getDate() - lead);
+      steps.push({
+        date: fmt(start),
+        action: `開始製作 ${atomId}（出貨前 ${lead} 天、估 ${productionHours.toFixed(1)} hr）`,
+        atomId,
+        quantity: qty,
+        estimated_hours: productionHours,
+      });
+    }
+
+    // 出貨當日（副產品已在上面處理）
     steps.push({
       date: batchDate,
-      action: `出貨 ${atomId}`,
+      action: `📦 出貨 ${atomId}`,
       atomId,
       quantity: qty,
     });
