@@ -80,6 +80,15 @@ export function AppShell({
     { key: "menu", label: "菜單" },
   ];
 
+  // 次頁：不在設計稿頂端 5 項內、但需可一鍵到達（統計三頁 + 產能 + 標籤）
+  const secondary: { key: NavKey; label: string }[] = [
+    { key: "payout", label: "分潤統計" },
+    { key: "stats", label: "出爐統計" },
+    { key: "kol", label: "KOL ROI" },
+    { key: "capacity", label: "產能設定" },
+    { key: "labels", label: "出貨標籤" },
+  ];
+
   const ActivePage = PAGES[active];
   const pageProps: PageProps = {
     orders,
@@ -130,6 +139,27 @@ export function AppShell({
           }
         />
         <WarningTape />
+
+        {/* 次頁 nav 列：統計三頁 + 產能 + 標籤（設計稿頂端 nav 未含、但需可達） */}
+        <div className="flex items-center gap-1 flex-wrap px-6 py-2 border-b border-narcos-line2 bg-[#0A0A0C]">
+          <span className="font-mono text-[10px] text-narcos-mut3 tracking-wideMono mr-2">更多 ·</span>
+          {secondary.map((item) => {
+            const isActive = item.key === active;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => navigate(item.key)}
+                className={`font-notoTc font-bold text-[12px] px-3 py-[5px] cursor-pointer ${
+                  isActive ? "text-[#111]" : "text-narcos-mut hover:text-narcos-ink"
+                }`}
+                style={isActive ? { background: "var(--acc, #F5D400)" } : undefined}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
 
         {error && (
           <div className="mx-6 mt-4 bg-narcos-redTint border border-narcos-red p-3 font-mono text-[12px] text-narcos-red">
