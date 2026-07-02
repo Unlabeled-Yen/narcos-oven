@@ -2,8 +2,29 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "PingFang TC",
-    Roboto, sans-serif;
+:root {
+  --acc: #f5d400;
+  --pad: 18px;
+  --grain: 1;
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.2;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #0d0d0f;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2a30;
 }
