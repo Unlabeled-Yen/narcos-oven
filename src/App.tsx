@@ -13,6 +13,7 @@ import { OrdersTable } from "./ui/OrdersTable";
 import { PendingBucket } from "./ui/PendingBucket";
 import { ConservationBanner } from "./ui/ConservationBanner";
 import { ImportSummaryModal } from "./ui/ImportSummaryModal";
+import { ExportPanel } from "./ui/ExportPanel";
 
 const menu = loadMenu(menuYamlText);
 
@@ -217,6 +218,8 @@ export default function App() {
               Excel/PDF 產出 disabled。點右下的匯入紀錄再叫出 modal。
             </div>
           )}
+
+          <ExportPanel orders={allOrders} menu={menu} />
 
           <section className="mb-6">
             <h2 className="text-xl font-bold mb-2">

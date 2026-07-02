@@ -26,3 +26,6 @@ data/backups/
 
 # 補：TypeScript incremental build cache
 tsconfig.tsbuildinfo
+
+# verify-m4 產出的樣本 Excel（本地檢查用、不進 git）
+test-output/
