@@ -110,6 +110,10 @@ type Order = {
     | "pending_amount"          // 金額對不上（防護 #2）
     | "pending_product"         // 品項找不到 SKU
     | "pending_kol_choice"      // KOL「擇一」品項待填實際選擇（雇主 confirm #7）
+    | "disappeared_pending_resolution"  // M3：上次匯入沒看到、雇主待拍板（憲章 #9）
+    | "change_pending_resolution"       // M3：關鍵欄位變動、雇主待拍板（憲章 #10）
+    | "shipped"                 // M3：雇主拍板為已出貨、進歷史
+    | "canceled"                // M3：雇主拍板為已取消、倒扣出爐量
   batchDate: string | null      // "2026-07-07"
   recipient: {
     name: string | null         // 賣貨便打星「王*晨」、面交全名
@@ -133,6 +137,42 @@ type Order = {
   }
   createdAt: string
   updatedAt: string
+
+  // M3 生命週期欄（憲章 #9 #10）
+  first_seen_at: string          // 首次被匯入系統的時間
+  last_seen_at: string           // 最近一次匯入還在的時間
+  disappeared_at: string | null  // 上次匯入沒看到就標記
+  disappeared_resolution:        // 雇主拍板結果
+    | "shipped" | "canceled" | "kept_active" | null
+  frozen_after_label_print: bool // 標籤印出後、拒絕自動變動
+  changes: OrderChange[]         // 每次匯入若關鍵欄位變動就 append
+}
+
+type OrderChange = {
+  imported_at: string
+  import_run_id: string
+  fields: Record<string, {from: unknown, to: unknown}>
+  resolved: "accepted" | "rejected" | "reprint_needed" | null
+}
+
+// M3：每次「雇主拖檔進來」是一個 ImportRun
+type ImportRun = {
+  id: string                   // "run-2026-07-15T14:32Z"
+  imported_at: string
+  source_files: string[]
+  diff: {
+    added: string[]              // order_ids（情境 A）
+    payment_confirmed: string[]  // 情境 B - 已自動更新
+    fields_changed: string[]     // 情境 D - 需雇主確認
+    disappeared: string[]        // 情境 C - 需雇主逐一分類
+    unchanged: string[]          // 情境 E - skip
+  }
+  resolutions: Record<string, {  // 雇主對 disappeared / fields_changed 的分類
+    order_id: string
+    resolution: "shipped" | "canceled" | "kept_active" | "accept_change" | "reject_change" | "reprint"
+    resolved_at: string
+  }>
+  fully_resolved_at: string | null   // 全處理完的時間；未 null 前 Excel/PDF 產出 disabled
 }
 
 type OrderItem = {
@@ -229,21 +269,47 @@ type PendingReason = {
     │
     │ 標籤編號：labelCount=2 → "2-1", "2-2"
     ▼
-[Stage 6: Persistence (upsert)]                     雇主 R2-2
-    │ orders 表 UNIQUE(order_id)
+[Stage 6a: Diff 偵測]                             甜點店隨時接單 → 每次匯入都要 diff
+    │ ImportRun 開始：source_files, imported_at
     │
-    │ 【付款狀態 upsert】——同 order_id 二次匯入時：
-    │   舊 c5 = "訂單成立(未付款)" & 新 c5 = "付款完成"
-    │     → 該 order 從 pending_payment 移到 confirmed
-    │     → 重跑 Stage 2-5 產生 items/labelCount/batchDate
-    │     → 記錄 payment_confirmed_at timestamp
-    │   舊/新狀態相同 → skip
+    │ new_ids   = 新匯出的 order_id 集合
+    │ db_active = 系統中「賣貨便 & status ∈ {confirmed, pending_*, pending_payment}」
     │
-    │ 寫進 SQLite：Order + PendingReason + Batch
+    │ added        = new_ids − db_active         情境 A: 新單
+    │ still_here   = new_ids ∩ db_active         情境 B/D/E 候選
+    │ disappeared  = db_active − new_ids         情境 C: 消失（最危險）
+    ▼
+[Stage 6b: Upsert 分派]
+    │ 新單（added）  → INSERT + Stage 2-5 pipeline
     │
-    │ 【防護 #1 總數守恆律】：
-    │   raw_input_count === Σ(confirmed) + Σ(all pending) + Σ(kol_shipped)
-    │ 【新增守恆律】upsert 前後全域 order_id 集合必須嚴格擴增（不能減少）
+    │ still_here 每一筆比對：
+    │   ├─ c5 從未付款 → 付款   → auto-update，重跑 Stage 2-5    情境 B
+    │   ├─ c5 沒變 & 關鍵欄位沒變        → skip                    情境 E idempotent
+    │   └─ 關鍵欄位變動 (c12/c22/c17/c18-20/c21/c11 收件門市)
+    │        → 進 「change_pending」桶                          情境 D
+    │        → 【憲章 #10】絕不 auto-overwrite 已排入批次的訂單
+    ▼
+[Stage 6c: 消失處理]                              憲章 #9 訂單消失守恆律
+    │ disappeared 每一筆 → status = "disappeared_pending_resolution"
+    │                    → 進「消失待確認桶」
+    │
+    │ 雇主必須逐一拍板（不能靜默）：
+    │   [已出貨] → status = shipped、離開 active、進歷史
+    │            如已印過標籤 → 保留、繼續有效
+    │   [已取消] → status = canceled、倒扣出爐量、分潤扣款
+    │            如已印過標籤 → 標「已作廢」、詢問是否重印同批他單
+    │   [暫留]  → 維持 active、下次匯入若再出現則恢復
+    │
+    │ 【憲章 #9】此桶未清空前、Excel/PDF 產出 disabled
+    ▼
+[Stage 6d: Persistence]
+    │ orders 表 UNIQUE(order_id)、含生命週期欄
+    │ import_runs 表：每次匯入的完整 diff 摘要（可回溯）
+    │ change_history 表：每筆訂單的欄位變動歷程
+    │
+    │ 【防護 #1 總數守恆律】
+    │ 【新增 #9 訂單消失守恆律】disappeared 桶必須清空才能產出
+    │ 【新增 #10 資訊變動守恆律】關鍵欄位變動 flag、不 auto-overwrite
     ▼
 [Stage 7: Output]
     │ 出爐統計 xlsx / 出貨總覽 xlsx / 分潤 xlsx / 標籤 PDF
@@ -269,7 +335,7 @@ type PendingReason = {
 
 | 防護 # | 名稱 | 實作位置 |
 |---|---|---|
-| 1 | 總數守恆律 | Stage 6 persistence 後執行 SQL count 驗證 |
+| 1 | 總數守恆律 | Stage 6d persistence 後執行 SQL count 驗證 |
 | 2 | 金額對帳 | Stage 3 每筆訂單 pipeline 內執行 |
 | 3 | 雙軌獨立驗證 | Output stage 前跑 `verify_stats.py` 從 raw fixture 重算一次 |
 | 4 | Schema-forced LLM | 無適用（Web app 端無 LLM 呼叫） |
@@ -277,6 +343,8 @@ type PendingReason = {
 | 6 | 離手前核對頁 | Output UI 元件 `<ReleaseGate />` |
 | 7 | Regression fixture | 每批處理完自動 dump `fixtures/YYYY-MM-roundN/`；tests 每次跑一輪 |
 | 8 | LLM 答案附引用 | MCP tool 返回結構強制含 `sourceOrderIds` |
+| **9** | **訂單消失守恆律**（M3 新增） | Stage 6c；disappeared 桶未清空前 Excel/PDF 產出 disabled；`import_runs.disappeared_resolved` 全 true 才能繼續 |
+| **10** | **資訊變動守恆律**（M3 新增） | Stage 6b；關鍵欄位 (c12/c22/c17/c18-20/c21/c11) 變動一律進 change_pending 桶、絕不 auto-overwrite；已印過標籤的訂單（`frozen_after_label_print`）拒絕變動、需雇主明確「接受並重印」 |
 
 ---
 
