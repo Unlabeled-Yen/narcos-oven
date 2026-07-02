@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-"""narcos-oven 資料完整分析器 v3
+"""narcos-oven 資料完整分析器 v4
 - atom / product id 全中文
 - 從三個 xlsx 歸納：品項、組合、通路自由文字、KOL 合成邊界、異常
-- 輸出 docs/data-analysis.md 與 data/menu.yaml (v0 draft)
+- ⚠️ 不再覆寫 data/menu.yaml（Yen 手改為主）
+- 只輸出 docs/data-analysis.md（含「建議 menu.yaml 修改」一節）
 
 用法：
     python3 scripts/analyze.py [fixture_dir]
@@ -576,11 +577,16 @@ if not unrecognized:
 for u in unrecognized:
     yaml_lines.append(f"# - \"{u['name']}\" (出現 {u['count']} 次)")
 
-with open(OUT_YAML, "w", encoding="utf-8") as f:
+# ⚠️ v4 起不再直接覆寫 menu.yaml（Yen 手改為主）
+# 改成寫到 docs/menu-proposal.yaml 讓 Yen review 後手動 merge
+OUT_PROPOSAL = ROOT / "docs" / "menu-proposal.yaml"
+with open(OUT_PROPOSAL, "w", encoding="utf-8") as f:
+    f.write("# ⚠️ 這是 analyzer 從本批資料歸納的建議 menu 結構，僅供參考。\n")
+    f.write("# 請 Yen 對照 data/menu.yaml 手動 merge、不要直接複製覆蓋。\n\n")
     f.write("\n".join(yaml_lines))
 
 print(f"✅ {OUT_MD}")
-print(f"✅ {OUT_YAML}")
+print(f"✅ {OUT_PROPOSAL}（建議、不直接覆寫 data/menu.yaml）")
 print()
 print(f"統計（v3，全中文 identifier）：")
 print(f"  賣貨便訂單: {len(seller_buy_orders)} 筆")

@@ -1,10 +1,19 @@
-# narcos-oven 官方菜單對照表 v0 (draft)
-# 生成自 fixtures/2026-07-round1/ 三個 xlsx。以賣貨便命名為權威。
+# narcos-oven 官方菜單對照表 v1
+# ================================================================
+# 依據 2026-07-02 雇主 confirm 定案。以菜單圖片為權威（fixtures/2026-07-round1/菜單/）。
 # 這是主軌 deterministic pipeline 的唯一 source of truth。
+#
 # 識別碼慣例：atoms + products id 全中文（短、無空白/標點）
-# Yen 每次遇到新品項、由 Yen 更新此檔；AI 只做「建議」不做「決策」。
+#
+# lookup 演算法（見 docs/spec.md §3 Stage 2）：
+#   1. 先跟 aliases[] 做 exact 字串 match（100% 命中最快）
+#   2. 若無命中，跟 match_signature 做「中文字 include/exclude」判定
+#   3. display_name 純粹是 UI 顯示用
+#
+# Yen 手改此檔為主。analyzer 不覆蓋此檔、只在 data-analysis.md 提「建議修改」。
+# ================================================================
 
-# ---------- ATOMS ---------- 
+# ---------- ATOMS ----------
 # 最小可拆解單位。出爐統計以 atom 為單位計數。
 atoms:
   肉桂捲: {unit: 顆}
@@ -16,168 +25,379 @@ atoms:
   白玉原味巴斯克: {unit: 顆}
   芝麻巴斯克: {unit: 顆}
   白玉芝麻巴斯克: {unit: 顆}
-  焙茶栗子巴斯克: {unit: 顆}
-  焙茶巴斯克: {unit: 顆}
+  焙茶巴斯克: {unit: 顆}         # 純焙茶（無栗子）
+  焙茶栗子巴斯克: {unit: 顆}     # 焙茶+栗子
   白玉烏龍茶巴斯克: {unit: 顆}
-  香料堅果醬40ml: {unit: 罐}
+  香料堅果醬40ml: {unit: 罐}      # 舊品項、菜單已無、留兼容
   香料堅果醬90ml: {unit: 罐}
   香料堅果醬240ml: {unit: 罐}
   瑕疵小脆捲10顆: {unit: 包}
 
-# ---------- PRODUCTS ---------- 
-# 上架 SKU。display_name = 賣貨便權威命名；aliases = 別名（面交/KOL/舊稱）
+# ---------- PRODUCTS ----------
+# 上架 SKU。display_name = 中文精簡版；aliases = 賣貨便原文/面交/KOL/舊稱
+# match_signature = 中文字 include/exclude 給 pipeline 自動 lookup
 products:
-  原味巴斯克:
-    display_name: "無麩 ✦ 原味巴斯克 六寸 原味巴斯克"
-    category: single   # combo | single
-    aliases: []
+
+  # ============ 四入禮盒組（menu 2.jpg）============
+
+  經典肉桂捲4入:
+    display_name: 經典肉桂捲 四入禮盒
+    category: combo
+    price: 400
+    cost: null                # 待雇主補
     contains:
-      - {atom: 原味巴斯克, count: 1}
-    price: 650
-    cost: null   # 待 Yen 補（淨營收用）
-    seen_count: 5
+      - {atom: 肉桂捲, count: 4}
+    aliases:
+      - 經典肉桂捲 四入禮盒（四顆肉桂捲）    # 賣貨便
+      - 肉桂捲四入 $400                       # 面交 c7
+      - ◆ 四入肉桂捲                          # KOL 口語
+      - ◆ 肉桂捲 4 入                         # KOL 口語
+    match_signature:
+      include: [經典肉桂捲, 四入]
+      exclude: [蘋果, 組合, 六入]
+    seen_count: 28
+
+  蘋果肉桂捲4入:
+    display_name: 蘋果肉桂捲 四入禮盒
+    category: combo
+    price: 480
+    cost: null
+    contains:
+      - {atom: 蘋果肉桂捲, count: 4}
+    aliases:
+      - 蘋果肉桂捲 禮盒組 四入禮盒（四顆蘋果肉桂捲）
+      - 蘋果肉桂捲四入 $480
+      - ◆ 蘋果肉桂捲 4 入
+      - ◆ 四入蘋果捲
+    match_signature:
+      include: [蘋果肉桂捲, 四入禮盒]
+      exclude: [組合, 六入]
+    seen_count: 3
 
   方型3入_焦糖蘋果:
-    display_name: "我想要組合 ✦ 方型禮盒組 三入組（兩顆肉桂捲＋一顆焦糖蘋果肉桂麵包）"
-    category: combo   # combo | single
-    aliases:
-      - "我想要組合 ✦ 四入禮盒組 三入組（兩顆肉桂捲＋一顆焦糖蘋果肉桂麵包）"
+    display_name: 方型三入 肉桂×2＋焦糖蘋果
+    category: combo
+    price: 400
+    cost: null
     contains:
       - {atom: 肉桂捲, count: 2}
       - {atom: 焦糖蘋果肉桂麵包, count: 1}
-    price: 400
-    cost: null   # 待 Yen 補（淨營收用）
+    aliases:
+      - 我想要組合 ✦ 方型禮盒組 三入組（兩顆肉桂捲＋一顆焦糖蘋果肉桂麵包）
+      - 我想要組合 ✦ 四入禮盒組 三入組（兩顆肉桂捲＋一顆焦糖蘋果肉桂麵包）
+      - 三入組 → 肉桂捲x2 ＋焦糖蘋果肉桂麵包x1 $400
+    match_signature:
+      include: [三入組, 肉桂捲, 焦糖蘋果]
+      exclude: [芝麻, 鳳梨]
     seen_count: 10
 
-  混合5入含醬:
-    display_name: "我想要組合 ✧ 長型禮盒組 三顆肉桂捲＋兩顆蘋果肉桂捲＋一個香料堅果醬"
-    category: combo   # combo | single
+  方型3入_芝麻磅:
+    display_name: 方型三入 肉桂×2＋芝麻焙茶磅
+    category: combo
+    price: 560
+    cost: null
+    contains:
+      - {atom: 肉桂捲, count: 2}
+      - {atom: 芝麻焙茶奶酥磅蛋糕, count: 1}
     aliases:
-      - "我想要組合 ✧ 六入禮盒組 三顆肉桂捲＋兩顆蘋果肉桂捲＋一個香料堅果醬"
+      - 我想要組合 ✦ 方型禮盒組 三入組（兩顆肉桂捲＋一顆芝麻焙茶奶酥磅蛋糕）
+      - 我想要組合 ✦ 四入禮盒組 三入組（兩顆肉桂捲＋一顆芝麻焙茶奶酥磅蛋糕）
+      - 三入組 → 肉桂捲x2 ＋芝麻焙茶奶酥磅蛋糕x1 $560
+    match_signature:
+      include: [三入組, 肉桂捲, 芝麻焙茶]
+      exclude: [鳳梨, 焦糖]
+    seen_count: 0                # 本批沒賣，預留
+
+  方型3入_鳳梨磅:
+    display_name: 方型三入 肉桂×2＋鳳梨肉桂磅
+    category: combo
+    price: 560
+    cost: null
+    contains:
+      - {atom: 肉桂捲, count: 2}
+      - {atom: 鳳梨肉桂奶酥磅蛋糕, count: 1}
+    aliases:
+      - 我想要組合 ✦ 方型禮盒組 三入組（兩顆肉桂捲＋一顆鳳梨肉桂奶酥磅蛋糕）
+      - 我想要組合 ✦ 四入禮盒組 三入組（兩顆肉桂捲＋一顆鳳梨肉桂奶酥磅蛋糕）
+      - 三入組 → 肉桂捲x2 ＋鳳梨肉桂奶酥磅蛋糕x1 $560
+    match_signature:
+      include: [三入組, 肉桂捲, 鳳梨肉桂]
+      exclude: [芝麻, 焦糖]
+    seen_count: 0                # 本批沒賣但菜單有
+
+  兩入磅蛋糕:
+    display_name: 兩入磅蛋糕 芝麻焙茶+鳳梨肉桂
+    category: combo
+    price: 720
+    cost: null
+    contains:
+      - {atom: 芝麻焙茶奶酥磅蛋糕, count: 1}
+      - {atom: 鳳梨肉桂奶酥磅蛋糕, count: 1}
+    aliases: []                  # 本批未見、待實際出現後補
+    match_signature:
+      include: [兩入, 芝麻焙茶, 鳳梨肉桂]
+      exclude: [肉桂捲]
+    seen_count: 0                # 本批沒賣但菜單有
+
+  # ============ 六入禮盒組（menu 3.jpg）============
+
+  經典肉桂捲5入含醬:
+    display_name: 經典肉桂捲六入 肉桂×5＋堅果醬
+    category: combo
+    price: 600
+    cost: null
+    contains:
+      - {atom: 肉桂捲, count: 5}
+      - {atom: 香料堅果醬90ml, count: 1}
+    aliases:
+      - 經典肉桂捲 六入禮盒（五顆肉桂捲＋一盒香料堅果醬）
+      - 肉桂捲x5 ＋香料堅果醬x1 $600
+    match_signature:
+      include: [經典肉桂捲, 六入禮盒, 香料堅果醬]
+      exclude: [蘋果]
+    seen_count: 3
+
+  蘋果肉桂捲5入含醬:
+    display_name: 蘋果肉桂捲六入 蘋果×5＋堅果醬
+    category: combo
+    price: 700
+    cost: null
+    contains:
+      - {atom: 蘋果肉桂捲, count: 5}
+      - {atom: 香料堅果醬90ml, count: 1}
+    aliases:
+      - 蘋果肉桂捲 禮盒組 六入禮盒（五顆蘋果肉桂捲＋一盒香料堅果醬）
+      - 蘋果肉桂捲x5 ＋香料堅果醬x1 $700
+    match_signature:
+      include: [蘋果肉桂捲, 六入禮盒, 香料堅果醬]
+      exclude: []
+    seen_count: 1
+
+  混合5入含醬:
+    display_name: 無敵組盒 肉桂×3＋蘋果×2＋堅果醬
+    category: combo
+    price: 640
+    cost: null
     contains:
       - {atom: 肉桂捲, count: 3}
       - {atom: 蘋果肉桂捲, count: 2}
       - {atom: 香料堅果醬90ml, count: 1}
-    price: 640
-    cost: null   # 待 Yen 補（淨營收用）
+    aliases:
+      - 我想要組合 ✧ 長型禮盒組 三顆肉桂捲＋兩顆蘋果肉桂捲＋一個香料堅果醬
+      - 我想要組合 ✧ 六入禮盒組 三顆肉桂捲＋兩顆蘋果肉桂捲＋一個香料堅果醬
+      - 肉桂捲x3 ＋蘋果肉桂捲x2＋香料堅果醬x1 $640
+    match_signature:
+      include: [三顆肉桂捲, 兩顆蘋果肉桂捲, 香料堅果醬]
+      exclude: []
     seen_count: 7
 
-  焙茶栗子巴斯克:
-    display_name: "無麩 ✦ 焙茶栗子巴斯克 六寸 焙茶巴斯克（純焙茶，不添加栗子）"
-    category: single   # combo | single
-    aliases: []
-    contains:
-      - {atom: 焙茶栗子巴斯克, count: 1}
-    price: 880
-    cost: null   # 待 Yen 補（淨營收用）
-    seen_count: 1
-
-  白玉原味巴斯克:
-    display_name: "無麩 ✦ 原味巴斯克 六寸 白玉原味巴斯克"
-    category: single   # combo | single
-    aliases: []
-    contains:
-      - {atom: 白玉原味巴斯克, count: 1}
-    price: 750
-    cost: null   # 待 Yen 補（淨營收用）
-    seen_count: 1
-
-  白玉烏龍茶巴斯克:
-    display_name: "無麩 ✦ 白玉烏龍茶巴斯克 六寸 白玉烏龍茶巴斯克"
-    category: single   # combo | single
-    aliases: []
-    contains:
-      - {atom: 白玉烏龍茶巴斯克, count: 1}
-    price: 980
-    cost: null   # 待 Yen 補（淨營收用）
-    seen_count: 2
-
-  經典肉桂捲4入:
-    display_name: "經典肉桂捲 四入禮盒（四顆肉桂捲）"
-    category: combo   # combo | single
-    aliases: []
-    contains:
-      - {atom: 肉桂捲, count: 4}
-    price: 400
-    cost: null   # 待 Yen 補（淨營收用）
-    seen_count: 28
-
-  經典肉桂捲5入含醬:
-    display_name: "經典肉桂捲 六入禮盒（五顆肉桂捲＋一盒香料堅果醬）"
-    category: combo   # combo | single
-    aliases: []
-    contains:
-      - {atom: 肉桂捲, count: 5}
-      - {atom: 香料堅果醬90ml, count: 1}
-    price: 600
-    cost: null   # 待 Yen 補（淨營收用）
-    seen_count: 3
-
-  芝麻巴斯克:
-    display_name: "無麩 ✦ 芝麻巴斯克 六寸 芝麻巴斯克"
-    category: single   # combo | single
-    aliases: []
-    contains:
-      - {atom: 芝麻巴斯克, count: 1}
-    price: 720
-    cost: null   # 待 Yen 補（淨營收用）
-    seen_count: 3
-
-  蘋果肉桂捲4入:
-    display_name: "蘋果肉桂捲 禮盒組 四入禮盒（四顆蘋果肉桂捲）"
-    category: combo   # combo | single
-    aliases: []
-    contains:
-      - {atom: 蘋果肉桂捲, count: 4}
-    price: 480
-    cost: null   # 待 Yen 補（淨營收用）
-    seen_count: 3
-
-  蘋果肉桂捲5入含醬:
-    display_name: "蘋果肉桂捲 禮盒組 六入禮盒（五顆蘋果肉桂捲＋一盒香料堅果醬）"
-    category: combo   # combo | single
-    aliases: []
-    contains:
-      - {atom: 蘋果肉桂捲, count: 5}
-      - {atom: 香料堅果醬90ml, count: 1}
-    price: 700
-    cost: null   # 待 Yen 補（淨營收用）
-    seen_count: 1
-
-  長型3入_三磅:
-    display_name: "我想要組合 ✧ 六入禮盒組 各一✧ 蘋果肉桂麵包＋芝麻焙茶奶酥＋鳳梨肉桂磅蛋糕"
-    category: combo   # combo | single
-    aliases: []
-    contains:
-      - {atom: 焦糖蘋果肉桂麵包, count: 1}
-      - {atom: 芝麻焙茶奶酥磅蛋糕, count: 1}
-      - {atom: 鳳梨肉桂奶酥磅蛋糕, count: 1}
-    price: 920
-    cost: null   # 待 Yen 補（淨營收用）
-    seen_count: 1
-
   長型4入_兩磅:
-    display_name: "我想要組合 ✧ 長型禮盒組 四入組（兩顆肉桂捲＋芝麻焙茶奶酥＋鳳梨肉桂磅蛋糕"
-    category: combo   # combo | single
-    aliases: []
+    display_name: 無敵組盒 肉桂×2＋芝麻焙茶磅＋鳳梨肉桂磅
+    category: combo
+    price: 920
+    cost: null
     contains:
       - {atom: 肉桂捲, count: 2}
       - {atom: 芝麻焙茶奶酥磅蛋糕, count: 1}
       - {atom: 鳳梨肉桂奶酥磅蛋糕, count: 1}
-    price: 920
-    cost: null   # 待 Yen 補（淨營收用）
+    aliases:
+      - 我想要組合 ✧ 長型禮盒組 四入組（兩顆肉桂捲＋芝麻焙茶奶酥＋鳳梨肉桂磅蛋糕
+      - 我想要組合 ✧ 長型禮盒組 四入組（兩顆肉桂捲＋芝麻焙茶奶酥＋鳳梨肉桂磅蛋糕）
+    match_signature:
+      include: [兩顆肉桂捲, 芝麻焙茶奶酥, 鳳梨肉桂磅蛋糕]
+      exclude: [蘋果]
     seen_count: 1
 
-  香料堅果醬90ml:
-    display_name: "不加油 ✦ 香料堅果醬 90ml 香料堅果醬（玻璃罐裝）"
-    category: single   # combo | single
-    aliases: []
+  長型3入_三磅:
+    display_name: 無敵組盒 蘋果肉桂麵包＋芝麻焙茶磅＋鳳梨肉桂磅
+    category: combo
+    price: 920
+    cost: null
     contains:
-      - {atom: 香料堅果醬90ml, count: 1}
-    price: 200
-    cost: null   # 待 Yen 補（淨營收用）
+      - {atom: 焦糖蘋果肉桂麵包, count: 1}
+      - {atom: 芝麻焙茶奶酥磅蛋糕, count: 1}
+      - {atom: 鳳梨肉桂奶酥磅蛋糕, count: 1}
+    aliases:
+      - 我想要組合 ✧ 六入禮盒組 各一✧ 蘋果肉桂麵包＋芝麻焙茶奶酥＋鳳梨肉桂磅蛋糕
+    match_signature:
+      include: [蘋果肉桂麵包, 芝麻焙茶奶酥, 鳳梨肉桂磅蛋糕]
+      exclude: [肉桂捲]
+    seen_count: 1
+
+  # ============ 全植無麩質六吋巴斯克（menu 訂購方式.jpg）============
+
+  原味巴斯克:
+    display_name: 原味巴斯克
+    category: single
+    price: 650
+    cost: null
+    contains:
+      - {atom: 原味巴斯克, count: 1}
+    aliases:
+      - 無麩 ✦ 原味巴斯克 六寸 原味巴斯克
+      - 原味巴斯克 $650
+    match_signature:
+      include: [原味巴斯克]
+      exclude: [白玉, 焙茶, 芝麻, 烏龍]
+    seen_count: 5
+
+  白玉原味巴斯克:
+    display_name: 白玉原味巴斯克
+    category: single
+    price: 750           # 原味 650 + 白玉夾餡升級 100
+    cost: null
+    contains:
+      - {atom: 白玉原味巴斯克, count: 1}
+    aliases:
+      - 無麩 ✦ 原味巴斯克 六寸 白玉原味巴斯克
+    match_signature:
+      include: [白玉, 原味巴斯克]
+      exclude: [芝麻, 焙茶, 烏龍]
+    seen_count: 1
+
+  芝麻巴斯克:
+    display_name: 芝麻巴斯克
+    category: single
+    price: 720
+    cost: null
+    contains:
+      - {atom: 芝麻巴斯克, count: 1}
+    aliases:
+      - 無麩 ✦ 芝麻巴斯克 六寸 芝麻巴斯克
+      - 芝麻巴斯克 $720
+    match_signature:
+      include: [芝麻巴斯克]
+      exclude: [白玉]
     seen_count: 3
 
-# ---------- UNRECOGNIZED ---------- 
-# 以下字串 auto-mapper 沒歸類到：
-# ✅ 全部歸類完成
+  白玉芝麻巴斯克:
+    display_name: 白玉芝麻巴斯克
+    category: single
+    price: 820           # 芝麻 720 + 白玉 100
+    cost: null
+    contains:
+      - {atom: 白玉芝麻巴斯克, count: 1}
+    aliases: []          # 本批未見、預留
+    match_signature:
+      include: [白玉, 芝麻巴斯克]
+      exclude: []
+    seen_count: 0
+
+  焙茶巴斯克:              # 純焙茶（無栗子）——雇主 confirm #2 新增獨立品項
+    display_name: 焙茶巴斯克（純焙茶）
+    category: single
+    price: 880
+    cost: null
+    contains:
+      - {atom: 焙茶巴斯克, count: 1}
+    aliases:
+      - 焙茶巴斯克 $980       # ⚠️ 面交 c17 標「$980」但菜單是 $880，待再 confirm
+    match_signature:
+      include: [焙茶巴斯克]
+      exclude: [栗子, 白玉]
+    seen_count: 0            # 本批賣貨便沒賣，面交 c17 有 1 筆
+
+  焙茶栗子巴斯克:
+    display_name: 焙茶栗子巴斯克
+    category: single
+    price: 980              # ⚠️ 菜單是 $980，但賣貨便舊訂單看到 $880，待補問是否曾調價
+    cost: null
+    contains:
+      - {atom: 焙茶栗子巴斯克, count: 1}
+    aliases:
+      - 無麩 ✦ 焙茶栗子巴斯克 六寸 焙茶巴斯克（純焙茶，不添加栗子）   # ⚠️ 賣貨便原字串含糊
+    match_signature:
+      include: [焙茶栗子]
+      exclude: [白玉]
+    seen_count: 1
+
+  白玉烏龍茶巴斯克:
+    display_name: 白玉烏龍茶巴斯克
+    category: single
+    price: 980
+    cost: null
+    contains:
+      - {atom: 白玉烏龍茶巴斯克, count: 1}
+    aliases:
+      - 無麩 ✦ 白玉烏龍茶巴斯克 六寸 白玉烏龍茶巴斯克
+      - 白玉烏龍茶巴斯克 $980
+    match_signature:
+      include: [白玉烏龍茶巴斯克]
+      exclude: []
+    seen_count: 2
+
+  # ============ 香料堅果醬 ============
+
+  香料堅果醬90ml:
+    display_name: 香料堅果醬 90ml
+    category: single
+    price: 200
+    cost: null
+    contains:
+      - {atom: 香料堅果醬90ml, count: 1}
+    aliases:
+      - 不加油 ✦ 香料堅果醬 90ml 香料堅果醬（玻璃罐裝）
+      - 90ml 香料堅果醬 $200
+      - ◆ 香料堅果醬 90ml
+      - ◆ 香料堅果醬 90ml（腰果×夏威夷果×核桃，煙燻微辣款）
+    match_signature:
+      include: [香料堅果醬, 90ml]
+      exclude: [40ml, 240ml]
+    seen_count: 3
+
+  香料堅果醬240ml:
+    display_name: 香料堅果醬 240ml
+    category: single
+    price: 500
+    cost: null
+    contains:
+      - {atom: 香料堅果醬240ml, count: 1}
+    aliases:
+      - 240ml 香料堅果醬 $500
+    match_signature:
+      include: [香料堅果醬, 240ml]
+      exclude: [40ml, 90ml]
+    seen_count: 0            # 賣貨便本批沒賣、面交 c20 賣 6 罐
+
+  # ============ 其他 / 瑕疵 ============
+
+  瑕疵小脆捲10顆:
+    display_name: 瑕疵小脆捲 10 顆
+    category: single
+    price: 500
+    cost: null
+    contains:
+      - {atom: 瑕疵小脆捲10顆, count: 1}
+    aliases:
+      - 十顆瑕疵小脆捲（be.yourownsunshine） 10顆
+    match_signature:
+      include: [瑕疵小脆捲]
+      exclude: []
+    seen_count: 0            # 賣貨便本批沒直接對到、但參考檔案 7月7日出貨有一筆
+
+# ---------- CHANNELS ----------
+# 通路清單。待處理桶可新增。
+channels:
+  - id: 賣貨便
+    color: "#3b82f6"
+  - id: 面交_中壢
+    color: "#10b981"
+  - id: 面交_台中
+    color: "#10b981"
+  - id: 面交_其他
+    color: "#10b981"
+  - id: 宅配                # 冷凍宅配歸這
+    color: "#8b5cf6"
+  - id: KOL
+    color: "#f59e0b"
+  - id: 待分類              # 駐店、活動、私定進這、雇主手動分
+    color: "#ef4444"
+
+# ---------- LOGISTICS COST (v1 預設) ----------
+# 淨營收計算用。雇主之後給精確數字、Yen 改這裡。
+logistics_cost:
+  賣貨便_超商: 60             # 猜的、雇主待補
+  賣貨便_宅配: 130            # 猜的
+  面交: 0
+  宅配: 130
+  KOL: 60                     # 平均

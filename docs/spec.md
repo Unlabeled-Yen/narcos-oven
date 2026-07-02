@@ -99,14 +99,17 @@ type Product = {
 // 一筆訂單（不管從哪個通路來）
 type Order = {
   id: string                    // 賣貨便 c4，或 auto-generated (in-person-001)
-  channel: "賣貨便" | "面交" | "宅配" | "KOL" | "活動" | "待分類"
+  channel: "賣貨便" | "面交_中壢" | "面交_台中" | "面交_其他" | "宅配" | "KOL" | "待分類"
   status:
     | "confirmed"               // 主軌走完、進出爐統計
+    | "pending_payment"         // 賣貨便 c5 = 訂單成立(未付款)（雇主 confirm #3）
     | "pending_batch_date"      // 沒抓到出爐日
+    | "pending_conflict_date"   // c12 vs c28 日期衝突（雇主 confirm #4）
     | "pending_channel"         // 通路不確定
     | "pending_recipient"       // 收件人資訊不足
     | "pending_amount"          // 金額對不上（防護 #2）
     | "pending_product"         // 品項找不到 SKU
+    | "pending_kol_choice"      // KOL「擇一」品項待填實際選擇（雇主 confirm #7）
   batchDate: string | null      // "2026-07-07"
   recipient: {
     name: string | null         // 賣貨便打星「王*晨」、面交全名
@@ -156,13 +159,16 @@ type Batch = {
 type PendingReason = {
   orderId: string
   code:
+    | "PAYMENT_NOT_CONFIRMED"        // 未付款、暫不排程
     | "MISSING_BATCH_DATE"
+    | "CONFLICT_DATE_C12_C28"        // c12 選項 vs c28 備註日期衝突
     | "AMBIGUOUS_CHANNEL"
     | "UNKNOWN_PRODUCT"
     | "AMOUNT_MISMATCH"
     | "MISSING_RECIPIENT"
-  humanMessage: string          // "客人 6/29 下單但沒選指定出貨日"
-  suggestion?: string           // "建議歸類為 7/07 批次（同期最近排定日）"
+    | "KOL_CHOICE_UNRESOLVED"        // KOL 擇一品項待填
+  humanMessage: string
+  suggestion?: string
   suggestionConfidence: number  // 0-1
 }
 ```
@@ -179,17 +185,24 @@ type PendingReason = {
     ▼
 [Stage 1: Detect & Parse]
     │ 靠 sheet name / column header 判斷檔型
-    │ 賣貨便：合併「訂單延續行」；提取指定出貨日
+    │ 賣貨便：合併「訂單延續行」；提取指定出貨日；判付款狀態
     │ 面交：regex 解析 c2；checkbox 欄位轉品項數
-    │ KOL：c1/c2 為新一筆邊界
+    │ KOL：c1/c2 為新一筆邊界；判 c6 已寄出
     │
-    │  遇到解析失敗 → PendingReason
+    │ 【付款 filter】賣貨便 c5 !== "付款完成..."
+    │   → PendingReason(PAYMENT_NOT_CONFIRMED)   雇主 confirm #3
+    │
+    │ 【KOL c6 filter】c6 === True (已寄出)
+    │   → 標記 shipped、不進本批出爐量        雇主 confirm #6
     ▼
-[Stage 2: Menu Lookup（純字串 match）]
-    │ 對 menu.yaml 的 displayName + aliases 做 exact match
-    │ 拆解 combo 為 atoms
+[Stage 2: Menu Lookup（純字串 + signature match）]
+    │ 步驟：                                     雇主 confirm #10
+    │   1. 先跟 aliases[] 做 exact 字串 match
+    │   2. 若無命中，跟 match_signature 做「中文字 include/exclude」判定
+    │   3. 拆解 combo 為 atoms
     │
-    │  找不到 SKU → PendingReason(UNKNOWN_PRODUCT)
+    │ 找不到 SKU → PendingReason(UNKNOWN_PRODUCT)
+    │ KOL「擇一」品項 → PendingReason(KOL_CHOICE_UNRESOLVED)
     ▼
 [Stage 3: Validation（防護 #2 金額對帳）]
     │ 賣貨便：Σsubtotal + freight - discount === total ?
@@ -200,21 +213,38 @@ type PendingReason = {
     │ 面交：c2 regex 抓日期
     │ KOL：c4 datetime or 字串日期解析
     │
-    │  抓不到 → PendingReason(MISSING_BATCH_DATE)
+    │ 【c28 vs c12 衝突檢查】                    雇主 confirm #4
+    │   若 c28 regex 有日期 且 c12 也有出貨日 且 兩者不同
+    │     → PendingReason(CONFLICT_DATE_C12_C28)
+    │   若 c28 有日期但 c12 沒選 → 建議用 c28 日期進 MISSING_BATCH_DATE
+    │
+    │ 抓不到 → PendingReason(MISSING_BATCH_DATE)
     ▼
 [Stage 5: Recipient Grouping（標籤分盒用）]
     │ key = (batch_date, recipient_name)
-    │ 同 key 內多品項 → 2-1 / 2-2 / 2-3 編號
     │
+    │ 【標籤數】                                 雇主 confirm #1
+    │   賣貨便：labelCount = c22 （每箱一張）
+    │   面交/KOL：labelCount = 該筆品項數
+    │
+    │ 標籤編號：labelCount=2 → "2-1", "2-2"
     ▼
 [Stage 6: Persistence]
     │ 寫進 SQLite：Order + PendingReason + Batch
-    │ 觸發防護 #1（總數守恆律）：
-    │   raw_input_count === Σ(confirmed) + Σ(pending)
-    │
+    │ 【防護 #1 總數守恆律】：
+    │   raw_input_count === Σ(confirmed) + Σ(all pending) + Σ(kol_shipped)
     ▼
 [Stage 7: Output]
     │ 出爐統計 xlsx / 出貨總覽 xlsx / 分潤 xlsx / 標籤 PDF
+    │
+    │ 【分潤計算】                               雇主 confirm #5
+    │   總營收 = Σc21 （含運費、含買家實付）
+    │   淨營收 = 總營收 - Σ品項成本 - Σ包材 - Σ物流實付
+    │   （品項成本 & 物流實付見 menu.yaml logistics_cost，v1 用預設值）
+    │
+    │ 【標籤 PDF】                               雇主 confirm #8
+    │   熱感應標籤機格式（尺寸待補問）、v1 用 60mm × 90mm 縱向
+    │
     │ 產出前彈「離手前核對頁」（防護 #6）給人確認
 ```
 
@@ -365,13 +395,15 @@ Vite React + Tailwind + shadcn/ui。
 
 ---
 
-## 10. 尚未定案（待雇主 confirm）
+## 10. 尚未定案（待雇主第二輪 confirm）
 
-見 `docs/open-questions-for-boss.md`。動工前不能 assume 的：
+10 個主要問題已在 2026-07-02 confirm 完（見 `docs/CONFIRMED-BY-BOSS.md`）。剩下這些細節動工前可 assume 預設、後補：
 
-- c22 標籤數量語意
-- 面交 c17 焙茶命名衝突
-- 未付款訂單是否進出爐量
-- 標籤紙型規格
-
-其餘可 assume 預設值先動工，之後改 config。
+1. **焙茶栗子舊訂單 $880 vs 菜單 $980**：歷史調價還是資料錯？
+   → v1 保留兩價：menu.yaml 用 $980（菜單當前），對帳時用 c14（訂單當時價）
+2. **未付款訂單標記機制**：雇主怎麼在系統標記「已付款」？
+   → v1 假設每次重新匯出賣貨便 xlsx 會刷新 c5
+3. **熱感應標籤機規格**：機型、紙張尺寸？
+   → v1 預設 60mm × 90mm 縱向、單張生成 PDF
+4. **物流實際成本**：超商取貨、宅配、面交自取的實際店家付出金額
+   → v1 用 menu.yaml `logistics_cost` 預設值（超商 $60、宅配 $130）
