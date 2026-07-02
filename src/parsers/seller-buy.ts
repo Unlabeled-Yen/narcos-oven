@@ -219,6 +219,12 @@ function finalizeOrder(w: WipOrder, menu: Menu): Order {
   // ---- 決定 status（優先度：付款 > 品項未歸類 > 金額不符 > 缺出爐日）----
   const status: Order["status"] = deriveStatus(pendingReasons);
 
+  const now = new Date().toISOString();
+  const productKey = w.items
+    .filter((it) => !it.name.includes("指定出貨日"))
+    .map((it) => it.name)
+    .join("\n");
+
   return {
     id: w.order_id,
     channel: "賣貨便",
@@ -245,6 +251,23 @@ function finalizeOrder(w: WipOrder, menu: Menu): Order {
       rowIndex: w.rowIndex,
       rawStatus: w.status_raw,
     },
+    snapshot: {
+      c5_status: w.status_raw,
+      c11_conv_store: w.conv_store,
+      c12_product: productKey,
+      c17_freight: w.freight,
+      c18_discount_seller: 0, // 單獨欄記錄一起累加為 discount、diff 時全體比較
+      c19_discount_freight: 0,
+      c20_discount_platform: w.discount, // 統一放這（M3 保守做法）
+      c21_total: w.total,
+      c22_label_count: w.c22,
+    },
+    first_seen_at: now,
+    last_seen_at: now,
+    disappeared_at: null,
+    disappeared_resolution: null,
+    frozen_after_label_print: false,
+    changes: [],
   };
 }
 

@@ -72,8 +72,26 @@ export const OrderStatusSchema = z.enum([
   "pending_product",
   "pending_kol_choice",
   "kol_shipped",
+  // M3 新增（憲章 #9 #10）
+  "disappeared_pending_resolution",
+  "change_pending_resolution",
+  "shipped",
+  "canceled",
 ]);
 export type OrderStatus = z.infer<typeof OrderStatusSchema>;
+
+/** 需觸發 change_pending 的關鍵欄位（憲章 #10）。 */
+export const KEY_FIELDS_FOR_CHANGE = [
+  "c12_product",
+  "c22_label_count",
+  "c17_freight",
+  "c18_discount_seller",
+  "c19_discount_freight",
+  "c20_discount_platform",
+  "c21_total",
+  "c11_conv_store",
+] as const;
+export type KeyFieldName = (typeof KEY_FIELDS_FOR_CHANGE)[number];
 
 export const OrderItemSchema = z.object({
   productSkuId: z.string().nullable(), // 找不到 SKU 時為 null
@@ -109,11 +127,40 @@ export const PendingReasonSchema = z.object({
 });
 export type PendingReason = z.infer<typeof PendingReasonSchema>;
 
+export const OrderChangeSchema = z.object({
+  imported_at: z.string(),
+  import_run_id: z.string(),
+  fields: z.record(
+    z.string(),
+    z.object({
+      from: z.unknown(),
+      to: z.unknown(),
+    })
+  ),
+  resolved: z.enum(["accepted", "rejected", "reprint_needed"]).nullable().default(null),
+  resolved_at: z.string().nullable().default(null),
+});
+export type OrderChange = z.infer<typeof OrderChangeSchema>;
+
+/** Order 的 raw 摘要（M3 diff 用）——只含關鍵欄位快照供比對。 */
+export const OrderSnapshotSchema = z.object({
+  c5_status: z.string(),
+  c11_conv_store: z.string().nullable(),
+  c12_product: z.string(), // 品項字串合併（多品項用 \n 分隔）
+  c17_freight: z.number().nullable(),
+  c18_discount_seller: z.number(),
+  c19_discount_freight: z.number(),
+  c20_discount_platform: z.number(),
+  c21_total: z.number().nullable(),
+  c22_label_count: z.number().nullable(),
+});
+export type OrderSnapshot = z.infer<typeof OrderSnapshotSchema>;
+
 export const OrderSchema = z.object({
   id: z.string(),
   channel: ChannelIdSchema,
   status: OrderStatusSchema,
-  batchDate: z.string().nullable(), // "2026-07-07"
+  batchDate: z.string().nullable(),
   recipient: z.object({
     name: z.string().nullable(),
     igOrLine: z.string().nullable(),
@@ -133,10 +180,58 @@ export const OrderSchema = z.object({
     file: z.string(),
     sheet: z.string(),
     rowIndex: z.number(),
-    rawStatus: z.string(), // 賣貨便 c5 原字串
+    rawStatus: z.string(),
   }),
+
+  // M3 生命週期欄
+  snapshot: OrderSnapshotSchema, // 關鍵欄位快照供 diff
+  first_seen_at: z.string(),
+  last_seen_at: z.string(),
+  disappeared_at: z.string().nullable().default(null),
+  disappeared_resolution: z
+    .enum(["shipped", "canceled", "kept_active"])
+    .nullable()
+    .default(null),
+  frozen_after_label_print: z.boolean().default(false),
+  changes: z.array(OrderChangeSchema).default([]),
 });
 export type Order = z.infer<typeof OrderSchema>;
+
+// ---------- ImportRun ----------
+
+export const ImportDiffSchema = z.object({
+  added: z.array(z.string()),
+  payment_confirmed: z.array(z.string()),
+  fields_changed: z.array(z.string()),
+  disappeared: z.array(z.string()),
+  unchanged: z.array(z.string()),
+});
+export type ImportDiff = z.infer<typeof ImportDiffSchema>;
+
+export const ImportResolutionSchema = z.object({
+  order_id: z.string(),
+  resolution: z.enum([
+    "shipped",
+    "canceled",
+    "kept_active",
+    "accept_change",
+    "reject_change",
+    "reprint",
+  ]),
+  resolved_at: z.string(),
+});
+export type ImportResolution = z.infer<typeof ImportResolutionSchema>;
+
+export const ImportRunSchema = z.object({
+  id: z.string(),
+  imported_at: z.string(),
+  source_files: z.array(z.string()),
+  channels_touched: z.array(ChannelIdSchema), // 只對這幾個 channel 做 diff
+  diff: ImportDiffSchema,
+  resolutions: z.record(z.string(), ImportResolutionSchema).default({}),
+  fully_resolved_at: z.string().nullable().default(null),
+});
+export type ImportRun = z.infer<typeof ImportRunSchema>;
 
 // ---------- Parse result（parser 回傳 shape）----------
 

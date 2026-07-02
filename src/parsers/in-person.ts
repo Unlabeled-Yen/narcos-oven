@@ -181,6 +181,7 @@ export function parseInPerson(
     const orderId = `IP-${sourceFile.replace(/\.xlsx$/, "")}-r${i + 1}`;
     const status = derivePendingStatus(pendingReasons);
 
+    const now = new Date().toISOString();
     orders.push({
       id: orderId,
       channel,
@@ -196,7 +197,7 @@ export function parseInPerson(
       items,
       revenue: {
         grossTotal: toNum(c23) ?? 0,
-        freight: 0, // 面交不收運費
+        freight: 0,
         discount: 0,
       },
       labelCount,
@@ -207,6 +208,23 @@ export function parseInPerson(
         rowIndex: i + 1,
         rawStatus: "",
       },
+      snapshot: {
+        c5_status: "in-person",
+        c11_conv_store: null,
+        c12_product: items.map((it) => `${it.rawName}×${it.quantity}`).join("\n"),
+        c17_freight: null,
+        c18_discount_seller: 0,
+        c19_discount_freight: 0,
+        c20_discount_platform: 0,
+        c21_total: toNum(c23),
+        c22_label_count: null,
+      },
+      first_seen_at: now,
+      last_seen_at: now,
+      disappeared_at: null,
+      disappeared_resolution: null,
+      frozen_after_label_print: false,
+      changes: [],
     });
   }
 

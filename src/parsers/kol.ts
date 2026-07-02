@@ -125,6 +125,27 @@ function isNonEmpty(v: unknown): v is string {
 function finalizeKol(w: WipKol, menu: Menu): Order {
   const pendingReasons: PendingReason[] = [];
 
+  const now = new Date().toISOString();
+  const snapshot = {
+    c5_status: w.shipped ? "kol-shipped" : "kol-pending",
+    c11_conv_store: null,
+    c12_product: w.products.join("\n"),
+    c17_freight: null,
+    c18_discount_seller: 0,
+    c19_discount_freight: 0,
+    c20_discount_platform: 0,
+    c21_total: null,
+    c22_label_count: null,
+  };
+  const lifecycle = {
+    first_seen_at: now,
+    last_seen_at: now,
+    disappeared_at: null as string | null,
+    disappeared_resolution: null as "shipped" | "canceled" | "kept_active" | null,
+    frozen_after_label_print: false,
+    changes: [] as import("../domain/models").OrderChange[],
+  };
+
   // ---- c6 = True 已寄出：直接 kol_shipped、後續 stage 不管 ----
   if (w.shipped) {
     return {
@@ -149,6 +170,8 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
         rowIndex: w.row_start,
         rawStatus: "shipped=true",
       },
+      snapshot,
+      ...lifecycle,
     };
   }
 
@@ -217,7 +240,7 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
       convStore: null,
     },
     items,
-    revenue: { grossTotal: 0, freight: 0, discount: 0 }, // KOL 免費贈品、無營收
+    revenue: { grossTotal: 0, freight: 0, discount: 0 },
     labelCount,
     pendingReasons,
     rawSource: {
@@ -226,6 +249,8 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
       rowIndex: w.row_start,
       rawStatus: "",
     },
+    snapshot,
+    ...lifecycle,
   };
 }
 
