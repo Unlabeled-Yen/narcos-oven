@@ -138,6 +138,10 @@ export function MenuEditorPage({ menu }: PageProps) {
 
         {/* ====== LEFT: SKU 清單 ============================== */}
         <div style={{ minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
+          {/* 左欄整合為單一板塊、上緣對齊右欄 Claude Code / 編輯器板塊 */}
+          <div style={{ background: C.panel, border: `1px solid ${C.line}`, flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+          {/* 板塊頭：分類 chips + 搜尋（flex-none） */}
+          <div style={{ padding: "12px 12px 0", flexShrink: 0 }}>
           {/* cat chips */}
           <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap", flexShrink: 0 }}>
             {(["all", "combo", "single"] as const).map((v) => {
@@ -150,9 +154,10 @@ export function MenuEditorPage({ menu }: PageProps) {
             })}
           </div>
           {/* search */}
-          <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜尋品項 / 別名…" style={{ ...inp(), padding: "9px 12px", width: "100%", boxSizing: "border-box", marginBottom: 10, flexShrink: 0 }} />
-          {/* list */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1, minHeight: 0, overflowY: "auto" }}>
+          <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜尋品項 / 別名…" style={{ ...inp(), padding: "9px 12px", width: "100%", boxSizing: "border-box", marginBottom: 12, flexShrink: 0 }} />
+          </div>
+          {/* list（板塊內捲動） */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1, minHeight: 0, overflowY: "auto", padding: "0 12px 12px" }}>
             {filteredIds.length === 0 && <div style={{ fontFamily: F.mono, fontSize: 12, color: C.mut, padding: "24px 12px", textAlign: "center", border: `1px dashed ${C.borderDash}` }}>無符合品項</div>}
             {filteredIds.map((id) => {
               const p = localProducts[id]!;
@@ -172,6 +177,7 @@ export function MenuEditorPage({ menu }: PageProps) {
                 </button>
               );
             })}
+          </div>
           </div>
         </div>
 

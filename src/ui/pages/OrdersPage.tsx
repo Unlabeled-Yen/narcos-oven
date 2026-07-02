@@ -201,25 +201,25 @@ export function OrdersPage({ orders, menu }: PageProps) {
 
         {/* LEFT: TABLE */}
         <div style={{ minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 }}>
-            <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 15, color: "#F5F4EF" }}>
-              訂單台帳{" "}
-              <span style={{ fontFamily: F.mono, fontWeight: 400, fontSize: 11, color: "#6C6C74" }}>
-                顯示 {filteredOrders.length} 筆代表訂單
-              </span>
-            </span>
-            {hasFilter && (
-              <button
-                type="button"
-                onClick={() => setFilter({ channel: "全部", status: "全部", batch: "全部", query: "" })}
-                style={{ fontFamily: F.mono, fontSize: 11, color: "#E5622A", cursor: "pointer", background: "none", border: "none", padding: 0 }}
-              >
-                ✕ 清除篩選 · {filterParts.join(" · ")}
-              </button>
-            )}
-          </div>
-
           <div style={{ background: "#0F0F12", border: "1px solid #26262C", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            {/* 台帳標題列（移入板塊、與右欄板塊上緣對齊） */}
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", padding: "13px 16px 11px", flexShrink: 0 }}>
+              <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 15, color: "#F5F4EF" }}>
+                訂單台帳{" "}
+                <span style={{ fontFamily: F.mono, fontWeight: 400, fontSize: 11, color: "#6C6C74" }}>
+                  顯示 {filteredOrders.length} 筆代表訂單
+                </span>
+              </span>
+              {hasFilter && (
+                <button
+                  type="button"
+                  onClick={() => setFilter({ channel: "全部", status: "全部", batch: "全部", query: "" })}
+                  style={{ fontFamily: F.mono, fontSize: 11, color: "#E5622A", cursor: "pointer", background: "none", border: "none", padding: 0 }}
+                >
+                  ✕ 清除篩選 · {filterParts.join(" · ")}
+                </button>
+              )}
+            </div>
             {/* 表頭 */}
             <div style={{
               display: "grid",
