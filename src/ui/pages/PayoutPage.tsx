@@ -48,18 +48,10 @@ const PERIODS = [
   { key: "all", label: "全部" },
 ];
 
-// ── sub-tab layout ─────────────────────────────────────────
-const SUB_TABS = [
-  { key: "payout", label: "分潤統計" },
-  { key: "bake", label: "出爐統計表" },
-  { key: "kol", label: "KOL ROI" },
-];
-
 // ─────────────────────────────────────────────────────────────
 export function PayoutPage({ orders, menu }: PageProps) {
   const [period, setPeriod] = useState("all");
   const [mode, setMode] = useState<"gross" | "net">("net");
-  const [activeTab] = useState("payout");
 
   const result = computePayout(orders, menu);
 
@@ -125,23 +117,6 @@ export function PayoutPage({ orders, menu }: PageProps) {
         title="PROFIT SPLIT"
         right={<PeriodChips options={PERIODS} active={period} onChange={setPeriod} />}
       />
-
-      {/* ── SUB TABS ────────────────────────────── */}
-      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", padding: "8px 24px 0", fontFamily: F.tc, fontWeight: 900, fontSize: 13, flexShrink: 0 }}>
-        {SUB_TABS.map((t) => (
-          <span
-            key={t.key}
-            style={{
-              color: t.key === activeTab ? "#111" : "#9A9AA2",
-              background: t.key === activeTab ? C.acc : C.track,
-              padding: "8px 16px",
-              cursor: "default",
-            }}
-          >
-            {t.label}
-          </span>
-        ))}
-      </div>
 
       {/* ── SCROLL WRAPPER ──────────────────────── */}
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>

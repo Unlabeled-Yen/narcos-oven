@@ -68,17 +68,11 @@ function TableRow({ row }: { row: KolRow }) {
   );
 }
 
-export function KolPage({ orders, menu, navigate }: PageProps) {
+export function KolPage({ orders, menu }: PageProps) {
   const { rows, kpi, champions, insightText, insightSourceOrderIds } = useMemo(
     () => computeKolRoi(orders, menu),
     [orders, menu]
   );
-
-  const TABS = [
-    { key: "payout" as const, label: "分潤統計" },
-    { key: "stats" as const, label: "出爐統計表" },
-    { key: "kol" as const, label: "KOL ROI" },
-  ] as const;
 
   const COLS = "1.3fr 1.8fr 0.8fr 1fr 0.7fr 1fr 0.8fr 0.9fr";
 
@@ -97,19 +91,6 @@ export function KolPage({ orders, menu, navigate }: PageProps) {
         />
       </div>
 
-      {/* 子頁分頁 — flex-none */}
-      <div style={{ flexShrink: 0, display: "flex", gap: 4, flexWrap: "wrap", padding: "8px 24px 0", fontFamily: F.tc, fontWeight: 900, fontSize: 13 }}>
-        {TABS.map((tab) => {
-          const active = tab.key === "kol";
-          return (
-            <button key={tab.key} type="button"
-              onClick={() => !active && navigate(tab.key)}
-              style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: active ? "#111" : C.mut2, background: active ? C.acc : C.track, padding: "8px 16px", border: "none", cursor: active ? "default" : "pointer" }}>
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
 
       {/* 估算警告 — flex-none */}
       {kpi.hasEstimate && (

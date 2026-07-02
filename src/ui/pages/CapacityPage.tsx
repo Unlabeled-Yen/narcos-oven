@@ -170,16 +170,6 @@ export function CapacityPage(props: PageProps) {
         }
       />
 
-      {/* Sub-tab strip */}
-      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", padding: "8px 24px 0", fontFamily: F.tc, fontWeight: 900, fontSize: 13 }}>
-        <span style={{ color: C.mut2, background: C.track, padding: "8px 16px", cursor: "pointer" }} onClick={() => props.navigate("schedule")}>
-          排程日曆
-        </span>
-        <span style={{ color: "#111", background: C.acc, padding: "8px 16px", cursor: "default" }}>
-          產能設定
-        </span>
-      </div>
-
       {/* Estimate warning */}
       <div style={{ padding: "14px 24px 4px" }}>
         <div style={{ background: isEstimate ? "#1a1206" : "#0c140c", borderLeft: `3px solid ${isEstimate ? C.orange : C.green}`, padding: "12px 16px" }}>

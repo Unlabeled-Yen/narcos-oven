@@ -76,18 +76,6 @@ export function StatsMatrixPage({ orders, menu }: PageProps) {
         right={<PeriodChips options={PERIOD_OPTS} active={period} onChange={setPeriod} />}
       />
 
-      {/* flex-none: Sub-tabs */}
-      <div style={{ display: "flex", gap: 4, padding: "8px 24px 0", fontFamily: F.tc, fontWeight: 900, fontSize: 13, flexShrink: 0 }}>
-        {(["分潤統計", "出爐統計表", "KOL ROI"] as const).map((label) => {
-          const active = label === "出爐統計表";
-          return (
-            <span key={label} style={{ color: active ? "#111" : C.mut2, background: active ? "var(--acc,#F5D400)" : C.track, padding: "8px 16px", cursor: active ? "default" : "pointer" }}>
-              {label}
-            </span>
-          );
-        })}
-      </div>
-
       {/* flex-none: View toggle (display only) */}
       <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "14px 24px 6px", flexWrap: "wrap", flexShrink: 0 }}>
         <span style={{ fontFamily: F.mono, fontSize: 10, color: C.mut3, letterSpacing: ".14em" }}>列＝</span>
