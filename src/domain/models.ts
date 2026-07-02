@@ -53,6 +53,38 @@ export const ProductionCapacitySchema = z.object({
 });
 export type ProductionCapacity = z.infer<typeof ProductionCapacitySchema>;
 
+export const ProductionTimeFormulaSchema = z.object({
+  per_batch_units: z.number(),
+  hours_by_batch_count: z.record(z.string(), z.number()),
+  hours_per_additional_batch: z.number(),
+  ml_per_unit: z.number().optional(), // 堅果醬類專用
+});
+export type ProductionTimeFormula = z.infer<typeof ProductionTimeFormulaSchema>;
+
+export const OverheadSchema = z.object({
+  product_switch_hours: z.number().default(0.67),
+  wash_mold_after_batches: z.number().int().default(3),
+  wash_mold_hours: z.number().default(1.0),
+});
+export type Overhead = z.infer<typeof OverheadSchema>;
+
+export const WeeklyBudgetSchema = z.object({
+  total_hours_min: z.number().default(24),
+  total_hours_max: z.number().default(30),
+  overflow_tuesday_extra_hours: z.number().default(8),
+});
+export type WeeklyBudget = z.infer<typeof WeeklyBudgetSchema>;
+
+export const SchedulingConfigSchema = z.object({
+  lead_time_days: z.number().int().default(5),
+  regular_shipping_weekday: z.number().int().default(2), // 0=Sun,2=Tue
+  max_retry_weeks: z.number().int().default(10),
+});
+export type SchedulingConfig = z.infer<typeof SchedulingConfigSchema>;
+
+export const WishPrioritySchema = z.enum(["strict", "flexible"]);
+export type WishPriority = z.infer<typeof WishPrioritySchema>;
+
 export const MenuSchema = z.object({
   atoms: z.record(z.string(), AtomSchema),
   products: z.record(z.string(), ProductSchema),
@@ -60,7 +92,13 @@ export const MenuSchema = z.object({
   logistics_cost: z.record(z.string(), z.number()).optional(),
   production_capacity: ProductionCapacitySchema.optional(),
   product_lead_time: z.record(z.string(), z.number()).optional(),
-  label_short_forms: z.record(z.string(), z.string()).optional(), // 印標籤用簡稱（\n 換行）
+  label_short_forms: z.record(z.string(), z.string()).optional(),
+  // M6.5 新增
+  production_time_formula: z.record(z.string(), ProductionTimeFormulaSchema).optional(),
+  overhead: OverheadSchema.optional(),
+  weekly_production_budget: WeeklyBudgetSchema.optional(),
+  scheduling: SchedulingConfigSchema.optional(),
+  wish_priority_by_atom: z.record(z.string(), WishPrioritySchema).optional(),
 });
 
 export type Atom = z.infer<typeof AtomSchema>;
@@ -194,6 +232,10 @@ export const OrderSchema = z.object({
   customer_wish_date: z.string().nullable().default(null),
   system_suggested_date: z.string().nullable().default(null),
   assignment_source: AssignmentSourceSchema.default("pending"),
+
+  // M6.5 新增（排程 v2）
+  wish_priority: WishPrioritySchema.nullable().default(null),
+  estimated_production_hours: z.number().nullable().default(null),
   recipient: z.object({
     name: z.string().nullable(),
     igOrLine: z.string().nullable(),

@@ -25,6 +25,7 @@ import {
   extractSellerBuyShippingDate,
   parseSellerBuyOrderDate,
 } from "../domain/batch-date";
+import { deriveOrderWishPriority, estimateOrderHours } from "../domain/production-time";
 
 const SHEET_NAME = "非訂單匯入";
 const HEADER_ROW_COUNT = 3; // 前 3 列是 header/title
@@ -73,6 +74,12 @@ export function parseSellerBuy(
     }
   }
   if (current) orders.push(finalizeOrder(current, menu));
+
+  // Derive wish_priority + estimated_hours per order
+  for (const o of orders) {
+    o.wish_priority = deriveOrderWishPriority(o, menu);
+    o.estimated_production_hours = estimateOrderHours(o, menu);
+  }
 
   return {
     orders,
@@ -265,6 +272,8 @@ function finalizeOrder(w: WipOrder, menu: Menu): Order {
     customer_wish_date: batchDate,
     system_suggested_date: null,
     assignment_source: batchDate ? "customer_wish_kept" : "pending",
+    wish_priority: null, // 稍後 derive
+    estimated_production_hours: null, // 稍後 derive
     first_seen_at: now,
     last_seen_at: now,
     disappeared_at: null,

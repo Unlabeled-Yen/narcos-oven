@@ -419,6 +419,124 @@ logistics_cost:
 # ---------- PRODUCTION CAPACITY (M6 排程系統用) ----------
 # 每個 atom 每天上限（雇主 D-7 預設、R3-2 補實際值）
 # UI 會提醒「這是估值、請設實際值」
+# ==============================================================
+# ---------- PRODUCTION TIME FORMULA (M6.5 排程 v2) ----------
+# 依 Yen 2026-07-03 confirm 的時間公式
+# hours_by_batch_count: {爐數: 該爐數的總時間 hr}
+# hours_per_additional_batch: 4 爐+ 每爐加多少 hr
+production_time_formula:
+  # 麵包類
+  肉桂捲:
+    per_batch_units: 24
+    hours_by_batch_count: {1: 4.0, 2: 7.0, 3: 10.0}
+    hours_per_additional_batch: 3.0
+  蘋果肉桂捲:
+    per_batch_units: 24
+    hours_by_batch_count: {1: 4.0, 2: 7.0, 3: 10.0}
+    hours_per_additional_batch: 3.0
+  焦糖蘋果肉桂麵包:
+    per_batch_units: 8
+    hours_by_batch_count: {1: 2.5, 2: 4.0, 3: 5.5}
+    hours_per_additional_batch: 1.5
+  # 磅蛋糕類
+  芝麻焙茶奶酥磅蛋糕:
+    per_batch_units: 8
+    hours_by_batch_count: {1: 2.5, 2: 4.0, 3: 5.5}
+    hours_per_additional_batch: 1.5
+  鳳梨肉桂奶酥磅蛋糕:
+    per_batch_units: 8
+    hours_by_batch_count: {1: 2.5, 2: 4.0, 3: 5.5}
+    hours_per_additional_batch: 1.5
+  # 巴斯克類（7 口味時間統一）
+  原味巴斯克:
+    per_batch_units: 4
+    hours_by_batch_count: {1: 2.0, 2: 3.5, 3: 5.0}
+    hours_per_additional_batch: 1.5
+  白玉原味巴斯克:
+    per_batch_units: 4
+    hours_by_batch_count: {1: 2.0, 2: 3.5, 3: 5.0}
+    hours_per_additional_batch: 1.5
+  芝麻巴斯克:
+    per_batch_units: 4
+    hours_by_batch_count: {1: 2.0, 2: 3.5, 3: 5.0}
+    hours_per_additional_batch: 1.5
+  白玉芝麻巴斯克:
+    per_batch_units: 4
+    hours_by_batch_count: {1: 2.0, 2: 3.5, 3: 5.0}
+    hours_per_additional_batch: 1.5
+  焙茶巴斯克:
+    per_batch_units: 4
+    hours_by_batch_count: {1: 2.0, 2: 3.5, 3: 5.0}
+    hours_per_additional_batch: 1.5
+  焙茶栗子巴斯克:
+    per_batch_units: 4
+    hours_by_batch_count: {1: 2.0, 2: 3.5, 3: 5.0}
+    hours_per_additional_batch: 1.5
+  白玉烏龍茶巴斯克:
+    per_batch_units: 4
+    hours_by_batch_count: {1: 2.0, 2: 3.5, 3: 5.0}
+    hours_per_additional_batch: 1.5
+  # 香料堅果醬（依總 ml 計、非罐數。1000ml = 2hr。特殊處理見 code）
+  香料堅果醬40ml:
+    per_batch_units: 1000     # ml
+    hours_by_batch_count: {1: 2.0}
+    hours_per_additional_batch: 2.0
+    ml_per_unit: 40
+  香料堅果醬90ml:
+    per_batch_units: 1000
+    hours_by_batch_count: {1: 2.0}
+    hours_per_additional_batch: 2.0
+    ml_per_unit: 90
+  香料堅果醬240ml:
+    per_batch_units: 1000
+    hours_by_batch_count: {1: 2.0}
+    hours_per_additional_batch: 2.0
+    ml_per_unit: 240
+  # 副產品、不佔時間
+  瑕疵小脆捲10顆:
+    per_batch_units: 1
+    hours_by_batch_count: {1: 0.0}
+    hours_per_additional_batch: 0.0
+
+# ---------- OVERHEAD ----------
+overhead:
+  product_switch_hours: 0.67   # 品項切換 40 分鐘
+  wash_mold_after_batches: 3   # 排滿 3 爐後洗模
+  wash_mold_hours: 1.0
+
+# ---------- WEEKLY PRODUCTION BUDGET ----------
+weekly_production_budget:
+  total_hours_min: 24
+  total_hours_max: 30
+  overflow_tuesday_extra_hours: 8   # 爆量時週二可加工上限
+
+# ---------- SCHEDULING ----------
+scheduling:
+  lead_time_days: 5              # 前置期 5 天（Yen 2026-07-03 confirm）
+  regular_shipping_weekday: 2    # 週二為主
+  max_retry_weeks: 10            # 遞進最多 10 週
+
+# ---------- WISH PRIORITY MAPPING ----------
+# 訂單有巴斯克 → strict、其他 flexible
+wish_priority_by_atom:
+  肉桂捲: flexible
+  蘋果肉桂捲: flexible
+  焦糖蘋果肉桂麵包: flexible
+  芝麻焙茶奶酥磅蛋糕: flexible
+  鳳梨肉桂奶酥磅蛋糕: flexible
+  原味巴斯克: strict
+  白玉原味巴斯克: strict
+  芝麻巴斯克: strict
+  白玉芝麻巴斯克: strict
+  焙茶巴斯克: strict
+  焙茶栗子巴斯克: strict
+  白玉烏龍茶巴斯克: strict
+  香料堅果醬40ml: flexible
+  香料堅果醬90ml: flexible
+  香料堅果醬240ml: flexible
+  瑕疵小脆捲10顆: flexible
+
+# ==============================================================
 # ---------- LABEL SHORT-FORMS (M5 標籤印刷用) ----------
 # SKU id → 印在標籤上的簡短版本（\n 為換行、每張標籤約 2-3 行）
 # 依照 fixtures/2026-07-round1/@ 參考.../出貨標籤/ 的樣式（方型/長型/罐 分類）

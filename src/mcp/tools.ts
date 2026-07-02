@@ -5,7 +5,7 @@
 import type { Menu, Order } from "../domain/models";
 import { calculateBOM } from "../domain/bom";
 import { productionTimeline } from "../domain/production-timeline";
-import { suggestSchedule } from "../domain/scheduler";
+import { suggestScheduleV2 } from "../domain/scheduler-v2";
 import {
   filterByPeriod,
   periodLabel,
@@ -221,9 +221,13 @@ export function getDisappearedPending(orders: Order[]) {
  * suggest_next_schedule: 系統目前對 pending 訂單的排程建議（read-only view）
  */
 export function suggestNextSchedule(orders: Order[], menu: Menu) {
-  const r = suggestSchedule(orders, menu);
+  const r = suggestScheduleV2(orders, menu);
+  const strictCount = r.suggestions.filter((s) => s.wish_priority === "strict").length;
+  const flexibleCount = r.suggestions.length - strictCount;
   return {
     suggestion_count: r.suggestions.length,
+    strict_count: strictCount,
+    flexible_count: flexibleCount,
     unscheduled_count: r.unscheduled.length,
     suggestions: r.suggestions,
     unscheduled: r.unscheduled,

@@ -26,6 +26,7 @@ import { toNum } from "../domain/utils";
 import { explodeToAtoms } from "../domain/menu";
 import { readSheetTolerant } from "../domain/xlsx-tolerant";
 import { extractInPersonDate } from "../domain/batch-date";
+import { deriveOrderWishPriority, estimateOrderHours } from "../domain/production-time";
 
 const SHEET_NAME = "表單回覆 1";
 
@@ -222,6 +223,8 @@ export function parseInPerson(
       customer_wish_date: batchDate,
       system_suggested_date: null,
       assignment_source: batchDate ? "customer_wish_kept" : "pending",
+      wish_priority: null,
+      estimated_production_hours: null,
       first_seen_at: now,
       last_seen_at: now,
       disappeared_at: null,
@@ -229,6 +232,11 @@ export function parseInPerson(
       frozen_after_label_print: false,
       changes: [],
     });
+  }
+
+  for (const o of orders) {
+    o.wish_priority = deriveOrderWishPriority(o, menu);
+    o.estimated_production_hours = estimateOrderHours(o, menu);
   }
 
   return {

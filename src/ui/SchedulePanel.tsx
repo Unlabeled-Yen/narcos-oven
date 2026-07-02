@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { db } from "../db/schema";
 import type { Menu, Order } from "../domain/models";
-import { applySuggestions, suggestSchedule } from "../domain/scheduler";
+import { applyV2Suggestions, suggestScheduleV2 } from "../domain/scheduler-v2";
 import { calculateBOM, type BomResult } from "../domain/bom";
 import { productionTimeline, type ProductionTimeline } from "../domain/production-timeline";
 
@@ -21,7 +21,7 @@ export function SchedulePanel({
   onOrdersChanged: () => void;
 }) {
   const [showBomFor, setShowBomFor] = useState<string | null>(null);
-  const result = useMemo(() => suggestSchedule(orders, menu), [orders, menu]);
+  const result = useMemo(() => suggestScheduleV2(orders, menu), [orders, menu]);
   const [busy, setBusy] = useState(false);
 
   const pendingCount = result.suggestions.length;
@@ -30,19 +30,16 @@ export function SchedulePanel({
     if (pendingCount === 0) return;
     if (!confirm(`⚠️ 接受 ${pendingCount} 筆建議、寫入 db？`)) return;
     setBusy(true);
-    const resolutions: Record<string, "accept"> = {};
-    for (const s of result.suggestions) resolutions[s.order_id] = "accept";
-    const updated = applySuggestions(orders, result.suggestions, resolutions);
-    await db.orders.bulkPut(updated.filter((o) => resolutions[o.id]));
+    const accepted = new Set(result.suggestions.map((s) => s.order_id));
+    const updated = applyV2Suggestions(orders, result.suggestions, accepted);
+    await db.orders.bulkPut(updated.filter((o) => accepted.has(o.id)));
     setBusy(false);
     onOrdersChanged();
   }
 
   async function acceptOne(orderId: string) {
     setBusy(true);
-    const updated = applySuggestions(orders, result.suggestions, {
-      [orderId]: "accept",
-    });
+    const updated = applyV2Suggestions(orders, result.suggestions, new Set([orderId]));
     const found = updated.find((o) => o.id === orderId);
     if (found) await db.orders.put(found);
     setBusy(false);
@@ -53,11 +50,10 @@ export function SchedulePanel({
     const date = prompt("輸入自訂出爐日 YYYY-MM-DD");
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
     setBusy(true);
-    const updated = applySuggestions(orders, result.suggestions, {
-      [orderId]: date,
-    });
-    const found = updated.find((o) => o.id === orderId);
-    if (found) await db.orders.put(found);
+    const o = orders.find((x) => x.id === orderId);
+    if (o) {
+      await db.orders.put({ ...o, batchDate: date, assignment_source: "boss_override" });
+    }
     setBusy(false);
     onOrdersChanged();
   }
@@ -110,37 +106,66 @@ export function SchedulePanel({
           {result.suggestions.map((s) => {
             const o = orders.find((x) => x.id === s.order_id);
             if (!o) return null;
+            const isStrict = s.wish_priority === "strict";
+            const budgetPct = Math.min(100, Math.round((s.batch_hours_after / s.weekly_budget) * 100));
             return (
               <div
                 key={s.order_id}
-                className="bg-white border rounded p-2 text-sm flex items-center justify-between"
+                className={`border rounded p-2 text-sm ${isStrict ? "bg-purple-50 border-purple-200" : "bg-white"}`}
               >
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs">{o.id}</span>
-                    <span>{o.recipient.name ?? "—"}</span>
-                    <span className="text-gray-500 text-xs">{o.channel}</span>
-                    <span className="ml-2 font-semibold text-blue-700">
-                      → {s.suggested_date}
-                    </span>
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {isStrict && (
+                        <span className="text-xs bg-purple-200 text-purple-900 px-1.5 rounded font-bold">
+                          🔒 STRICT
+                        </span>
+                      )}
+                      <span className="font-mono text-xs">{o.id}</span>
+                      <span>{o.recipient.name ?? "—"}</span>
+                      <span className="text-gray-500 text-xs">{o.channel}</span>
+                      <span className="ml-2 font-semibold text-blue-700">
+                        → {s.suggested_date}
+                      </span>
+                      {s.customer_wish_date && !s.is_wish_kept && (
+                        <span className="text-xs text-orange-700 bg-orange-100 px-1.5 rounded">
+                          ⚠️ 客人希望 {s.customer_wish_date}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-500 ml-1">
+                      {s.reason} · 訂單約 {s.estimated_hours} hr
+                    </div>
+                    <div className="mt-1 flex items-center gap-2 text-xs">
+                      <div className="w-32 bg-gray-200 rounded-full h-1.5">
+                        <div
+                          className={`h-1.5 rounded-full ${
+                            budgetPct > 90 ? "bg-red-500" : budgetPct > 70 ? "bg-yellow-500" : "bg-green-500"
+                          }`}
+                          style={{ width: `${budgetPct}%` }}
+                        />
+                      </div>
+                      <span className="text-gray-500">
+                        {s.batch_hours_after.toFixed(1)} / {s.weekly_budget} hr ({budgetPct}%)
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-xs text-gray-500 ml-1">{s.reason}</div>
-                </div>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => acceptOne(s.order_id)}
-                    disabled={busy}
-                    className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded"
-                  >
-                    接受
-                  </button>
-                  <button
-                    onClick={() => overrideOne(s.order_id)}
-                    disabled={busy}
-                    className="px-2 py-1 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded"
-                  >
-                    改日
-                  </button>
+                  <div className="flex gap-1 flex-shrink-0 ml-2">
+                    <button
+                      onClick={() => acceptOne(s.order_id)}
+                      disabled={busy}
+                      className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded"
+                    >
+                      接受
+                    </button>
+                    <button
+                      onClick={() => overrideOne(s.order_id)}
+                      disabled={busy}
+                      className="px-2 py-1 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded"
+                    >
+                      改日
+                    </button>
+                  </div>
                 </div>
               </div>
             );

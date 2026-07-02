@@ -24,6 +24,7 @@ import type {
 import { explodeToAtoms, lookupSku } from "../domain/menu";
 import { readSheetTolerant } from "../domain/xlsx-tolerant";
 import { extractKolShippingDate } from "../domain/batch-date";
+import { deriveOrderWishPriority, estimateOrderHours } from "../domain/production-time";
 
 const SHEET_NAME = "未完成";
 const CHOICE_KEYWORD_RE = /擇一|口味擇一|請選/;
@@ -100,6 +101,10 @@ export function parseKol(
   }
   if (current) orders.push(finalizeKol(current, menu));
 
+  for (const o of orders) {
+    o.wish_priority = deriveOrderWishPriority(o, menu);
+    o.estimated_production_hours = estimateOrderHours(o, menu);
+  }
   return { orders, raw_row_count: rawCount, source_file: sourceFile };
 }
 
@@ -148,6 +153,8 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
     customer_wish_date: _ship,
     system_suggested_date: null as string | null,
     assignment_source: (_ship ? "customer_wish_kept" : "pending") as import("../domain/models").AssignmentSource,
+    wish_priority: null as import("../domain/models").WishPriority | null,
+    estimated_production_hours: null as number | null,
   };
 
   // ---- c6 = True 已寄出：直接 kol_shipped、後續 stage 不管 ----
