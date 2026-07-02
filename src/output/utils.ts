@@ -58,14 +58,20 @@ export function writeWorkbookBuffer(wb: XLSX.WorkBook): Uint8Array {
 }
 
 /**
- * 從 orders 集合過濾出「可入 Excel」的訂單（已排出爐日、非 pending/取消/待決議）。
+ * 從 orders 集合過濾出「可入 Excel」的訂單（confirmed、含未排出爐日）。
+ * M100-A1：改為納入 pending_batch_date 訂單、UI 顯示為「待老闆排」
  */
 export function ordersForOutput(orders: Order[]): Order[] {
   return orders.filter(
     (o) =>
-      (o.status === "confirmed" || o.status === "kol_shipped") &&
-      o.batchDate !== null
+      o.status === "confirmed" ||
+      o.status === "kol_shipped" ||
+      o.status === "pending_batch_date"
   );
+}
+
+export function pendingBatchLabel(o: Order): string {
+  return o.batchDate ?? "待老闆排";
 }
 
 /**

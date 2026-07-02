@@ -27,6 +27,7 @@ import { explodeToAtoms } from "../domain/menu";
 import { readSheetTolerant } from "../domain/xlsx-tolerant";
 import { extractInPersonDate } from "../domain/batch-date";
 import { deriveOrderWishPriority, estimateOrderHours } from "../domain/production-time";
+import { inPersonOrderId } from "../domain/id-hash";
 
 const SHEET_NAME = "表單回覆 1";
 
@@ -179,7 +180,13 @@ export function parseInPerson(
     // ---- Stage 5: 標籤數 = 該筆總品項數（雇主 R2-5）----
     const labelCount = items.reduce((s, it) => s + it.quantity, 0) || 1;
 
-    const orderId = `IP-${sourceFile.replace(/\.xlsx$/, "")}-r${i + 1}`;
+    const submitTimestamp = r[0] instanceof Date ? r[0].toISOString() : (typeof r[0] === "string" ? r[0] : null);
+    const orderId = inPersonOrderId({
+      recipientName,
+      phone,
+      submitTimestamp,
+      pickupLocation: c2Text || null,
+    });
     const status = derivePendingStatus(pendingReasons);
 
     const now = new Date().toISOString();

@@ -15,6 +15,7 @@ import { ConservationBanner } from "./ui/ConservationBanner";
 import { ImportSummaryModal } from "./ui/ImportSummaryModal";
 import { ExportPanel } from "./ui/ExportPanel";
 import { SchedulePanel } from "./ui/SchedulePanel";
+import { DashboardPanel } from "./ui/DashboardPanel";
 
 const menu = loadMenu(menuYamlText);
 
@@ -220,6 +221,8 @@ export default function App() {
             </div>
           )}
 
+          <DashboardPanel orders={allOrders} />
+
           <SchedulePanel orders={allOrders} menu={menu} onOrdersChanged={refreshOrders} />
 
           <ExportPanel orders={allOrders} menu={menu} />
@@ -240,6 +243,8 @@ export default function App() {
             </h2>
             <PendingBucket
               orders={allOrders.filter((o) => isPending(o.status))}
+              menu={menu}
+              onOrdersChanged={refreshOrders}
             />
           </section>
 

@@ -25,6 +25,7 @@ import { explodeToAtoms, lookupSku } from "../domain/menu";
 import { readSheetTolerant } from "../domain/xlsx-tolerant";
 import { extractKolShippingDate } from "../domain/batch-date";
 import { deriveOrderWishPriority, estimateOrderHours } from "../domain/production-time";
+import { kolOrderId } from "../domain/id-hash";
 
 const SHEET_NAME = "未完成";
 const CHOICE_KEYWORD_RE = /擇一|口味擇一|請選/;
@@ -266,6 +267,5 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
 }
 
 function kolId(w: WipKol): string {
-  const key = w.discount_code || w.ig || `row${w.row_start}`;
-  return `KOL-${key}`;
+  return kolOrderId({ discountCode: w.discount_code, ig: w.ig });
 }

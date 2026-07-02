@@ -8,6 +8,7 @@ import {
   aoaToSheet,
   buildWorkbook,
   ordersForOutput,
+  pendingBatchLabel,
   writeWorkbookBuffer,
 } from "./utils";
 
@@ -40,7 +41,7 @@ export function buildOverviewWorkbook(orders: Order[], menu: Menu) {
   const outputOrders = ordersForOutput(orders);
   const byDate = new Map<string, Order[]>();
   for (const o of outputOrders) {
-    const d = o.batchDate!;
+    const d = pendingBatchLabel(o);
     if (!byDate.has(d)) byDate.set(d, []);
     byDate.get(d)!.push(o);
   }

@@ -6,7 +6,7 @@
  * 物流實付估算、淨營收
  */
 import type { Menu, Order } from "../domain/models";
-import { aoaToSheet, buildWorkbook, ordersForOutput, writeWorkbookBuffer } from "./utils";
+import { aoaToSheet, buildWorkbook, ordersForOutput, pendingBatchLabel, writeWorkbookBuffer } from "./utils";
 
 const BRAND_RATIO = 0.5;
 const CHEF_RATIO = 0.3;
@@ -31,7 +31,7 @@ export function buildPayoutWorkbook(orders: Order[], menu: Menu) {
   const outputOrders = ordersForOutput(orders);
   const byDate = new Map<string, Order[]>();
   for (const o of outputOrders) {
-    const d = o.batchDate!;
+    const d = pendingBatchLabel(o);
     if (!byDate.has(d)) byDate.set(d, []);
     byDate.get(d)!.push(o);
   }
