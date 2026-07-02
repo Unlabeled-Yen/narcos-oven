@@ -60,6 +60,7 @@ export const MenuSchema = z.object({
   logistics_cost: z.record(z.string(), z.number()).optional(),
   production_capacity: ProductionCapacitySchema.optional(),
   product_lead_time: z.record(z.string(), z.number()).optional(),
+  label_short_forms: z.record(z.string(), z.string()).optional(), // 印標籤用簡稱（\n 換行）
 });
 
 export type Atom = z.infer<typeof AtomSchema>;

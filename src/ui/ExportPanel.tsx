@@ -9,6 +9,8 @@ import { writeOverviewExcel } from "../output/overview-excel";
 import { writePayoutExcel } from "../output/payout-excel";
 import { buildBundleZip } from "../output/bundle";
 import { downloadBlob, ordersForOutput } from "../output/utils";
+import { extractLabels } from "../output/label-data";
+import { renderLabelsToPDF } from "../output/label-renderer";
 
 export function ExportPanel({
   orders,
@@ -41,6 +43,13 @@ export function ExportPanel({
     downloadBlob(buf, `分潤統計_${today}.xlsx`);
     setBusy(null);
   }
+  async function handleLabels() {
+    setBusy("labels");
+    const labels = extractLabels(orders, menu);
+    const pdf = renderLabelsToPDF(labels);
+    downloadBlob(new Uint8Array(pdf), `標籤_${today}.pdf`, "application/pdf");
+    setBusy(null);
+  }
   async function handleBundle() {
     setBusy("bundle");
     const zip = await buildBundleZip(orders, menu);
@@ -70,7 +79,7 @@ export function ExportPanel({
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
         <ExportButton
           disabled={!gate.can_release}
           busy={busy === "stats"}
@@ -94,10 +103,17 @@ export function ExportPanel({
         />
         <ExportButton
           disabled={!gate.can_release}
+          busy={busy === "labels"}
+          onClick={handleLabels}
+          label="出貨標籤"
+          hint="PDF 每頁 3 標籤直排"
+        />
+        <ExportButton
+          disabled={!gate.can_release}
           busy={busy === "bundle"}
           onClick={handleBundle}
           label="打包全部 (zip)"
-          hint="3 個 Excel 一次下載"
+          hint="Excel + 標籤 PDF"
           primary
         />
       </div>
