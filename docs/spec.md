@@ -453,19 +453,19 @@ Vite React + Tailwind + shadcn/ui。
 
 ## 8. Milestones
 
-| M | Deliverable | 目標時間 |
-|---|---|---|
-| **M0** | ✅ Skeleton + 資料分析 + menu.yaml v0 | 完成 |
-| **M1** | vertical slice：拖檔 → 賣貨便 parser → menu lookup → 顯示 | 1-2 hr |
-| **M2** | 完整 3 個 parsers（賣貨便 + 面交 + KOL）+ SQLite persistence | 3-4 hr |
-| **M3** | 待處理桶 UI + 分類流程 | 2 hr |
-| **M4** | 出爐統計 + 出貨總覽 Excel 產出 | 2 hr |
-| **M5** | 標籤 PDF 產出 | 2-3 hr |
-| **M6** | 分潤（總+淨並列）+ 儀表板 | 2 hr |
-| **M7** | MCP server + Claude Code 整合驗證 | 3 hr |
-| **M8** | 憲章防護 #1/#2/#3 test suite + regression fixture | 2 hr |
+| M | Deliverable | 目標時間 | 狀態 |
+|---|---|---|---|
+| **M0** | Skeleton + 資料分析 + menu.yaml v0 | 完成 | ✅ |
+| **M1** | vertical slice：拖檔 → 賣貨便 parser → menu lookup → 顯示 | 1-2 hr | ✅ |
+| **M2** | 完整 3 個 parsers（賣貨便 + 面交 + KOL） + 多檔智慧上傳 | 3-4 hr | ✅ |
+| **M3** | 連續匯入 diff engine + Dexie persistence + 憲章 #9 #10 UX | 4-5 hr | ✅ |
+| **M4** | 出爐統計 + 出貨總覽 Excel 產出 | 2 hr | 待動 |
+| **M5** | 標籤 PDF 產出（jpg 佈局 spec） | 2-3 hr | 待動 |
+| **M6** | **排程系統**（Stage 8-11 + 日曆 UI + BOM 清單） | 8-12 hr | 待動 |
+| **M7** | 分潤（總+淨並列）+ 儀表板 + MCP server + Claude Code 整合 | 5 hr | 待動 |
+| **M8** | 憲章防護 test suite + regression fixture 全套 | 2 hr | 待動 |
 
-**估總工時**：18-22 hr（不含雇主 confirm 期間等待）
+**估總剩餘工時**：19-24 hr
 
 ---
 
@@ -491,3 +491,114 @@ Vite React + Tailwind + shadcn/ui。
    → v1 預設 60mm × 90mm 縱向、單張生成 PDF
 4. **物流實際成本**：超商取貨、宅配、面交自取的實際店家付出金額
    → v1 用 menu.yaml `logistics_cost` 預設值（超商 $60、宅配 $130）
+
+---
+
+## 11. 排程系統設計（M6 藍圖）
+
+_源自 2026-07-02 Yen 洞察：「不論客人有沒有指定、最終都是雇主排出貨日」→ batchDate 從「已決定值」demoted 為「建議值」、`assigned_batch_date` 才是雇主拍板的 source of truth。_
+
+### 11.1 資料模型調整（M6 動工前先做）
+
+```ts
+type Order = {
+  // 現有 batchDate 拆成三層：
+  customer_wish_date: string | null    // 客人選的（原 batchDate 語意）
+  system_suggested_date: string | null // 系統規則推算的
+  assigned_batch_date: string | null   // 🎯 雇主拍板、唯一真相
+  assignment_source:
+    | "customer_wish_kept"
+    | "boss_override"
+    | "boss_scheduled"
+    | "auto_from_rule"
+    | "pending"
+
+  // M6d 之後補
+  production_start_date: string | null  // = assigned_batch_date − max(items.lead_time_days)
+  raw_material_bom: Record<AtomId, number> | null  // 該筆需要的原物料
+}
+
+type Product = {
+  // ...現有
+  lead_time_days: number                          // 出貨提前 N 天開始做
+  raw_material_recipe: Record<string, number>     // BOM 每單位
+}
+
+type ProductionCapacity = {                       // config 或 menu.yaml 新段
+  daily_max_by_atom: Record<AtomId, number>       // 每 atom 每天上限
+  weekly_pattern: Record<Weekday, number>         // 週幾產能倍率（週末 x 1.5）
+}
+```
+
+### 11.2 新增 Pipeline Stages
+
+```
+[Stage 8: 排程建議引擎]（M6b）
+    │ 對 assigned_batch_date=null 的 confirmed 訂單：
+    │
+    │ 【預設規則】(Yen D-6)
+    │   1. customer_wish_date 存在 → 標「客人希望 X」給雇主參考
+    │   2. 沒指定 → 用「下次週二」作 system_suggested_date
+    │      （NARCOS.sugar 常規出爐日、從歷史資料 6/09 6/16 6/23 7/07 7/14 觀察）
+    │   3. 產能檢核（Stage 9）
+    │      · 未超載 → 建議該日
+    │      · 超載 → 建議下一個週二
+    │
+    │ 【憲章原則】所有建議都需雇主 UI 點按確認才寫進 assigned_batch_date
+    ▼
+[Stage 9: 產能檢核]（M6c）
+    │ 對每個候選 assigned_batch_date：
+    │   計算該日所有 order 累積 atoms → 對照 daily_max_by_atom
+    │   任一 atom 超載 → 紅色警示、不 auto-assign
+    │
+    │ 【預設值】(Yen D-7、雇主待補 R3-2)
+    │   肉桂捲: 200 / 天
+    │   蘋果肉桂捲: 200 / 天（共享肉桂捲產能？待雇主 confirm）
+    │   巴斯克類（全）: 50 / 天
+    │   香料堅果醬: 100 / 天
+    │   磅蛋糕類: 30 / 天
+    │
+    │ UI 提醒雇主「這是估值、請設實際值」
+    ▼
+[Stage 10: 備料 BOM 計算]（M6d）
+    │ 對每個 assigned_batch_date：
+    │   Σ orders.items × product.raw_material_recipe
+    │
+    │ 【等雇主提供 recipe】(R3-4)
+    │   目前 menu.yaml 每 SKU 的 raw_material_recipe 都是 null
+    │   雇主提供前、Stage 10 UI 顯示「請雇主填 recipe」
+    ▼
+[Stage 11: 製作時程回推]（M6e）
+    │ 對每個 assigned_batch_date D：
+    │   production_start_date = D − max(items.map(lead_time_days))
+    │
+    │ 【等雇主提供 lead_time_days】(R3-3)
+    │   目前 menu.yaml 預設 2 天（肉桂捲需要麵糰發酵+冷藏熟成）
+    │   巴斯克 1 天、磅蛋糕 1 天、堅果醬 0 天（現貨）
+    │
+    │ 產出「製作行事曆」：7/05 開麵糰 → 7/06 冷藏+烤磅蛋糕 → 7/07 烤肉桂捲+出貨
+```
+
+### 11.3 排程系統 UI
+
+| 頁面 | 內容 |
+|---|---|
+| `/schedule` 排程日曆 | 月/週檢視、每天顯示：出貨量 + 產能進度條 + 待排訂單。可拖拉調整。 |
+| `/schedule/:date/bom` 備料清單 | 該日原物料需求（麵糰 kg、蘋果顆、堅果醬罐）+ 製作時程回推 |
+| `/schedule/capacity` 產能設定 | 雇主編輯每 atom 每日上限 + 週幾倍率 |
+
+### 11.4 LLM 在排程系統的位置（憲章 #2）
+
+主軌依然 0 LLM。LLM 只在 MCP server（M7）出現：
+- `suggest_schedule_for_pending` — 對所有 pending 訂單、由 LLM 提排程建議、雇主拍板
+- `explain_capacity_conflict` — 「7/7 為何超載、怎麼調整」的自然語言解釋
+- `find_similar_batch` — 「上次有這種訂單組合是哪批？」（RAG 到 db）
+
+排程 UI 本身**不呼叫 LLM**。
+
+### 11.5 憲章新增（M6 完成前 lock）
+
+| # | 名稱 | 內容 |
+|---|---|---|
+| **#11** | **排程雇主拍板守恆律** | 每筆 confirmed 訂單、`assigned_batch_date` 為 null 時、Excel/PDF/標籤產出 disabled；只有雇主明確拍板才能寫入 |
+| **#12** | **產能超載守恆律** | 若某 batch_date 累積 atom 超過 `daily_max_by_atom`、絕不 auto-assign；一律回退到 pending 讓雇主決定 |

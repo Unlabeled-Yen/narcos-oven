@@ -80,6 +80,84 @@ _每一條都寫「Why」讓未來 Claude Code 讀到就懂為何這樣定。_
 
 ---
 
+---
+
+## 2026-07-02（下午）: 排程系統定位（M6 藍圖）
+
+**背景**: Yen 洞察「不論客人有沒有指定、最終都是雇主排出貨日」。原本 spec 把客人指定的 batchDate 當作最終出爐日、系統把它當已決定值。實際上雇主是所有訂單的最終排程者、客人指定只是**建議**。
+
+### D-5. batchDate demoted 為建議、assigned_batch_date 才是最終真相
+
+**Why**: 
+- 客人選 7/7、雇主可能改到 7/14（因為 7/7 超載）
+- 客人沒選、雇主一定要排
+- 統計上「7/7 出爐 120 顆」的來源必須是**雇主拍板的 assigned_batch_date**、不能是客人建議
+
+**How to apply**:
+- Order 資料模型加 3 個欄位：customer_wish_date / system_suggested_date / assigned_batch_date
+- 加 assignment_source 記錄「這日期怎麼來的」
+- Excel/PDF/標籤產出只認 assigned_batch_date
+- 憲章新增 **#11 排程雇主拍板守恆律**
+- 相關：[[narcos-oven-constitution]]
+
+---
+
+### D-6. 排程規則預設「下次週二」
+
+**Why**: 
+- 從歷史資料觀察 6/09 6/16 6/23 7/07 7/14 全是週二 → NARCOS.sugar 常規出爐日是週二
+- 這是最少改動的規則、雇主接手後可調
+- 若雇主給不同 rule、改 config 一格就好
+
+**How to apply**:
+- Stage 8 排程建議引擎、customer_wish_date 為 null 時 → 下一個週二
+- 若下週二該 atom 已超載（Stage 9）→ 建議下下週二
+- 雇主可在 config UI 改成「下次週三」或「訂購日+N」等
+
+---
+
+### D-7. 產能上限預設值（雇主未提供前）
+
+**Why**: 
+- 若不預設、Stage 9 產能檢核無法運作、所有訂單都能自動排入
+- 預設值需要足夠寬鬆（避免雇主一直看到「超載」警告）、但也要能捕捉異常爆量
+- 從資料觀察 6/23 出爐 135 顆肉桂捲、7/07 預計 120 顆 → 200 是合理上限
+
+**預設值**:
+- 肉桂捲: 200 / 天
+- 蘋果肉桂捲: 200 / 天
+- 巴斯克類（全）: 50 / 天
+- 香料堅果醬: 100 / 天
+- 磅蛋糕類: 30 / 天
+
+**How to apply**:
+- menu.yaml 新增 production_capacity 段
+- UI 顯示「⚠️ 這是估值、請設實際值」直到雇主明確 confirm
+- 憲章 **#12 產能超載守恆律**：超載絕不 auto-assign
+
+---
+
+### D-8. Milestone 順序：M4 → M5 → M6 → M7
+
+**Why**: 
+- M4 (Excel) 是雇主 minimum viable output——即使沒排程系統、能匯出 Excel 就能給主廚/行銷看
+- M5 (標籤) 是最緊急的實體產出——沒標籤不能出貨
+- M6 (排程) 是真正的核心系統、但需要雇主先看到 M4/M5 才知道要什麼
+- M7 (儀表板 + MCP) 是「已經有排程資料之後才有意義」
+
+**替代方案評估**:
+- 先做 M6 排程再做 M4 Excel：問題是雇主不能拿到任何實體產出、動工很久才看到成果
+- 跳過 M4 直接 M5：Excel 是最需要給合作方（主廚/行銷）看的、不能跳
+- M4 + M6 同步：M4 需要 assigned_batch_date、M6 才產這個值——所以 M4 v1 用 batchDate (現有欄位) 先產出、M6 上線後 M4 升級用 assigned_batch_date
+
+**How to apply**:
+- 立刻進 M4：以現有 batchDate 為出爐日產 Excel
+- M4 產出的 Excel 標明「這些是客人建議/系統抓的日期、非雇主拍板」
+- M5 標籤同理
+- M6 完成後、M4/M5 升級用 assigned_batch_date
+
+---
+
 ## 待未來記錄的決策模板
 
 ```markdown
