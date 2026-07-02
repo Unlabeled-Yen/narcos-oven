@@ -106,7 +106,7 @@ export function PayoutPage({ orders, menu }: PageProps) {
   // Empty state
   if (orders.length === 0) {
     return (
-      <div style={{ fontFamily: F.tc }}>
+      <div className="h-full flex flex-col min-h-0" style={{ fontFamily: F.tc }}>
         <PageHeader
           caption="PAYOUT · 分潤統計 · 總+淨並列"
           title="PROFIT SPLIT"
@@ -118,7 +118,7 @@ export function PayoutPage({ orders, menu }: PageProps) {
   }
 
   return (
-    <div style={{ fontFamily: F.tc }}>
+    <div className="h-full flex flex-col min-h-0" style={{ fontFamily: F.tc }}>
       {/* ── PAGE HEADER ─────────────────────────── */}
       <PageHeader
         caption="PAYOUT · 分潤統計 · 總+淨並列"
@@ -127,7 +127,7 @@ export function PayoutPage({ orders, menu }: PageProps) {
       />
 
       {/* ── SUB TABS ────────────────────────────── */}
-      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", padding: "8px 24px 0", fontFamily: F.tc, fontWeight: 900, fontSize: 13 }}>
+      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", padding: "8px 24px 0", fontFamily: F.tc, fontWeight: 900, fontSize: 13, flexShrink: 0 }}>
         {SUB_TABS.map((t) => (
           <span
             key={t.key}
@@ -142,6 +142,9 @@ export function PayoutPage({ orders, menu }: PageProps) {
           </span>
         ))}
       </div>
+
+      {/* ── SCROLL WRAPPER ──────────────────────── */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
 
       {/* ── HERO: 總營收 vs 淨利 ─────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 12, padding: "16px 24px 8px" }}>
@@ -312,7 +315,7 @@ export function PayoutPage({ orders, menu }: PageProps) {
       </div>
 
       {/* ── DISCLAIMER ──────────────────────────── */}
-      <div style={{ padding: "4px 24px 60px" }}>
+      <div style={{ padding: "4px 24px 16px" }}>
         <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderLeft: `3px solid ${C.orange}`, padding: "14px 16px" }}>
           <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 12, color: C.orange }}>
             {isEstimated ? "⚠ v1 估算" : "✓ 來自 menu"}
@@ -335,6 +338,8 @@ export function PayoutPage({ orders, menu }: PageProps) {
           </div>
         </div>
       </div>
+
+      </div>{/* end scroll wrapper */}
     </div>
   );
 }

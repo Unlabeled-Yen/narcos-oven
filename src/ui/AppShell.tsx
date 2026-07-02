@@ -121,7 +121,7 @@ export function AppShell({
 
   return (
     <div
-      className="relative min-h-screen bg-narcos-bg font-notoTc overflow-hidden"
+      className="relative h-screen flex flex-col bg-narcos-bg font-notoTc overflow-hidden"
       onDragOver={(e) => e.preventDefault()}
       onDrop={onDrop}
     >
@@ -137,7 +137,7 @@ export function AppShell({
           e.target.value = "";
         }}
       />
-      <div className="relative z-10 mx-auto" style={{ maxWidth: 1560 }}>
+      <div className="relative z-10 mx-auto w-full flex-1 min-h-0 flex flex-col" style={{ maxWidth: 1560 }}>
         <CommandBar
           nav={nav}
           active={activeGroup}
@@ -178,12 +178,15 @@ export function AppShell({
         )}
 
         {error && (
-          <div className="mx-6 mt-4 bg-narcos-redTint border border-narcos-red p-3 font-mono text-[12px] text-narcos-red">
+          <div className="mx-6 mt-4 bg-narcos-redTint border border-narcos-red p-3 font-mono text-[12px] text-narcos-red flex-none">
             {error}
           </div>
         )}
 
-        <ActivePage {...pageProps} />
+        {/* 內容區：填滿剩餘視窗高、由各頁自控內部滾動（header/nav 永遠固定） */}
+        <main className="flex-1 min-h-0 overflow-hidden">
+          <ActivePage {...pageProps} />
+        </main>
       </div>
     </div>
   );

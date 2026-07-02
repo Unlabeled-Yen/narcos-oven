@@ -193,7 +193,7 @@ export function PendingPage(props: PageProps) {
   // ── Empty state ─────────────────────────────────────────────────────────
   if (total === 0) {
     return (
-      <div style={{ fontFamily: F.tc, minHeight: "100vh", background: C.bg }}>
+      <div className="h-full flex flex-col min-h-0" style={{ fontFamily: F.tc, background: C.bg }}>
         <PageHeader caption="PENDING · 主軌的一等公民出口 · 非錯誤" title="待處理桶" />
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "80px 24px", gap: 16 }}>
           <div style={{ fontFamily: F.anton, fontSize: 64, color: C.green, lineHeight: 1 }}>✓</div>
@@ -210,7 +210,7 @@ export function PendingPage(props: PageProps) {
 
   // ── Main render ─────────────────────────────────────────────────────────
   return (
-    <div style={{ fontFamily: F.tc, minHeight: "100vh", background: C.bg }}>
+    <div className="h-full flex flex-col min-h-0" style={{ fontFamily: F.tc, background: C.bg }}>
       <PageHeader
         caption="PENDING · 主軌的一等公民出口 · 非錯誤"
         title="待處理桶"
@@ -252,10 +252,11 @@ export function PendingPage(props: PageProps) {
       </div>
 
       {/* Two-column layout */}
-      <div style={{ display: "grid", gridTemplateColumns: "2.4fr 1fr", gap: 12, padding: "8px 24px 60px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "2.4fr 1fr", gap: 12, padding: "8px 24px 16px", flex: 1, minHeight: 0 }}>
 
         {/* ── Left: order list ── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+        <div style={{ display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1, minHeight: 0, overflowY: "auto" }}>
           {visibleOrders.map((o, i) => {
             const isFocus   = i === focusIdx;
             const isResolved = resolvedSet.has(o.id);
@@ -333,9 +334,11 @@ export function PendingPage(props: PageProps) {
             );
           })}
 
+          </div>{/* end scrolling list */}
+
           {/* Cross-filter hint */}
           {activeFilter !== "ALL" && pendingOrders.length > visibleOrders.length && (
-            <div style={{ background: "#0d0d0f", border: `1px dashed ${C.line}`, padding: "12px 15px", fontFamily: F.mono, fontSize: 11, color: "#6C6C74", display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ background: "#0d0d0f", border: `1px dashed ${C.line}`, padding: "12px 15px", fontFamily: F.mono, fontSize: 11, color: "#6C6C74", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
               <span style={{ color: C.cyan }}>＋ {pendingOrders.length - visibleOrders.length}</span> 其他類別待處理
               <span style={{ flex: 1 }} />
               <button type="button" onClick={() => setActiveFilter("ALL")} style={{ color: "#111", background: C.cyan, fontFamily: F.tc, fontWeight: 900, fontSize: 11, padding: "4px 10px", border: "none", cursor: "pointer", borderRadius: 0 }}>
@@ -343,10 +346,10 @@ export function PendingPage(props: PageProps) {
               </button>
             </div>
           )}
-        </div>
+        </div>{/* end left column */}
 
         {/* ── Right rail ── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
 
           {/* Progress */}
           <div style={{ background: C.panel, border: `1px solid ${C.line}`, padding: 16 }}>

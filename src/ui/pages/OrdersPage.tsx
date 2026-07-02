@@ -145,7 +145,7 @@ export function OrdersPage({ orders, menu }: PageProps) {
   const hasFilter = filterParts.length > 0;
 
   return (
-    <div style={{ fontFamily: F.tc }}>
+    <div className="h-full flex flex-col min-h-0" style={{ fontFamily: F.tc }}>
       {/* PAGE HEADER */}
       <PageHeader
         caption="ORDERS · 全通路訂單台帳"
@@ -197,10 +197,10 @@ export function OrdersPage({ orders, menu }: PageProps) {
       </div>
 
       {/* MAIN: TABLE + RIGHT RAIL */}
-      <div style={{ display: "grid", gridTemplateColumns: "2.7fr 1fr", gap: 12, padding: "4px 24px 60px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "2.7fr 1fr", gap: 12, padding: "4px 24px 16px", flex: 1, minHeight: 0 }}>
 
         {/* LEFT: TABLE */}
-        <div style={{ minWidth: 0 }}>
+        <div style={{ minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 }}>
             <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 15, color: "#F5F4EF" }}>
               訂單台帳{" "}
@@ -219,13 +219,13 @@ export function OrdersPage({ orders, menu }: PageProps) {
             )}
           </div>
 
-          <div style={{ background: "#0F0F12", border: "1px solid #26262C", overflow: "hidden" }}>
+          <div style={{ background: "#0F0F12", border: "1px solid #26262C", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
             {/* 表頭 */}
             <div style={{
               display: "grid",
               gridTemplateColumns: "1.5fr 0.8fr 1fr 2fr 0.7fr 0.9fr 0.5fr 0.9fr",
               gap: 8, padding: "11px 16px", background: "#141417",
-              borderBottom: "1px solid #26262C",
+              borderBottom: "1px solid #26262C", flexShrink: 0,
               fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".08em",
             }}>
               <span>訂單編號</span><span>通路</span><span>收件</span><span>品項</span>
@@ -235,6 +235,8 @@ export function OrdersPage({ orders, menu }: PageProps) {
               <span style={{ textAlign: "right" }}>狀態</span>
             </div>
 
+            {/* 捲動列區 */}
+            <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
             {/* 空狀態 */}
             {filteredOrders.length === 0 && (
               <div style={{ padding: "48px 24px", textAlign: "center" }}>
@@ -302,11 +304,12 @@ export function OrdersPage({ orders, menu }: PageProps) {
                 </div>
               );
             })}
+            </div>
           </div>
         </div>
 
         {/* RIGHT RAIL */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
 
           {/* 出貨總覽：每批一張 */}
           <div style={{ background: "#0F0F12", border: "1px solid #26262C", padding: 16 }}>

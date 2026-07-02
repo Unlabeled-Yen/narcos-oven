@@ -140,7 +140,7 @@ export function CapacityPage(props: PageProps) {
 
   // ─── Render ──────────────────────────────────────────────────────────────
   return (
-    <div style={{ fontFamily: F.tc }}>
+    <div className="h-full flex flex-col min-h-0" style={{ fontFamily: F.tc }}>
       {/* Page header + actions */}
       <PageHeader
         caption="CAPACITY · 產能設定 · 雇主編輯"
@@ -196,6 +196,9 @@ export function CapacityPage(props: PageProps) {
           )}
         </div>
       </div>
+
+      {/* ── Scrollable form body ────────────────────────────────────────────── */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
 
       {/* ── Daily max by atom ──────────────────────────────────────────────── */}
       <div style={{ padding: "12px 24px 8px" }}>
@@ -350,7 +353,7 @@ export function CapacityPage(props: PageProps) {
       </div>
 
       {/* Footer note */}
-      <div style={{ padding: "8px 24px 40px" }}>
+      <div style={{ padding: "8px 24px 16px" }}>
         <div style={{ background: C.track, border: `1px solid ${C.line}`, padding: "12px 16px" }}>
           <span style={{ fontFamily: F.mono, fontSize: 10, color: "#6C6C74", letterSpacing: ".05em" }}>NOTE</span>
           <span style={{ fontFamily: F.tc, fontWeight: 500, fontSize: 11, color: "#5a5a62", marginLeft: 8 }}>
@@ -360,6 +363,8 @@ export function CapacityPage(props: PageProps) {
           </span>
         </div>
       </div>
+
+      </div>{/* end scrollable form body */}
     </div>
   );
 }

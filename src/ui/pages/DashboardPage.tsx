@@ -98,21 +98,24 @@ export function DashboardPage({ orders, menu }: PageProps) {
 
   if (orders.length === 0) {
     return (
-      <div style={{ fontFamily: F.tc }}>
+      <div className="h-full flex flex-col min-h-0" style={{ fontFamily: F.tc }}>
         <PageHeader caption="DASHBOARD · 跨批統計" title="OVEN CENTRAL"
           right={<PeriodChips options={PERIODS} active={period} onChange={setPeriod} />} />
-        <div style={{ margin: "40px 24px", padding: "32px 24px", background: "#0F0F12", border: "1px solid #26262C", borderLeft: "3px solid #E5622A", fontFamily: F.mono, fontSize: 13, color: "#8A8A93" }}>
-          <span style={{ fontFamily: F.tc, fontWeight: 900, color: "#E5622A" }}>暫無資料</span>
-          {" "}— 請上傳訂單 Excel 以開始。
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+          <div style={{ margin: "40px 24px", padding: "32px 24px", background: "#0F0F12", border: "1px solid #26262C", borderLeft: "3px solid #E5622A", fontFamily: F.mono, fontSize: 13, color: "#8A8A93" }}>
+            <span style={{ fontFamily: F.tc, fontWeight: 900, color: "#E5622A" }}>暫無資料</span>
+            {" "}— 請上傳訂單 Excel 以開始。
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ fontFamily: F.tc }}>
+    <div className="h-full flex flex-col min-h-0" style={{ fontFamily: F.tc }}>
       <PageHeader caption="DASHBOARD · 跨批統計" title="OVEN CENTRAL"
         right={<PeriodChips options={PERIODS} active={period} onChange={setPeriod} />} />
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
 
       {/* KPI ROW */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, padding: "16px 24px" }}>
@@ -271,7 +274,7 @@ export function DashboardPage({ orders, menu }: PageProps) {
       </div>
 
       {/* TOP 品項 + 原物料出爐總量 */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(360px,1fr))", gap: 12, padding: "8px 24px 40px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(360px,1fr))", gap: 12, padding: "8px 24px 16px" }}>
         {/* TOP 10 品項 */}
         <PanelBox>
           <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 17, color: "#F5F4EF", marginBottom: 18 }}>
@@ -335,6 +338,7 @@ export function DashboardPage({ orders, menu }: PageProps) {
             </>
           )}
         </PanelBox>
+      </div>
       </div>
     </div>
   );

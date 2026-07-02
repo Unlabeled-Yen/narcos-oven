@@ -165,7 +165,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   const shipList = assignedByDay.get(shipISO) ?? [];
 
   return (
-    <>
+    <div className="h-full flex flex-col min-h-0">
       <PageHeader
         caption="SCHEDULE · 出爐排程 · 雇主拍板為準"
         title="PRODUCTION"
@@ -214,6 +214,8 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
         </div>
       )}
 
+      {/* 內容捲動區：header/banner 固定、其餘在視窗內內滾 */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
       <div className="px-6 py-2" style={{ display: "grid", gridTemplateColumns: "2.7fr 1fr", gap: 12 }}>
         {/* WEEK GRID */}
         <div style={{ background: "#0F0F12", border: "1px solid #26262C", padding: 16, minWidth: 0 }}>
@@ -322,7 +324,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
               <span style={{ fontFamily: F.anton, fontSize: 22, color: pending.length ? "#E5622A" : "#43B23C" }}>{pending.length}</span>
             </div>
             <div style={{ fontFamily: F.mono, fontSize: 10, color: "#6C6C74", marginBottom: 12 }}>憲章 #11 · 拖到出貨日即拍板</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 9, maxHeight: "50vh", overflowY: "auto" }}>
               {pending.map((o) => (
                 <div
                   key={o.id}
@@ -395,7 +397,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
       </div>
 
       {/* SELECTED BATCH DETAIL */}
-      <div className="px-6 py-2 pb-16">
+      <div className="px-6 py-2 pb-4">
         <div style={{ background: "#0F0F12", border: "1px solid #26262C" }}>
           <div className="flex items-center justify-between flex-wrap" style={{ gap: 12, padding: "18px 20px 14px" }}>
             <div className="flex items-baseline" style={{ gap: 12 }}>
@@ -416,7 +418,8 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
           </div>
         </div>
       </div>
-    </>
+      </div>
+    </div>
   );
 }
 

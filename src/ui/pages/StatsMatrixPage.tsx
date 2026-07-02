@@ -54,7 +54,7 @@ export function StatsMatrixPage({ orders, menu }: PageProps) {
 
   if (orders.length === 0) {
     return (
-      <div style={{ fontFamily: F.tc, minHeight: "100vh", background: C.bg }}>
+      <div className="h-full flex flex-col min-h-0" style={{ fontFamily: F.tc, background: C.bg }}>
         <PageHeader caption="PRODUCTION STATS · 品項 × 批次 × 通路" title="OVEN MATRIX" />
         <div style={{ padding: "60px 24px", textAlign: "center" }}>
           <div style={{ display: "inline-block", padding: "32px 40px", background: C.panel, border: `1px solid ${C.line}` }}>
@@ -68,15 +68,16 @@ export function StatsMatrixPage({ orders, menu }: PageProps) {
   }
 
   return (
-    <div style={{ fontFamily: F.tc, minHeight: "100vh", background: C.bg }}>
+    <div className="h-full flex flex-col min-h-0" style={{ fontFamily: F.tc, background: C.bg }}>
+      {/* flex-none: PageHeader */}
       <PageHeader
         caption="PRODUCTION STATS · 品項 × 批次 × 通路"
         title="OVEN MATRIX"
         right={<PeriodChips options={PERIOD_OPTS} active={period} onChange={setPeriod} />}
       />
 
-      {/* Sub-tabs */}
-      <div style={{ display: "flex", gap: 4, padding: "8px 24px 0", fontFamily: F.tc, fontWeight: 900, fontSize: 13 }}>
+      {/* flex-none: Sub-tabs */}
+      <div style={{ display: "flex", gap: 4, padding: "8px 24px 0", fontFamily: F.tc, fontWeight: 900, fontSize: 13, flexShrink: 0 }}>
         {(["分潤統計", "出爐統計表", "KOL ROI"] as const).map((label) => {
           const active = label === "出爐統計表";
           return (
@@ -87,16 +88,18 @@ export function StatsMatrixPage({ orders, menu }: PageProps) {
         })}
       </div>
 
-      {/* View toggle (display only) */}
-      <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "14px 24px 6px", flexWrap: "wrap" }}>
+      {/* flex-none: View toggle (display only) */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "14px 24px 6px", flexWrap: "wrap", flexShrink: 0 }}>
         <span style={{ fontFamily: F.mono, fontSize: 10, color: C.mut3, letterSpacing: ".14em" }}>列＝</span>
         <ActiveChip label="原子 atom" /><InactiveChip label="SKU" />
         <span style={{ fontFamily: F.mono, fontSize: 10, color: C.mut3, letterSpacing: ".14em", marginLeft: 12 }}>值＝</span>
         <ActiveChip label="顆數" /><InactiveChip label="通路占比" />
       </div>
 
-      {/* Matrix */}
-      <div style={{ padding: "8px 24px 20px", overflowX: "auto" }}>
+      {/* flex-1 捲動區：矩陣 + 底部卡 */}
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "8px 24px" }}>
+
+        {/* Matrix */}
         <div style={{ background: C.panel, border: `1px solid ${C.line}`, minWidth: 600 + visCols.length * 90 }}>
 
           {/* Header row */}
@@ -147,57 +150,58 @@ export function StatsMatrixPage({ orders, menu }: PageProps) {
             <span style={{ fontFamily: F.anton, fontSize: 16, color: C.ink, textAlign: "right" }}>{fmt(mx.grandTotal)}</span>
           </div>
         </div>
-      </div>
 
-      {/* 通路交叉 + 雙軌驗證 */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 12, padding: "8px 24px 60px" }}>
+        {/* 通路交叉 + 雙軌驗證（在捲動區內） */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 12, padding: "8px 0 16px" }}>
 
-        {/* 通路交叉 mini */}
-        <div style={{ background: C.panel, border: `1px solid ${C.line}`, padding: 20 }}>
-          <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 16, color: C.ink, marginBottom: 16 }}>
-            本批 {latestDate ? latestDate.slice(5).replace("-", "/") : "—"} · 通路 × 出爐
-          </div>
-          {mx.latestChannelShares.length === 0
-            ? <div style={{ fontFamily: F.mono, fontSize: 11, color: C.mut3, textAlign: "center", padding: "20px 0" }}>無資料</div>
-            : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 9, fontFamily: F.mono, fontSize: 12 }}>
-                {mx.latestChannelShares.map((s) => (
-                  <div key={s.channel} style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                    <span style={{ width: 60, fontFamily: F.tc, fontWeight: 700, color: C.ink3, flexShrink: 0 }}>{s.channel}</span>
-                    <div style={{ flex: 1, height: 13, background: C.track }}>
-                      <div style={{ width: `${s.pct}%`, height: 13, background: CHANNEL_COLOR[s.channel as Channel] ?? C.mut }} />
+          {/* 通路交叉 mini */}
+          <div style={{ background: C.panel, border: `1px solid ${C.line}`, padding: 20 }}>
+            <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 16, color: C.ink, marginBottom: 16 }}>
+              本批 {latestDate ? latestDate.slice(5).replace("-", "/") : "—"} · 通路 × 出爐
+            </div>
+            {mx.latestChannelShares.length === 0
+              ? <div style={{ fontFamily: F.mono, fontSize: 11, color: C.mut3, textAlign: "center", padding: "20px 0" }}>無資料</div>
+              : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 9, fontFamily: F.mono, fontSize: 12 }}>
+                  {mx.latestChannelShares.map((s) => (
+                    <div key={s.channel} style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                      <span style={{ width: 60, fontFamily: F.tc, fontWeight: 700, color: C.ink3, flexShrink: 0 }}>{s.channel}</span>
+                      <div style={{ flex: 1, height: 13, background: C.track }}>
+                        <div style={{ width: `${s.pct}%`, height: 13, background: CHANNEL_COLOR[s.channel as Channel] ?? C.mut }} />
+                      </div>
+                      <span style={{ width: 40, textAlign: "right", color: C.mut2 }}>{s.count}</span>
                     </div>
-                    <span style={{ width: 40, textAlign: "right", color: C.mut2 }}>{s.count}</span>
+                  ))}
+                  <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", fontFamily: F.mono, fontSize: 11, color: C.mut3 }}>
+                    <span>本批合計</span>
+                    <span style={{ color: C.ink3, fontWeight: 700 }}>
+                      {fmt(latestDate ? (mx.batchTotals.get(latestDate)?.total ?? 0) : 0)} 顆
+                    </span>
                   </div>
-                ))}
-                <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", fontFamily: F.mono, fontSize: 11, color: C.mut3 }}>
-                  <span>本批合計</span>
-                  <span style={{ color: C.ink3, fontWeight: 700 }}>
-                    {fmt(latestDate ? (mx.batchTotals.get(latestDate)?.total ?? 0) : 0)} 顆
-                  </span>
                 </div>
-              </div>
-            )
-          }
+              )
+            }
+          </div>
+
+          {/* 憲章 #3 雙軌驗證 */}
+          <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderLeft: `3px solid ${C.green}`, padding: 20, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+            <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: C.green }}>雙軌獨立驗證 · 憲章 #3</div>
+            <div style={{ fontFamily: F.tc, fontWeight: 500, fontSize: 12, color: C.mut, marginTop: 6, lineHeight: 1.6 }}>
+              本表由主軌 orders aggregate；產出前{" "}
+              <span style={{ fontFamily: F.mono, color: C.ink3 }}>verify_stats.py</span>{" "}
+              從 raw fixture 重算一次交叉核對，數字一致才放行。
+            </div>
+            <div style={{ fontFamily: F.mono, fontSize: 11, color: C.green, marginTop: 10 }}>
+              ✓ {fmt(mx.grandTotal)} 顆 · 來自 orders 主軌即時計算
+            </div>
+            <div style={{ marginTop: 12, padding: "8px 12px", background: C.track, fontFamily: F.mono, fontSize: 10, color: C.mut3, letterSpacing: ".08em" }}>
+              副軌核對指令：<br />
+              <span style={{ color: C.ink3 }}>python verify_stats.py --source orders.json</span>
+            </div>
+          </div>
         </div>
 
-        {/* 憲章 #3 雙軌驗證 */}
-        <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderLeft: `3px solid ${C.green}`, padding: 20, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-          <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: C.green }}>雙軌獨立驗證 · 憲章 #3</div>
-          <div style={{ fontFamily: F.tc, fontWeight: 500, fontSize: 12, color: C.mut, marginTop: 6, lineHeight: 1.6 }}>
-            本表由主軌 orders aggregate；產出前{" "}
-            <span style={{ fontFamily: F.mono, color: C.ink3 }}>verify_stats.py</span>{" "}
-            從 raw fixture 重算一次交叉核對，數字一致才放行。
-          </div>
-          <div style={{ fontFamily: F.mono, fontSize: 11, color: C.green, marginTop: 10 }}>
-            ✓ {fmt(mx.grandTotal)} 顆 · 來自 orders 主軌即時計算
-          </div>
-          <div style={{ marginTop: 12, padding: "8px 12px", background: C.track, fontFamily: F.mono, fontSize: 10, color: C.mut3, letterSpacing: ".08em" }}>
-            副軌核對指令：<br />
-            <span style={{ color: C.ink3 }}>python verify_stats.py --source orders.json</span>
-          </div>
-        </div>
-      </div>
+      </div>{/* end flex-1 捲動區 */}
     </div>
   );
 }

@@ -83,20 +83,22 @@ export function KolPage({ orders, menu, navigate }: PageProps) {
   const COLS = "1.3fr 1.8fr 0.8fr 1fr 0.7fr 1fr 0.8fr 0.9fr";
 
   return (
-    <div style={{ position: "relative", zIndex: 1 }}>
-      {/* Page Header */}
-      <PageHeader
-        caption="KOL ROI · 合作成本 vs 帶單"
-        title="KOL PAYBACK"
-        right={
-          <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 12, color: "#111", background: C.purple, padding: "9px 16px", cursor: "default" }}>
-            ◆ Claude Code 分析
-          </span>
-        }
-      />
+    <div className="h-full flex flex-col min-h-0" style={{ position: "relative", zIndex: 1 }}>
+      {/* Page Header — flex-none */}
+      <div style={{ flexShrink: 0 }}>
+        <PageHeader
+          caption="KOL ROI · 合作成本 vs 帶單"
+          title="KOL PAYBACK"
+          right={
+            <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 12, color: "#111", background: C.purple, padding: "9px 16px", cursor: "default" }}>
+              ◆ Claude Code 分析
+            </span>
+          }
+        />
+      </div>
 
-      {/* 子頁分頁 */}
-      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", padding: "8px 24px 0", fontFamily: F.tc, fontWeight: 900, fontSize: 13 }}>
+      {/* 子頁分頁 — flex-none */}
+      <div style={{ flexShrink: 0, display: "flex", gap: 4, flexWrap: "wrap", padding: "8px 24px 0", fontFamily: F.tc, fontWeight: 900, fontSize: 13 }}>
         {TABS.map((tab) => {
           const active = tab.key === "kol";
           return (
@@ -109,9 +111,9 @@ export function KolPage({ orders, menu, navigate }: PageProps) {
         })}
       </div>
 
-      {/* 估算警告 */}
+      {/* 估算警告 — flex-none */}
       {kpi.hasEstimate && (
-        <div style={{ margin: "8px 24px 0", padding: "8px 16px", background: "#2a1a10", borderLeft: `3px solid ${C.orange}`, fontFamily: F.mono, fontSize: 11, color: C.orange }}>
+        <div style={{ flexShrink: 0, margin: "8px 24px 0", padding: "8px 16px", background: "#2a1a10", borderLeft: `3px solid ${C.orange}`, fontFamily: F.mono, fontSize: 11, color: C.orange }}>
           ⚠ 估算模式：部分品項 cost 未設定，成本以 $0 計算——請補齊 menu.yaml cost 欄位。
         </div>
       )}
@@ -124,8 +126,8 @@ export function KolPage({ orders, menu, navigate }: PageProps) {
         </div>
       ) : (
         <>
-          {/* KPI 四欄 */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 12, padding: "16px 24px 8px" }}>
+          {/* KPI 四欄 — flex-none */}
+          <div style={{ flexShrink: 0, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 12, padding: "16px 24px 8px" }}>
             <KpiCard accent={C.purple} label="合作 KOL"
               foot={`已寄 ${kpi.shippedCount} · 待寄 ${kpi.pendingCount} · 待選 ${kpi.choiceCount}`}>
               <span style={{ fontFamily: F.anton, fontSize: 42, color: C.ink, lineHeight: 0.85 }}>{kpi.kolCount}</span>
@@ -162,21 +164,25 @@ export function KolPage({ orders, menu, navigate }: PageProps) {
             </div>
           </div>
 
-          {/* 明細表 */}
-          <div style={{ padding: "8px 24px 20px", overflowX: "auto" }}>
-            <div style={{ background: C.panel, border: `1px solid ${C.line}`, minWidth: 820 }}>
-              <div style={{ display: "grid", gridTemplateColumns: COLS, gap: 8, padding: "11px 16px", background: "#141417", borderBottom: `1px solid ${C.line}`, fontFamily: F.mono, fontSize: 10, color: C.mut2, letterSpacing: ".06em" }}>
+          {/* 明細表區域 — flex-1 min-h-0，內部捲動 */}
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: "8px 24px 0", overflowX: "auto" }}>
+            <div style={{ background: C.panel, border: `1px solid ${C.line}`, minWidth: 820, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+              {/* 表頭 — flex-none */}
+              <div style={{ flexShrink: 0, display: "grid", gridTemplateColumns: COLS, gap: 8, padding: "11px 16px", background: "#141417", borderBottom: `1px solid ${C.line}`, fontFamily: F.mono, fontSize: 10, color: C.mut2, letterSpacing: ".06em" }}>
                 <span>KOL</span><span>提供品項</span>
                 <span style={{ textAlign: "right" }}>成本</span><span>折扣碼</span>
                 <span style={{ textAlign: "right" }}>帶單</span><span style={{ textAlign: "right" }}>帶單營收</span>
                 <span style={{ textAlign: "right" }}>ROI</span><span style={{ textAlign: "right" }}>狀態</span>
               </div>
-              {rows.map((row) => <TableRow key={row.handle} row={row} />)}
+              {/* 資料列區 — flex-1 min-h-0 overflow-y-auto */}
+              <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+                {rows.map((row) => <TableRow key={row.handle} row={row} />)}
+              </div>
             </div>
           </div>
 
-          {/* 冠軍榜 + 洞察 */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 12, padding: "0 24px 60px" }}>
+          {/* 冠軍榜 + 洞察 — flex-none，固定在表格下方 */}
+          <div style={{ flexShrink: 0, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 12, padding: "12px 24px 16px" }}>
             {/* Claude Code 洞察（靜態，#2 不呼叫 LLM）*/}
             <div style={{ background: "#160f26", border: `1px solid ${C.purple}`, borderLeft: `3px solid ${C.purple}`, padding: 18 }}>
               <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: "#b79ae6", marginBottom: 6 }}>◆ Claude Code 洞察 · kol_roi_analysis</div>

@@ -123,7 +123,7 @@ export function MenuEditorPage({ menu }: PageProps) {
   });
 
   return (
-    <div style={{ fontFamily: F.tc, minHeight: "100vh", background: C.bg }}>
+    <div className="h-full flex flex-col min-h-0" style={{ fontFamily: F.tc }}>
       <PageHeader
         caption={`MENU · 主軌唯一真相 · source of truth · ${totalSku} SKU`}
         title="MENU MAP"
@@ -134,12 +134,12 @@ export function MenuEditorPage({ menu }: PageProps) {
         }
       />
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.7fr", gap: 12, padding: "8px 24px 80px", alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.7fr", gap: 12, padding: "8px 24px 16px", flex: 1, minHeight: 0, overflow: "hidden" }}>
 
         {/* ====== LEFT: SKU 清單 ============================== */}
-        <div style={{ minWidth: 0 }}>
+        <div style={{ minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
           {/* cat chips */}
-          <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap", flexShrink: 0 }}>
             {(["all", "combo", "single"] as const).map((v) => {
               const on = catFilter === v;
               return (
@@ -150,9 +150,9 @@ export function MenuEditorPage({ menu }: PageProps) {
             })}
           </div>
           {/* search */}
-          <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜尋品項 / 別名…" style={{ ...inp(), padding: "9px 12px", width: "100%", boxSizing: "border-box", marginBottom: 10 }} />
+          <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜尋品項 / 別名…" style={{ ...inp(), padding: "9px 12px", width: "100%", boxSizing: "border-box", marginBottom: 10, flexShrink: 0 }} />
           {/* list */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 640, overflowY: "auto" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1, minHeight: 0, overflowY: "auto" }}>
             {filteredIds.length === 0 && <div style={{ fontFamily: F.mono, fontSize: 12, color: C.mut, padding: "24px 12px", textAlign: "center", border: `1px dashed ${C.borderDash}` }}>無符合品項</div>}
             {filteredIds.map((id) => {
               const p = localProducts[id]!;
@@ -176,7 +176,7 @@ export function MenuEditorPage({ menu }: PageProps) {
         </div>
 
         {/* ====== RIGHT: 編輯器 ================================ */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
 
           {/* Claude Code 建議區（靜態 demo，憲章 #2） */}
           {showSuggest && (
