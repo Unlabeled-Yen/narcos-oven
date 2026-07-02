@@ -14,6 +14,7 @@ import { PendingBucket } from "./ui/PendingBucket";
 import { ConservationBanner } from "./ui/ConservationBanner";
 import { ImportSummaryModal } from "./ui/ImportSummaryModal";
 import { ExportPanel } from "./ui/ExportPanel";
+import { SchedulePanel } from "./ui/SchedulePanel";
 
 const menu = loadMenu(menuYamlText);
 
@@ -218,6 +219,8 @@ export default function App() {
               Excel/PDF 產出 disabled。點右下的匯入紀錄再叫出 modal。
             </div>
           )}
+
+          <SchedulePanel orders={allOrders} menu={menu} onOrdersChanged={refreshOrders} />
 
           <ExportPanel orders={allOrders} menu={menu} />
 

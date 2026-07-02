@@ -37,11 +37,29 @@ export const ChannelSchema = z.object({
   color: z.string(),
 });
 
+export const ProductionCapacitySchema = z.object({
+  daily_max_by_atom: z.record(z.string(), z.number()),
+  weekly_pattern: z
+    .object({
+      Mon: z.number().default(1),
+      Tue: z.number().default(1),
+      Wed: z.number().default(1),
+      Thu: z.number().default(1),
+      Fri: z.number().default(1),
+      Sat: z.number().default(1),
+      Sun: z.number().default(1),
+    })
+    .default({ Mon: 1, Tue: 1, Wed: 1, Thu: 1, Fri: 1, Sat: 1, Sun: 1 }),
+});
+export type ProductionCapacity = z.infer<typeof ProductionCapacitySchema>;
+
 export const MenuSchema = z.object({
   atoms: z.record(z.string(), AtomSchema),
   products: z.record(z.string(), ProductSchema),
   channels: z.array(ChannelSchema).optional(),
   logistics_cost: z.record(z.string(), z.number()).optional(),
+  production_capacity: ProductionCapacitySchema.optional(),
+  product_lead_time: z.record(z.string(), z.number()).optional(),
 });
 
 export type Atom = z.infer<typeof AtomSchema>;
@@ -156,11 +174,25 @@ export const OrderSnapshotSchema = z.object({
 });
 export type OrderSnapshot = z.infer<typeof OrderSnapshotSchema>;
 
+export const AssignmentSourceSchema = z.enum([
+  "customer_wish_kept",  // 客人選了、雇主未改
+  "boss_override",       // 雇主改過客人建議
+  "boss_scheduled",      // 客人沒選、雇主直接排
+  "auto_from_rule",      // 系統規則自動排（雇主可覆蓋）
+  "pending",             // 還沒排
+]);
+export type AssignmentSource = z.infer<typeof AssignmentSourceSchema>;
+
 export const OrderSchema = z.object({
   id: z.string(),
   channel: ChannelIdSchema,
   status: OrderStatusSchema,
-  batchDate: z.string().nullable(),
+  batchDate: z.string().nullable(),  // 系統認定的最終出爐日（M6 之後 = assigned_batch_date）
+
+  // M6 新增（backward-compat）
+  customer_wish_date: z.string().nullable().default(null),
+  system_suggested_date: z.string().nullable().default(null),
+  assignment_source: AssignmentSourceSchema.default("pending"),
   recipient: z.object({
     name: z.string().nullable(),
     igOrLine: z.string().nullable(),

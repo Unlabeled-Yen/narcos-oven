@@ -137,6 +137,7 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
     c21_total: null,
     c22_label_count: null,
   };
+  const _ship = extractKolShippingDate(w.ship_raw, null);
   const lifecycle = {
     first_seen_at: now,
     last_seen_at: now,
@@ -144,6 +145,9 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
     disappeared_resolution: null as "shipped" | "canceled" | "kept_active" | null,
     frozen_after_label_print: false,
     changes: [] as import("../domain/models").OrderChange[],
+    customer_wish_date: _ship,
+    system_suggested_date: null as string | null,
+    assignment_source: (_ship ? "customer_wish_kept" : "pending") as import("../domain/models").AssignmentSource,
   };
 
   // ---- c6 = True 已寄出：直接 kol_shipped、後續 stage 不管 ----
