@@ -229,10 +229,21 @@ type PendingReason = {
     │
     │ 標籤編號：labelCount=2 → "2-1", "2-2"
     ▼
-[Stage 6: Persistence]
+[Stage 6: Persistence (upsert)]                     雇主 R2-2
+    │ orders 表 UNIQUE(order_id)
+    │
+    │ 【付款狀態 upsert】——同 order_id 二次匯入時：
+    │   舊 c5 = "訂單成立(未付款)" & 新 c5 = "付款完成"
+    │     → 該 order 從 pending_payment 移到 confirmed
+    │     → 重跑 Stage 2-5 產生 items/labelCount/batchDate
+    │     → 記錄 payment_confirmed_at timestamp
+    │   舊/新狀態相同 → skip
+    │
     │ 寫進 SQLite：Order + PendingReason + Batch
+    │
     │ 【防護 #1 總數守恆律】：
     │   raw_input_count === Σ(confirmed) + Σ(all pending) + Σ(kol_shipped)
+    │ 【新增守恆律】upsert 前後全域 order_id 集合必須嚴格擴增（不能減少）
     ▼
 [Stage 7: Output]
     │ 出爐統計 xlsx / 出貨總覽 xlsx / 分潤 xlsx / 標籤 PDF
@@ -242,8 +253,12 @@ type PendingReason = {
     │   淨營收 = 總營收 - Σ品項成本 - Σ包材 - Σ物流實付
     │   （品項成本 & 物流實付見 menu.yaml logistics_cost，v1 用預設值）
     │
-    │ 【標籤 PDF】                               雇主 confirm #8
-    │   熱感應標籤機格式（尺寸待補問）、v1 用 60mm × 90mm 縱向
+    │ 【標籤 PDF】                               雇主 R2-3
+    │   spec = She 既有 jpg 佈局（fixtures/2026-07-round1/@ 參考.../出貨標籤/）
+    │   每頁 590×945 px 等效比例
+    │   內含 3 個標籤直排、虛線分隔
+    │   單一標籤 590×315 px（aspect 1.87:1）
+    │   實體 mm 由印表機決定；若需精確 → 200 DPI 換算為 75×120mm 每頁
     │
     │ 產出前彈「離手前核對頁」（防護 #6）給人確認
 ```
@@ -312,12 +327,13 @@ Server：Fastify @ `localhost:3000`
 | `query_batch(date)` | 讀某批次完整資料 |
 | `get_batch_summary(date)` | 該批次出爐量、營收、通路分佈 |
 | `list_pending(reasonCode?)` | 列出所有/特定原因的待處理 |
-| `classify_pending(orderId, patch)` | 分類 / 修正一筆 pending（等同 REST PATCH） |
-| `suggest_new_menu_item(orderName, orderPrice)` | 給 Claude Code 建議新 SKU（回 draft yaml block、Yen 要按確認才寫回） |
+| `classify_pending(orderId, patch)` | 分類 / 修正一筆 pending |
+| `refresh_payment_status(xlsx_path)` | 觸發付款 reconciliation：只跑 Stage 6 upsert、將 pending_payment → confirmed（雇主 R2-2） |
+| `suggest_new_menu_item(orderName, orderPrice)` | 給 Claude Code 建議新 SKU |
 | `list_menu_products(category?)` | 讀 menu |
 | `compare_batches(dates[])` | 比較 N 個批次的品項/營收 |
 | `get_payout(dateFrom?, dateTo?, mode: "gross" \| "net")` | 分潤 |
-| `find_recipient(query)` | 用姓名/IG/phone 找歷史訂單（回頭客分析） |
+| `find_recipient(query)` | 用姓名/IG/phone 找歷史訂單 |
 
 ### Prompts（給 Claude Code 對話啟動用）
 
