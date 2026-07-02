@@ -113,14 +113,14 @@ export function parseInPerson(
       channel = "待分類";
       pendingReasons.push({
         code: "AMBIGUOUS_CHANNEL",
-        humanMessage: `c2「${c2Text}」類型=${typeMatch[1]}、進待分類桶`,
+        humanMessage: `「在哪邊取貨」欄=「${c2Text}」類型=${typeMatch[1]}、進待分類桶`,
         suggestionConfidence: 0,
       });
     } else {
       channel = "待分類";
       pendingReasons.push({
         code: "AMBIGUOUS_CHANNEL",
-        humanMessage: `c2「${c2Text.slice(0, 40)}」regex 無法辨識通路類型`,
+        humanMessage: `「在哪邊取貨」欄=「${c2Text.slice(0, 40)}」無法辨識通路類型（不含面交/宅配/駐店等關鍵字）`,
         suggestionConfidence: 0,
       });
     }
@@ -128,7 +128,7 @@ export function parseInPerson(
     if (!batchDate) {
       pendingReasons.push({
         code: "MISSING_BATCH_DATE",
-        humanMessage: `c2「${c2Text.slice(0, 40)}」無法解析出出爐日`,
+        humanMessage: `「在哪邊取貨」欄=「${c2Text.slice(0, 40)}」無法抓到出爐日`,
         suggestionConfidence: 0,
       });
     }
@@ -143,7 +143,7 @@ export function parseInPerson(
       if (!skuId) {
         pendingReasons.push({
           code: "UNKNOWN_PRODUCT",
-          humanMessage: `面交欄 c${col}「${headerName}」找不到 SKU`,
+          humanMessage: `面交欄「${headerName}」找不到對應的 menu SKU`,
           suggestionConfidence: 0,
         });
         continue;

@@ -184,7 +184,7 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
   if (!batchDate) {
     pendingReasons.push({
       code: "MISSING_BATCH_DATE",
-      humanMessage: `KOL c4 寄貨時間「${String(w.ship_raw ?? "").slice(0, 20)}」無法解析`,
+      humanMessage: `KOL「寄貨時間」欄=「${String(w.ship_raw ?? "").slice(0, 20)}」無法解析為日期`,
       suggestionConfidence: 0,
     });
   }
@@ -204,7 +204,7 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
     if (!sku) {
       pendingReasons.push({
         code: "UNKNOWN_PRODUCT",
-        humanMessage: `KOL 品項「${p.slice(0, 30)}」找不到 SKU`,
+        humanMessage: `KOL「提供項目」欄=「${p.slice(0, 30)}」找不到對應的 menu SKU`,
         suggestionConfidence: 0,
       });
       continue;

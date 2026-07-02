@@ -161,7 +161,7 @@ function finalizeOrder(w: WipOrder, menu: Menu): Order {
   if (!batchDate) {
     pendingReasons.push({
       code: "MISSING_BATCH_DATE",
-      humanMessage: `賣貨便訂單 ${w.order_id} 沒選指定出貨日`,
+      humanMessage: `賣貨便訂單客人沒選「⚠️必填！指定出貨日」→ 等雇主排批次（M6 排程系統會建議下次週二）`,
       suggestionConfidence: 0,
     });
   }
@@ -176,7 +176,7 @@ function finalizeOrder(w: WipOrder, menu: Menu): Order {
     if (!skuId) {
       pendingReasons.push({
         code: "UNKNOWN_PRODUCT",
-        humanMessage: `品項字串無法對到 menu SKU：「${raw.name.slice(0, 50)}」`,
+        humanMessage: `賣貨便「商品名稱」欄=「${raw.name.slice(0, 50)}」無法對到 menu.yaml SKU`,
         suggestionConfidence: 0,
       });
       items.push({
