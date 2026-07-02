@@ -23,3 +23,6 @@ fixtures/
 *.sqlite
 *.db
 data/backups/
+
+# 補：TypeScript incremental build cache
+tsconfig.tsbuildinfo

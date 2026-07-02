@@ -1,1 +1,0 @@
-{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/domain/menu.ts","./src/domain/models.ts","./src/domain/utils.ts","./src/parsers/seller-buy.ts","./src/ui/conservationbanner.tsx","./src/ui/orderstable.tsx","./src/ui/pendingbucket.tsx"],"version":"5.9.3"}
