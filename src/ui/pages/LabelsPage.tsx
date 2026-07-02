@@ -226,7 +226,7 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
               標籤規則
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, fontFamily: F.tc, fontWeight: 500, fontSize: 12, color: "#9A9AA2" }}>
-              <div>· 賣貨便：每箱一張（c22）</div>
+              <div>· 賣貨便：每箱一張（依配送數量）</div>
               <div>· 面交 / KOL：每品項一張</div>
               <div>· 分盒編號 <span style={{ fontFamily: F.mono, color: "#C9C9CF" }}>N-1 / N-2…</span></div>
             </div>
