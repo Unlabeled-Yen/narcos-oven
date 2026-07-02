@@ -19,56 +19,15 @@ import type {
   ParseResult,
 } from "../domain/models";
 import { toNum } from "../domain/utils";
-import { explodeToAtoms, lookupSku } from "./../domain/menu";
+import { explodeToAtoms, lookupSku } from "../domain/menu";
+import { readSheetTolerant } from "../domain/xlsx-tolerant";
+import {
+  extractSellerBuyShippingDate,
+  parseSellerBuyOrderDate,
+} from "../domain/batch-date";
 
 const SHEET_NAME = "非訂單匯入";
 const HEADER_ROW_COUNT = 3; // 前 3 列是 header/title
-
-/**
- * 對抗賣貨便的 broken !ref：直接掃 cell keys 決定真實 row/col 範圍。
- * 憲章原則 1 實例——不能信外部匯出的 metadata。
- */
-function readSheetTolerant(sh: XLSX.WorkSheet): unknown[][] {
-  let maxRow = 0;
-  let maxCol = 0;
-  for (const key of Object.keys(sh)) {
-    if (key.startsWith("!")) continue;
-    const m = /^([A-Z]+)(\d+)$/.exec(key);
-    if (!m) continue;
-    const col = colToNum(m[1]!);
-    const row = parseInt(m[2]!, 10);
-    if (row > maxRow) maxRow = row;
-    if (col > maxCol) maxCol = col;
-  }
-  const out: unknown[][] = [];
-  for (let r = 1; r <= maxRow; r++) {
-    const row: unknown[] = [];
-    for (let c = 0; c <= maxCol; c++) {
-      const addr = numToCol(c) + r;
-      const cell = sh[addr] as XLSX.CellObject | undefined;
-      row.push(cell?.v ?? null);
-    }
-    out.push(row);
-  }
-  return out;
-}
-
-function colToNum(letters: string): number {
-  let n = 0;
-  for (const ch of letters) n = n * 26 + (ch.charCodeAt(0) - 64);
-  return n - 1;
-}
-
-function numToCol(n: number): string {
-  let s = "";
-  n++;
-  while (n > 0) {
-    const rem = (n - 1) % 26;
-    s = String.fromCharCode(65 + rem) + s;
-    n = Math.floor((n - 1) / 26);
-  }
-  return s;
-}
 
 /**
  * 讀 xlsx buffer、輸出 ParseResult。
@@ -142,6 +101,7 @@ type WipOrder = {
   items: RawItem[];
   recipient_name: string | null;
   conv_store: string | null;
+  order_date: Date | null;
   rowIndex: number;
   sourceFile: string;
 };
@@ -162,6 +122,7 @@ function beginOrder(r: unknown[], rowIndex: number, sourceFile: string): WipOrde
     items: r[12] != null ? [makeRawItem(r)] : [],
     recipient_name: r[7] != null ? String(r[7]).trim() : null,
     conv_store: r[11] != null ? String(r[11]).trim() : null,
+    order_date: parseSellerBuyOrderDate(r[3]),
     rowIndex,
     sourceFile,
   };
@@ -185,6 +146,22 @@ function finalizeOrder(w: WipOrder, menu: Menu): Order {
     pendingReasons.push({
       code: "PAYMENT_NOT_CONFIRMED",
       humanMessage: `訂單 ${w.order_id} 尚未付款（狀態：${w.status_raw.split("\n")[0]}）`,
+      suggestionConfidence: 0,
+    });
+  }
+
+  // ---- Stage 4: 出爐日抓取（從指定出貨日 marker）----
+  let batchDate: string | null = null;
+  for (const raw of w.items) {
+    if (raw.name.includes("指定出貨日")) {
+      batchDate = extractSellerBuyShippingDate(raw.name, w.order_date);
+      break;
+    }
+  }
+  if (!batchDate) {
+    pendingReasons.push({
+      code: "MISSING_BATCH_DATE",
+      humanMessage: `賣貨便訂單 ${w.order_id} 沒選指定出貨日`,
       suggestionConfidence: 0,
     });
   }
@@ -239,22 +216,14 @@ function finalizeOrder(w: WipOrder, menu: Menu): Order {
   // ---- Stage 5: 標籤數 (雇主 confirm #1 每箱一張) ----
   const labelCount = w.c22 !== null ? Math.max(1, Math.floor(w.c22)) : 1;
 
-  // ---- 決定 status ----
-  const status: Order["status"] = pendingReasons.length === 0
-    ? "confirmed"
-    : (pendingReasons[0]!.code === "PAYMENT_NOT_CONFIRMED"
-        ? "pending_payment"
-        : pendingReasons[0]!.code === "UNKNOWN_PRODUCT"
-        ? "pending_product"
-        : pendingReasons[0]!.code === "AMOUNT_MISMATCH"
-        ? "pending_amount"
-        : "pending_amount"); // fallback
+  // ---- 決定 status（優先度：付款 > 品項未歸類 > 金額不符 > 缺出爐日）----
+  const status: Order["status"] = deriveStatus(pendingReasons);
 
   return {
     id: w.order_id,
     channel: "賣貨便",
     status,
-    batchDate: null, // Stage 4 之後填（M1 尚未實作）
+    batchDate,
     recipient: {
       name: w.recipient_name,
       igOrLine: null,
@@ -277,4 +246,22 @@ function finalizeOrder(w: WipOrder, menu: Menu): Order {
       rawStatus: w.status_raw,
     },
   };
+}
+
+function deriveStatus(reasons: PendingReason[]): Order["status"] {
+  if (reasons.length === 0) return "confirmed";
+  // 優先度
+  for (const p of reasons) {
+    if (p.code === "PAYMENT_NOT_CONFIRMED") return "pending_payment";
+  }
+  for (const p of reasons) {
+    if (p.code === "UNKNOWN_PRODUCT") return "pending_product";
+  }
+  for (const p of reasons) {
+    if (p.code === "AMOUNT_MISMATCH") return "pending_amount";
+  }
+  for (const p of reasons) {
+    if (p.code === "MISSING_BATCH_DATE") return "pending_batch_date";
+  }
+  return "pending_amount";
 }
