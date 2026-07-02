@@ -115,6 +115,16 @@ function StatSection({ diff }: { diff: ImportDiff }) {
   );
 }
 
+const CHANNEL_BADGE: Record<string, { label: string; color: string }> = {
+  賣貨便: { label: "🛒 賣貨便", color: "bg-blue-100 text-blue-900" },
+  面交_中壢: { label: "🤝 面交 中壢", color: "bg-emerald-100 text-emerald-900" },
+  面交_台中: { label: "🤝 面交 台中", color: "bg-emerald-100 text-emerald-900" },
+  面交_其他: { label: "🤝 面交 其他", color: "bg-emerald-100 text-emerald-900" },
+  宅配: { label: "📦 宅配", color: "bg-purple-100 text-purple-900" },
+  KOL: { label: "⭐ KOL", color: "bg-amber-100 text-amber-900" },
+  待分類: { label: "❓ 待分類", color: "bg-gray-200 text-gray-900" },
+};
+
 function DisappearedSection({
   orders,
   resolutions,
@@ -133,23 +143,37 @@ function DisappearedSection({
         {orders.map((o) => {
           const decision = resolutions[o.id];
           const frozen = o.frozen_after_label_print;
+          const chanBadge = CHANNEL_BADGE[o.channel] ?? {
+            label: o.channel,
+            color: "bg-gray-100 text-gray-900",
+          };
           return (
             <div
               key={o.id}
               className={`border rounded p-3 ${decision ? "bg-gray-50 opacity-60" : "bg-white"}`}
             >
               <div className="flex items-start justify-between text-sm">
-                <div>
-                  <span className="font-mono text-xs">{o.id}</span>
-                  <span className="ml-2">{o.recipient.name ?? "—"}</span>
-                  <span className="ml-2 text-gray-500">
-                    {o.batchDate ?? "?"} / ${o.revenue.grossTotal}
-                  </span>
-                  {frozen && (
-                    <span className="ml-2 text-xs bg-orange-100 text-orange-900 rounded px-1">
-                      🖨️ 已印標籤
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className={`text-xs px-2 py-0.5 rounded font-semibold ${chanBadge.color}`}>
+                      {chanBadge.label}
                     </span>
-                  )}
+                    <span className="font-mono text-xs">{o.id}</span>
+                    <span>{o.recipient.name ?? "—"}</span>
+                    {frozen && (
+                      <span className="text-xs bg-orange-100 text-orange-900 rounded px-1">
+                        🖨️ 已印標籤
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500 ml-1">
+                    {o.batchDate ?? "?"} / ${o.revenue.grossTotal}
+                    {o.rawSource.file && (
+                      <span className="ml-2">
+                        來源: <span className="font-mono">{o.rawSource.file}</span>
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {decision ? (
                   <span className="text-xs bg-green-100 text-green-900 px-2 py-1 rounded">
@@ -210,15 +234,22 @@ function ChangedSection({
           const decision = resolutions[o.id];
           const lastChange = o.changes[o.changes.length - 1];
           if (!lastChange) return null;
+          const chanBadge = CHANNEL_BADGE[o.channel] ?? {
+            label: o.channel,
+            color: "bg-gray-100 text-gray-900",
+          };
           return (
             <div
               key={o.id}
               className={`border rounded p-3 ${decision ? "bg-gray-50 opacity-60" : "bg-white"}`}
             >
               <div className="flex items-start justify-between text-sm mb-2">
-                <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`text-xs px-2 py-0.5 rounded font-semibold ${chanBadge.color}`}>
+                    {chanBadge.label}
+                  </span>
                   <span className="font-mono text-xs">{o.id}</span>
-                  <span className="ml-2">{o.recipient.name ?? "—"}</span>
+                  <span>{o.recipient.name ?? "—"}</span>
                 </div>
                 {decision ? (
                   <span className="text-xs bg-green-100 text-green-900 px-2 py-1 rounded">
