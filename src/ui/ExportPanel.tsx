@@ -14,6 +14,7 @@ import { extractLabels } from "../output/label-data";
 import { renderLabelsToPDF } from "../output/label-renderer";
 import { filterByPeriod, periodLabel, type Period } from "../domain/period";
 import { PeriodPicker } from "./PeriodPicker";
+import { db } from "../db/schema";
 
 export function ExportPanel({
   orders,
@@ -67,6 +68,21 @@ export function ExportPanel({
     setBusy("bundle");
     const zip = await buildBundleZip(filtered, menu);
     downloadBlob(zip, `narcos-oven-${suffix}.zip`, "application/zip");
+    setBusy(null);
+  }
+  async function handleMcpExport() {
+    setBusy("mcp");
+    // 匯出全部 orders + import_runs（不套用 period filter、MCP 拿全部才能查歷史）
+    const allOrders = await db.orders.toArray();
+    const allRuns = await db.import_runs.toArray();
+    const snapshot = {
+      version: 1 as const,
+      exported_at: new Date().toISOString(),
+      orders: allOrders,
+      import_runs: allRuns,
+    };
+    const json = JSON.stringify(snapshot, null, 2);
+    downloadBlob(new Blob([json], { type: "application/json" }), "state.json", "application/json");
     setBusy(null);
   }
 
@@ -151,6 +167,19 @@ export function ExportPanel({
         {period.type === "all"
           ? `本次可入 Excel 的訂單：${eligibleOrders.length} 筆（confirmed + 有 batchDate）`
           : `期間 ${label} 內符合條件：${eligibleOrders.length} 筆 / 全域 ${orders.length} 筆`}
+      </div>
+
+      <div className="mt-3 pt-3 border-t flex items-center justify-between text-sm">
+        <div className="text-xs text-gray-500">
+          💾 <strong>MCP 狀態匯出</strong>：讓雇主 Claude Code 能查詢最新資料
+        </div>
+        <button
+          onClick={handleMcpExport}
+          disabled={busy === "mcp"}
+          className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs rounded"
+        >
+          {busy === "mcp" ? "匯出中…" : "匯出 state.json"}
+        </button>
       </div>
     </section>
   );

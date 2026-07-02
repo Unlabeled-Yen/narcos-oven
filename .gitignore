@@ -29,3 +29,6 @@ tsconfig.tsbuildinfo
 
 # verify-m4 產出的樣本 Excel（本地檢查用、不進 git）
 test-output/
+
+# MCP state 快照（含 PII、不進 git）
+data/state.json
