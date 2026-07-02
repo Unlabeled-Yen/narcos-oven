@@ -12,7 +12,6 @@ export function DashboardPanel({ orders }: { orders: Order[] }) {
   );
 
   const monthTrend = useMemo(() => computeMonthTrend(eligible), [eligible]);
-  const topKols = useMemo(() => computeTopKols(eligible), [eligible]);
   const topProducts = useMemo(() => computeTopProducts(eligible), [eligible]);
   const channelShare = useMemo(() => computeChannelShare(eligible), [eligible]);
   const repeatCustomers = useMemo(() => computeRepeatCustomers(eligible), [eligible]);
@@ -39,22 +38,10 @@ export function DashboardPanel({ orders }: { orders: Order[] }) {
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-        {/* TOP KOL */}
-        <div className="bg-white border rounded p-3">
-          <h3 className="text-sm font-bold mb-2">⭐ TOP 5 KOL（依合作次數）</h3>
-          {topKols.length > 0 ? (
-            <RankingList items={topKols} unit="次" />
-          ) : (
-            <p className="text-xs text-gray-500">尚無 KOL 資料</p>
-          )}
-        </div>
-
-        {/* TOP 品項 */}
-        <div className="bg-white border rounded p-3">
-          <h3 className="text-sm font-bold mb-2">🏆 TOP 10 品項</h3>
-          <RankingList items={topProducts} unit="份" />
-        </div>
+      {/* TOP 品項 */}
+      <div className="mb-4 bg-white border rounded p-3">
+        <h3 className="text-sm font-bold mb-2">🏆 TOP 10 品項</h3>
+        <RankingList items={topProducts} unit="份" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -89,19 +76,6 @@ function computeMonthTrend(orders: Order[]) {
   return [...byMonth.entries()]
     .sort()
     .map(([month, m]) => ({ month, ...m }));
-}
-
-function computeTopKols(orders: Order[]): { label: string; value: number }[] {
-  const kolOrders = orders.filter((o) => o.channel === "KOL");
-  const byIg = new Map<string, number>();
-  for (const o of kolOrders) {
-    const key = o.recipient.igOrLine ?? o.recipient.name ?? "unknown";
-    byIg.set(key, (byIg.get(key) ?? 0) + 1);
-  }
-  return [...byIg.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([label, value]) => ({ label, value }));
 }
 
 function computeTopProducts(orders: Order[]): { label: string; value: number }[] {
