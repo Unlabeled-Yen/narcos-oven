@@ -66,7 +66,9 @@ function isPendingSchedule(o: Order): boolean {
 }
 
 export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
+  const [viewMode, setViewMode] = useState<"week" | "month">("week");
   const [weekOffset, setWeekOffset] = useState(0);
+  const [monthOffset, setMonthOffset] = useState(0);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overDay, setOverDay] = useState<string | null>(null);
   const [warn, setWarn] = useState<string | null>(null);
@@ -99,6 +101,35 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   }, [orders, weekISO.join(",")]);
 
   const pending = useMemo(() => orders.filter(isPendingSchedule), [orders]);
+
+  // 全部有日期的訂單（月曆計數用）
+  const ordersByDate = useMemo(() => {
+    const m = new Map<string, Order[]>();
+    for (const o of orders) {
+      if (o.batchDate && o.assignment_source !== "pending") {
+        (m.get(o.batchDate) ?? m.set(o.batchDate, []).get(o.batchDate)!).push(o);
+      }
+    }
+    return m;
+  }, [orders]);
+
+  // 月曆：含當月的完整週列（週一起始）
+  const monthInfo = useMemo(() => {
+    const base = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
+    const y = base.getFullYear();
+    const mo = base.getMonth();
+    const firstMon = mondayOf(new Date(y, mo, 1), 0);
+    const weeks: Date[][] = [];
+    let cur = new Date(firstMon);
+    for (let w = 0; w < 6; w++) {
+      const row = Array.from({ length: 7 }, (_, i) => addDays(cur, i));
+      weeks.push(row);
+      cur = addDays(cur, 7);
+      // 若整週都超過當月且已排過當月最後一天、可提早停
+      if (row[0]!.getMonth() > mo && row[0]!.getFullYear() >= y) break;
+    }
+    return { year: y, month: mo, weeks };
+  }, [today, monthOffset]);
 
   // 該日工時
   function dayHours(iso: string): number {
@@ -170,15 +201,35 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
         caption="SCHEDULE · 出爐排程 · 雇主拍板為準"
         title="PRODUCTION"
         right={
-          <div className="flex items-center gap-[10px]">
-            <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 18, color: "#8A8A93" }}>
-              {mdOf(weekISO[0])}–{mdOf(weekISO[6])}
-            </span>
+          <div className="flex items-center gap-[10px] flex-wrap">
+            {/* 月/週 切換 */}
             <div className="flex gap-[2px]">
-              <button type="button" onClick={() => setWeekOffset((w) => w - 1)} style={btn}>‹ 上週</button>
-              <button type="button" onClick={() => setWeekOffset(0)} style={weekOffset === 0 ? btnActive : btn}>本週</button>
-              <button type="button" onClick={() => setWeekOffset((w) => w + 1)} style={btn}>下週 ›</button>
+              <button type="button" onClick={() => setViewMode("month")} style={viewMode === "month" ? btnActive : btn}>月</button>
+              <button type="button" onClick={() => setViewMode("week")} style={viewMode === "week" ? btnActive : btn}>週</button>
             </div>
+            {viewMode === "week" ? (
+              <>
+                <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 18, color: "#8A8A93" }}>
+                  {mdOf(weekISO[0])}–{mdOf(weekISO[6])}
+                </span>
+                <div className="flex gap-[2px]">
+                  <button type="button" onClick={() => setWeekOffset((w) => w - 1)} style={btn}>‹ 上週</button>
+                  <button type="button" onClick={() => setWeekOffset(0)} style={weekOffset === 0 ? btnActive : btn}>本週</button>
+                  <button type="button" onClick={() => setWeekOffset((w) => w + 1)} style={btn}>下週 ›</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 18, color: "#8A8A93" }}>
+                  {monthInfo.year} / {String(monthInfo.month + 1).padStart(2, "0")}
+                </span>
+                <div className="flex gap-[2px]">
+                  <button type="button" onClick={() => setMonthOffset((m) => m - 1)} style={btn}>‹ 上月</button>
+                  <button type="button" onClick={() => setMonthOffset(0)} style={monthOffset === 0 ? btnActive : btn}>本月</button>
+                  <button type="button" onClick={() => setMonthOffset((m) => m + 1)} style={btn}>下月 ›</button>
+                </div>
+              </>
+            )}
           </div>
         }
       />
@@ -214,19 +265,30 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
         </div>
       )}
 
-      {/* 內容捲動區：header/banner 固定、其餘在視窗內內滾 */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-      <div className="px-6 py-2" style={{ display: "grid", gridTemplateColumns: "2.7fr 1fr", gap: 12 }}>
+      {/* 內容區：header/banner 固定 */}
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      {viewMode === "month" ? (
+        <MonthCalendar
+          weeks={monthInfo.weeks}
+          month={monthInfo.month}
+          today={today}
+          ordersByDate={ordersByDate}
+          menu={menu}
+          onPickDay={(d) => { setViewMode("week"); setWeekOffset(weekOffsetForDate(d, today)); }}
+        />
+      ) : (
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      <div className="px-6 py-2" style={{ display: "grid", gridTemplateColumns: "2.7fr 1fr", gap: 12, flex: 1, minHeight: 0 }}>
         {/* WEEK GRID */}
-        <div style={{ background: "#0F0F12", border: "1px solid #26262C", padding: 16, minWidth: 0 }}>
-          <div className="flex justify-between items-baseline flex-wrap" style={{ marginBottom: 12, gap: 6 }}>
+        <div style={{ background: "#0F0F12", border: "1px solid #26262C", padding: 16, minWidth: 0, display: "flex", flexDirection: "column" }}>
+          <div className="flex justify-between items-baseline flex-wrap" style={{ marginBottom: 12, gap: 6, flexShrink: 0 }}>
             <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 15, color: "#F5F4EF" }}>
               本週工作排程 <span style={{ fontFamily: F.mono, fontWeight: 400, fontSize: 11, color: "#6C6C74" }}>出貨日回推備料</span>
             </span>
             <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 11, color: "var(--acc,#F5D400)" }}>⠿ 拖曳待排訂單 → 出貨日</span>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6, flex: 1, minHeight: 0 }}>
             {week.map((d) => {
               const iso = toISO(d);
               const isShip = d.getDay() === 2;
@@ -238,7 +300,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                   style={{
                     background: isShip ? "#1c1600" : "#111114",
                     border: isShip ? "2px solid var(--acc,#F5D400)" : "1px solid #26262C",
-                    minHeight: 360,
+                    minHeight: 0,
                     display: "flex",
                     flexDirection: "column",
                     boxShadow: isShip ? "0 0 0 3px rgba(245,212,0,.12)" : undefined,
@@ -261,6 +323,8 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                     onDrop={(e) => { e.preventDefault(); if (dragId) attemptDrop(dragId, iso); }}
                     style={{
                       flex: 1,
+                      minHeight: 0,
+                      overflowY: "auto",
                       margin: 8,
                       border: `1.5px dashed ${isShip ? "#4a3f00" : "#2a2a30"}`,
                       padding: 6,
@@ -311,7 +375,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
         </div>
 
         {/* RIGHT RAIL */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
           <div
             data-day="pending"
             onDragOver={(e) => { e.preventDefault(); setOverDay("pending"); }}
@@ -397,7 +461,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
       </div>
 
       {/* SELECTED BATCH DETAIL */}
-      <div className="px-6 py-2 pb-4">
+      <div className="px-6 pb-4" style={{ flexShrink: 0 }}>
         <div style={{ background: "#0F0F12", border: "1px solid #26262C" }}>
           <div className="flex items-center justify-between flex-wrap" style={{ gap: 12, padding: "18px 20px 14px" }}>
             <div className="flex items-baseline" style={{ gap: 12 }}>
@@ -419,8 +483,17 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
         </div>
       </div>
       </div>
+      )}
+      </div>
     </div>
   );
+}
+
+// 給某日期算出它落在 today 的第幾週偏移（月曆點日 → 週檢視）
+function weekOffsetForDate(d: Date, today: Date): number {
+  const m0 = mondayOf(today, 0).getTime();
+  const md = mondayOf(d, 0).getTime();
+  return Math.round((md - m0) / (7 * 86400000));
 }
 
 // 訂單顯示標籤：第一個 item 的 SKU 顯示名（禁 raw hardcode、經 menu）
@@ -498,6 +571,81 @@ function BatchAtoms({ shipList, menu }: { shipList: Order[]; menu: Menu }) {
             <span style={{ color: "#F5F4EF", fontWeight: 700 }}>{qty}</span>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// 月曆視圖：整月排程一眼（每日已排單數 + 顆數），點某日 → 跳該週檢視
+function MonthCalendar({
+  weeks, month, today, ordersByDate, menu, onPickDay,
+}: {
+  weeks: Date[][];
+  month: number;
+  today: Date;
+  ordersByDate: Map<string, Order[]>;
+  menu: Menu;
+  onPickDay: (d: Date) => void;
+}) {
+  const todayISO = toISO(today);
+  return (
+    <div className="px-6 py-2" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      {/* 星期頭 */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6, flexShrink: 0, marginBottom: 6 }}>
+        {["一", "二", "三", "四", "五", "六", "日"].map((w, i) => (
+          <div key={w} style={{ fontFamily: F.mono, fontSize: 11, color: i === 1 ? "var(--acc,#F5D400)" : "#7A7A82", textAlign: "center", letterSpacing: ".1em" }}>
+            {w}{i === 1 ? " · 出貨" : ""}
+          </div>
+        ))}
+      </div>
+      {/* 週列 */}
+      <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateRows: `repeat(${weeks.length},1fr)`, gap: 6 }}>
+        {weeks.map((row, ri) => (
+          <div key={ri} style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6, minHeight: 0 }}>
+            {row.map((d) => {
+              const iso = toISO(d);
+              const inMonth = d.getMonth() === month;
+              const isShip = d.getDay() === 2;
+              const isToday = iso === todayISO;
+              const list = ordersByDate.get(iso) ?? [];
+              const atoms = list.length ? [...accumulateAtoms(list).values()].reduce((s, n) => s + n, 0) : 0;
+              return (
+                <button
+                  key={iso}
+                  type="button"
+                  onClick={() => onPickDay(d)}
+                  style={{
+                    background: isShip && inMonth ? "#1c1600" : "#111114",
+                    border: isToday ? "2px solid var(--acc,#F5D400)" : isShip ? "1px solid #4a3f00" : "1px solid #26262C",
+                    opacity: inMonth ? 1 : 0.35,
+                    padding: "8px 9px",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    borderRadius: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    minHeight: 0,
+                    overflow: "hidden",
+                  }}
+                >
+                  <div className="flex items-baseline justify-between" style={{ flexShrink: 0 }}>
+                    <span style={{ fontFamily: F.mono, fontSize: 9, color: isShip ? "var(--acc,#F5D400)" : "#6C6C74" }}>{isShip ? "出貨" : ""}</span>
+                    <span style={{ fontFamily: F.anton, fontSize: 18, color: inMonth ? "#E7E7EA" : "#6C6C74" }}>{d.getDate()}</span>
+                  </div>
+                  {list.length > 0 && (
+                    <div style={{ marginTop: "auto", flexShrink: 0 }}>
+                      <div style={{ height: 4, background: "var(--acc,#F5D400)", marginBottom: 4, width: `${Math.min(100, list.length * 20)}%` }} />
+                      <div style={{ fontFamily: F.mono, fontSize: 10, color: "#C9C9CF" }}>{list.length} 單 · {atoms} 顆</div>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+      <div style={{ fontFamily: F.mono, fontSize: 10, color: "#6C6C74", marginTop: 8, flexShrink: 0 }}>
+        點任一日 → 跳該週檢視拖拉排單 · 週二為出貨日 · 黃框＝今天 · {menu.scheduling?.regular_shipping_weekday === 2 ? "常態週二出貨" : ""}
       </div>
     </div>
   );
