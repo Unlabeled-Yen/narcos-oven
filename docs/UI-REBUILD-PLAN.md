@@ -215,10 +215,22 @@ src/
 
 ## 目前狀態
 
-- [x] **P0** 底層（in progress，Opus 4.8 親做）
-- [ ] **P1** nav + 路由
-- [ ] **P2** 沿用型 5 頁
-- [ ] **P3** 全新型 3 頁
-- [ ] **P4** 排程拖拉排單
-- [ ] **P5** 標籤品牌化
-- [ ] **P6** 憲章 UI audit
+- [x] **P0** 底層（Opus 4.8）
+- [x] **P1** nav + 路由（Opus）
+- [x] **P2** 沿用型 5 頁（Sonnet subagent × 5）
+- [x] **P3** 全新型 3 頁（Sonnet subagent × 3）
+- [x] **P4** 排程拖拉排單（Opus 親做）
+- [x] **P5** 標籤品牌化（Sonnet subagent）
+- [x] **P6** 憲章 UI audit（Opus）— 見下方
+
+### P6 audit 結論（2026-07-03）
+
+**憲章 11 條防護全部落實 ✓**：#1 品項全經 menu（10 頁）、#2 web app 零 LLM/fetch、#3 出爐統計雙軌卡、#8 KOL 附 sourceOrderIds、#9 儀表板健康燈+待處理閘門、#10 標籤印出即凍結、#11 拖入=boss_scheduled、#12 超載二次確認+產能卡、#14 前置期警示。
+
+**Runtime 驗證 ✓**：pnpm build 綠、10 頁在空 DB 全部 render 無 console error、空狀態安全。
+
+**已知缺口（非憲章違反、待後續 wire）**：
+1. **Excel/PDF 產出未接**：`output/{stats,overview,payout,period-summary}-excel.ts` 產檔器尚未 wire 進新頁的「產出」按鈕（僅 LabelsPage 接了 label 渲染）。新頁的產出按鈕目前是視覺。← **功能面最重要、下輪優先**
+2. **ImportSummaryModal 仍舊淺色**：功能完整（#6/#9/#10 匯入閘門有效）、但視覺未品牌化。
+3. **舊 panel 孤兒**：DashboardPanel/OrdersTable/PendingBucket/SchedulePanel/ExportPanel/ConservationBanner 不再被 shell render、留在 repo 當 dead code（可刪或當 compute 參考）。
+4. **未用真實資料截圖驗證**：dev DB 空、只驗了空狀態不崩；populated data 路徑（Math/排序/矩陣熱區）待 import 真 xlsx 後再看。
