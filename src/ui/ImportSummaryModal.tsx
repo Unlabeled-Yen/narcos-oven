@@ -134,11 +134,44 @@ function DisappearedSection({
   resolutions: Record<string, ImportResolution["resolution"]>;
   onDecide: (id: string, r: ImportResolution["resolution"]) => void;
 }) {
+  const unresolved = orders.filter((o) => !resolutions[o.id]);
+  const bulkResolve = async (r: "shipped" | "canceled" | "kept_active") => {
+    const label = r === "shipped" ? "已出貨" : r === "canceled" ? "已取消" : "暫留";
+    if (!confirm(`⚠️ 將剩下 ${unresolved.length} 筆全部標為「${label}」？`)) return;
+    for (const o of unresolved) {
+      await onDecide(o.id, r);
+    }
+  };
   return (
     <section>
-      <h3 className="font-bold text-red-700 mb-2">
-        ❓ 消失待確認（{orders.length} 筆）—— 憲章 #9 必須逐一拍板
-      </h3>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="font-bold text-red-700">
+          ❓ 消失待確認（{orders.length} 筆）—— 憲章 #9 必須逐一拍板
+        </h3>
+        {unresolved.length > 1 && (
+          <div className="flex gap-1 text-xs">
+            <span className="text-gray-500 mr-1 self-center">批次處理剩餘 {unresolved.length}：</span>
+            <button
+              onClick={() => bulkResolve("shipped")}
+              className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              全部已出貨
+            </button>
+            <button
+              onClick={() => bulkResolve("canceled")}
+              className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+            >
+              全部取消
+            </button>
+            <button
+              onClick={() => bulkResolve("kept_active")}
+              className="px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
+            >
+              全部暫留
+            </button>
+          </div>
+        )}
+      </div>
       <div className="space-y-2">
         {orders.map((o) => {
           const decision = resolutions[o.id];
@@ -224,11 +257,38 @@ function ChangedSection({
   resolutions: Record<string, ImportResolution["resolution"]>;
   onDecide: (id: string, r: ImportResolution["resolution"]) => void;
 }) {
+  const unresolved = orders.filter((o) => !resolutions[o.id]);
+  const bulkResolve = async (r: "accept_change" | "reject_change") => {
+    const label = r === "accept_change" ? "接受變動" : "保留舊資料";
+    if (!confirm(`⚠️ 將剩下 ${unresolved.length} 筆全部標為「${label}」？`)) return;
+    for (const o of unresolved) {
+      await onDecide(o.id, r);
+    }
+  };
   return (
     <section>
-      <h3 className="font-bold text-yellow-800 mb-2">
-        📝 資訊變動待確認（{orders.length} 筆）—— 憲章 #10 不 auto-overwrite
-      </h3>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="font-bold text-yellow-800">
+          📝 資訊變動待確認（{orders.length} 筆）—— 憲章 #10 不 auto-overwrite
+        </h3>
+        {unresolved.length > 1 && (
+          <div className="flex gap-1 text-xs">
+            <span className="text-gray-500 mr-1 self-center">批次處理剩餘 {unresolved.length}：</span>
+            <button
+              onClick={() => bulkResolve("accept_change")}
+              className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              全部接受
+            </button>
+            <button
+              onClick={() => bulkResolve("reject_change")}
+              className="px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
+            >
+              全部保留舊
+            </button>
+          </div>
+        )}
+      </div>
       <div className="space-y-2">
         {orders.map((o) => {
           const decision = resolutions[o.id];
