@@ -1,0 +1,214 @@
+# narcos-oven 官方菜單對照表 v0 (draft)
+# 生成自 fixtures/2026-07-round1/ 三個 xlsx。以賣貨便命名為權威。
+# 這是主軌 deterministic pipeline 的唯一 source of truth。
+# Yen 每次遇到新品項、由 Yen 更新此檔；AI 只做「建議」不做「決策」。
+
+# ---------- ATOMS ---------- 
+# 最小可拆解單位。出爐統計以 atom 為單位計數。
+atoms:
+  cinnamon_roll:
+    name_zh: "肉桂捲"
+    unit: "顆"
+  apple_cinnamon_roll:
+    name_zh: "蘋果肉桂捲"
+    unit: "顆"
+  caramel_apple_cinnamon_bread:
+    name_zh: "焦糖蘋果肉桂麵包"
+    unit: "顆"
+  sesame_matcha_pound_cake:
+    name_zh: "芝麻焙茶奶酥磅蛋糕"
+    unit: "顆"
+  pineapple_cinnamon_pound_cake:
+    name_zh: "鳳梨肉桂奶酥磅蛋糕"
+    unit: "顆"
+  basque_original:
+    name_zh: "原味巴斯克"
+    unit: "顆"
+  basque_white_jade_original:
+    name_zh: "白玉原味巴斯克"
+    unit: "顆"
+  basque_sesame:
+    name_zh: "芝麻巴斯克"
+    unit: "顆"
+  basque_white_jade_sesame:
+    name_zh: "白玉芝麻巴斯克"
+    unit: "顆"
+  basque_matcha_chestnut:
+    name_zh: "焙茶栗子巴斯克"
+    unit: "顆"
+  basque_matcha_pure:
+    name_zh: "焙茶巴斯克"
+    unit: "顆"
+  basque_white_jade_oolong:
+    name_zh: "白玉烏龍茶巴斯克"
+    unit: "顆"
+  sauce_40ml:
+    name_zh: "40ml 香料堅果醬"
+    unit: "罐"
+  sauce_90ml:
+    name_zh: "90ml 香料堅果醬"
+    unit: "罐"
+  sauce_240ml:
+    name_zh: "240ml 香料堅果醬"
+    unit: "罐"
+  defect_small_rolls_10pcs:
+    name_zh: "十顆瑕疵小脆捲"
+    unit: "包"
+
+# ---------- PRODUCTS ---------- 
+# 上架 SKU。display_name = 賣貨便權威命名；aliases 是不同來源的字串。
+products:
+  apple_4pack:
+    display_name: "蘋果肉桂捲 禮盒組 四入禮盒（四顆蘋果肉桂捲）"
+    category: combo   # combo | single
+    aliases: []
+    contains:
+      - {atom: apple_cinnamon_roll, count: 4}
+    price: 480
+    cost: null   # 待 Yen 補（淨營收用）
+    seen_count: 3   # 本次資料出現次數
+
+  apple_6pack_with_sauce:
+    display_name: "蘋果肉桂捲 禮盒組 六入禮盒（五顆蘋果肉桂捲＋一盒香料堅果醬）"
+    category: combo   # combo | single
+    aliases: []
+    contains:
+      - {atom: apple_cinnamon_roll, count: 5}
+      - {atom: sauce_90ml, count: 1}
+    price: 700
+    cost: null   # 待 Yen 補（淨營收用）
+    seen_count: 1   # 本次資料出現次數
+
+  basque_matcha_chestnut:
+    display_name: "無麩 ✦ 焙茶栗子巴斯克 六寸 焙茶巴斯克（純焙茶，不添加栗子）"
+    category: single   # combo | single
+    aliases: []
+    contains:
+      - {atom: basque_matcha_chestnut, count: 1}
+    price: 880
+    cost: null   # 待 Yen 補（淨營收用）
+    seen_count: 1   # 本次資料出現次數
+
+  basque_original:
+    display_name: "無麩 ✦ 原味巴斯克 六寸 原味巴斯克"
+    category: single   # combo | single
+    aliases: []
+    contains:
+      - {atom: basque_original, count: 1}
+    price: 650
+    cost: null   # 待 Yen 補（淨營收用）
+    seen_count: 5   # 本次資料出現次數
+
+  basque_sesame:
+    display_name: "無麩 ✦ 芝麻巴斯克 六寸 芝麻巴斯克"
+    category: single   # combo | single
+    aliases: []
+    contains:
+      - {atom: basque_sesame, count: 1}
+    price: 720
+    cost: null   # 待 Yen 補（淨營收用）
+    seen_count: 3   # 本次資料出現次數
+
+  basque_white_jade_oolong:
+    display_name: "無麩 ✦ 白玉烏龍茶巴斯克 六寸 白玉烏龍茶巴斯克"
+    category: single   # combo | single
+    aliases: []
+    contains:
+      - {atom: basque_white_jade_oolong, count: 1}
+    price: 980
+    cost: null   # 待 Yen 補（淨營收用）
+    seen_count: 2   # 本次資料出現次數
+
+  basque_white_jade_original:
+    display_name: "無麩 ✦ 原味巴斯克 六寸 白玉原味巴斯克"
+    category: single   # combo | single
+    aliases: []
+    contains:
+      - {atom: basque_white_jade_original, count: 1}
+    price: 750
+    cost: null   # 待 Yen 補（淨營收用）
+    seen_count: 1   # 本次資料出現次數
+
+  classic_3pack_caramel_apple:
+    display_name: "我想要組合 ✦ 方型禮盒組 三入組（兩顆肉桂捲＋一顆焦糖蘋果肉桂麵包）"
+    category: combo   # combo | single
+    aliases:
+      - "我想要組合 ✦ 四入禮盒組 三入組（兩顆肉桂捲＋一顆焦糖蘋果肉桂麵包）"
+    contains:
+      - {atom: cinnamon_roll, count: 2}
+      - {atom: caramel_apple_cinnamon_bread, count: 1}
+    price: 400
+    cost: null   # 待 Yen 補（淨營收用）
+    seen_count: 10   # 本次資料出現次數
+
+  classic_4pack:
+    display_name: "經典肉桂捲 四入禮盒（四顆肉桂捲）"
+    category: combo   # combo | single
+    aliases: []
+    contains:
+      - {atom: cinnamon_roll, count: 4}
+    price: 400
+    cost: null   # 待 Yen 補（淨營收用）
+    seen_count: 28   # 本次資料出現次數
+
+  classic_4pack_two_pound:
+    display_name: "我想要組合 ✧ 長型禮盒組 四入組（兩顆肉桂捲＋芝麻焙茶奶酥＋鳳梨肉桂磅蛋糕"
+    category: combo   # combo | single
+    aliases: []
+    contains:
+      - {atom: cinnamon_roll, count: 2}
+      - {atom: sesame_matcha_pound_cake, count: 1}
+      - {atom: pineapple_cinnamon_pound_cake, count: 1}
+    price: 920
+    cost: null   # 待 Yen 補（淨營收用）
+    seen_count: 1   # 本次資料出現次數
+
+  classic_6pack_with_sauce:
+    display_name: "經典肉桂捲 六入禮盒（五顆肉桂捲＋一盒香料堅果醬）"
+    category: combo   # combo | single
+    aliases: []
+    contains:
+      - {atom: cinnamon_roll, count: 5}
+      - {atom: sauce_90ml, count: 1}
+    price: 600
+    cost: null   # 待 Yen 補（淨營收用）
+    seen_count: 3   # 本次資料出現次數
+
+  mix_pound_3pack:
+    display_name: "我想要組合 ✧ 六入禮盒組 各一✧ 蘋果肉桂麵包＋芝麻焙茶奶酥＋鳳梨肉桂磅蛋糕"
+    category: combo   # combo | single
+    aliases: []
+    contains:
+      - {atom: caramel_apple_cinnamon_bread, count: 1}
+      - {atom: sesame_matcha_pound_cake, count: 1}
+      - {atom: pineapple_cinnamon_pound_cake, count: 1}
+    price: 920
+    cost: null   # 待 Yen 補（淨營收用）
+    seen_count: 1   # 本次資料出現次數
+
+  mixed_6pack_with_sauce:
+    display_name: "我想要組合 ✧ 長型禮盒組 三顆肉桂捲＋兩顆蘋果肉桂捲＋一個香料堅果醬"
+    category: combo   # combo | single
+    aliases:
+      - "我想要組合 ✧ 六入禮盒組 三顆肉桂捲＋兩顆蘋果肉桂捲＋一個香料堅果醬"
+    contains:
+      - {atom: cinnamon_roll, count: 3}
+      - {atom: apple_cinnamon_roll, count: 2}
+      - {atom: sauce_90ml, count: 1}
+    price: 640
+    cost: null   # 待 Yen 補（淨營收用）
+    seen_count: 7   # 本次資料出現次數
+
+  sauce_90ml:
+    display_name: "不加油 ✦ 香料堅果醬 90ml 香料堅果醬（玻璃罐裝）"
+    category: single   # combo | single
+    aliases: []
+    contains:
+      - {atom: sauce_90ml, count: 1}
+    price: 200
+    cost: null   # 待 Yen 補（淨營收用）
+    seen_count: 3   # 本次資料出現次數
+
+# ---------- UNRECOGNIZED ---------- 
+# 以下字串 auto-mapper 沒歸類到，請 Yen 逐一確認：
+# ✅ 全部歸類完成

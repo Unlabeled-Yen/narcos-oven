@@ -1,0 +1,25 @@
+# Node
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+.vite/
+coverage/
+
+# PII / 客戶資料 — 絕對不進 git
+fixtures/
+!fixtures/.gitkeep
+!fixtures/README.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# 本地資料庫 / IndexedDB backup
+*.sqlite
+*.db
+data/backups/
