@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Menu, Order } from "../../domain/models";
 import { getDisplayName } from "../../domain/menu";
 import { accumulateAtoms } from "../../domain/production-time";
+import { shippingDayFor } from "../../domain/day-type";
 import { upsertOrder, clearAll } from "../../db/orders";
 import type { PageProps } from "./types";
 
@@ -373,14 +374,6 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
     return { year: y, month: mo, weeks };
   }, [today, monthOffset]);
 
-  // 該日訂單顆數（依 accumulateAtoms 統計）
-  function dayCount(iso: string): number {
-    const list = assignedByDay.get(iso) ?? [];
-    if (list.length === 0) return 0;
-    let total = 0;
-    for (const qty of accumulateAtoms(list).values()) total += qty;
-    return total;
-  }
   // 該日 atom breakdown（給日欄底部 mini 統計用、依顆數降序）
   function dayAtomBreakdown(iso: string): Array<{ atom: string; qty: number }> {
     const list = assignedByDay.get(iso) ?? [];
@@ -390,21 +383,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
       .map(([atom, qty]) => ({ atom, qty }))
       .sort((a, b) => b.qty - a.qty);
   }
-  // 週彙總 atom breakdown（給週檢視下方本週合計條用）
-  function weekAtomBreakdown(): Array<{ atom: string; qty: number }> {
-    const totals = new Map<string, number>();
-    for (const iso of weekISO) {
-      const list = assignedByDay.get(iso) ?? [];
-      if (list.length === 0) continue;
-      for (const [atom, qty] of accumulateAtoms(list)) {
-        totals.set(atom, (totals.get(atom) ?? 0) + qty);
-      }
-    }
-    return [...totals.entries()]
-      .filter(([, q]) => q > 0)
-      .map(([atom, qty]) => ({ atom, qty }))
-      .sort((a, b) => b.qty - a.qty);
-  }
+  // 週彙總 atom breakdown 移到下方 useMemo（用批次歸屬語意、非日欄語意）
 
   // 拖放持久化（憲章 #11 拍板）
   async function commitAssign(id: string, toISO: string | null) {
@@ -481,10 +460,32 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   }
   const hasOverrides = Object.keys(dayOverrides).length > 0;
 
-  // Yen 2026-07-03 決策：拿掉工時計算
-  // 保留簡單「本週統計」給雇主人工評估：訂單數 + 總顆數
-  const weekOrderCount = weekISO.reduce((n, iso) => n + (assignedByDay.get(iso)?.length ?? 0), 0);
-  const weekAtomCount = weekISO.reduce((n, iso) => n + dayCount(iso), 0);
+  // 本週統計 = 訂單歸屬 shipping day ∈ 本週出貨日集合的訂單
+  // Yen 規則：當週出貨日之後的工作日訂單、屬於下週出貨批、不算本週
+  //   例：本週 shipping=06/30、訂單排在 07/05（本週工作日、07/05 之後找 shipping = 07/07 下週）→ 屬下週
+  //   例：訂單排在 06/29（本週工作日、06/29 之後找 shipping = 06/30 本週）→ 屬本週
+  const weekShipSet = useMemo(() => {
+    const s = new Set<string>();
+    for (const iso of weekISO) if (dayTypeOf(iso) === "ship") s.add(iso);
+    return s;
+  }, [weekISO.join(","), dayOverrides, menu.scheduling?.shipping_weekdays, menu.scheduling?.working_weekdays]);
+  const weekBatchOrders = useMemo(() => {
+    if (weekShipSet.size === 0) return [];
+    return orders.filter((o) => {
+      if (!o.batchDate || o.assignment_source === "pending") return false;
+      const shipDay = shippingDayFor(o.batchDate, dayTypeOf);
+      return weekShipSet.has(shipDay);
+    });
+  }, [orders, weekShipSet, dayTypeOf]);
+  const weekOrderCount = weekBatchOrders.length;
+  const weekAtomBreakdownList = useMemo(() => {
+    if (weekBatchOrders.length === 0) return [];
+    return [...accumulateAtoms(weekBatchOrders).entries()]
+      .filter(([, q]) => q > 0)
+      .map(([atom, qty]) => ({ atom, qty }))
+      .sort((a, b) => b.qty - a.qty);
+  }, [weekBatchOrders]);
+  const weekAtomCount = weekAtomBreakdownList.reduce((s, r) => s + r.qty, 0);
 
   return (
     <div
@@ -709,15 +710,14 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
 
           {/* 本週合計 · 各 atom 顆數（讓雇主一眼看全週堆積） */}
           {(() => {
-            const wk = weekAtomBreakdown();
+            const wk = weekAtomBreakdownList;
             if (wk.length === 0) return null;
-            const wkTotal = wk.reduce((s, r) => s + r.qty, 0);
             return (
               <div style={{ marginTop: 14, padding: "10px 14px", background: "#141417", border: "1px solid #26262C", borderLeft: "3px solid var(--acc,#F5D400)" }}>
                 <div className="flex items-baseline flex-wrap" style={{ gap: 10, marginBottom: 8 }}>
-                  <span style={{ fontFamily: F.mono, fontSize: 10, color: "var(--acc,#F5D400)", letterSpacing: ".14em" }}>本週合計</span>
+                  <span style={{ fontFamily: F.mono, fontSize: 10, color: "var(--acc,#F5D400)", letterSpacing: ".14em" }}>本週合計 · 依批次歸屬</span>
                   <span className="flex items-baseline" style={{ gap: 3 }}>
-                    <span style={{ fontFamily: F.anton, fontSize: 20, color: "#F5F4EF", lineHeight: 0.85 }}>{wkTotal}</span>
+                    <span style={{ fontFamily: F.anton, fontSize: 20, color: "#F5F4EF", lineHeight: 0.85 }}>{weekAtomCount}</span>
                     <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 11, color: "#8A8A93" }}>顆</span>
                   </span>
                 </div>
