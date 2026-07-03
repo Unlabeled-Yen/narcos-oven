@@ -102,19 +102,22 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   const pending = useMemo(() => orders.filter(isPendingSchedule), [orders]);
 
   // 待排訂單分頁 + 搜尋（供雇主插單搜尋）
-  const [pendingTab, setPendingTab] = useState<"all" | "KOL" | "面交">("all");
+  const [pendingTab, setPendingTab] = useState<"all" | "賣貨便" | "KOL" | "面交" | "指定日">("all");
   const [pendingQuery, setPendingQuery] = useState("");
   const pendingFiltered = useMemo(() => {
     const q = pendingQuery.trim().toLowerCase();
     return pending.filter((o) => {
+      if (pendingTab === "賣貨便" && o.channel !== "賣貨便") return false;
       if (pendingTab === "KOL" && o.channel !== "KOL") return false;
       if (pendingTab === "面交" && !o.channel.startsWith("面交")) return false;
+      if (pendingTab === "指定日" && !o.customer_wish_date) return false;
       if (!q) return true;
-      // 搜尋：訂單編號、收件人、IG、品項顯示名
+      // 搜尋：訂單編號、收件人、IG、品項顯示名、指定日
       const hay = [
         o.id,
         o.recipient.name ?? "",
         o.recipient.igOrLine ?? "",
+        o.customer_wish_date ?? "",
         ...o.items.map((it) => it.productSkuId ? getDisplayName(it.productSkuId, menu) : it.rawName),
       ].join(" ").toLowerCase();
       return hay.includes(q);
@@ -122,8 +125,10 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   }, [pending, pendingTab, pendingQuery, menu]);
   const pendingCounts = useMemo(() => ({
     all: pending.length,
+    賣貨便: pending.filter((o) => o.channel === "賣貨便").length,
     KOL: pending.filter((o) => o.channel === "KOL").length,
     面交: pending.filter((o) => o.channel.startsWith("面交")).length,
+    指定日: pending.filter((o) => !!o.customer_wish_date).length,
   }), [pending]);
 
   // 全部有日期的訂單（月曆計數用）
@@ -447,12 +452,14 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
               <span style={{ fontFamily: F.anton, fontSize: 22, color: pending.length ? "#E5622A" : "#43B23C" }}>{pending.length}</span>
             </div>
 
-            {/* 分頁：全部 / KOL / 面交 */}
-            <div className="flex" style={{ gap: 2, marginBottom: 8 }}>
+            {/* 分頁：全部 / 賣貨便 / KOL / 面交 / 指定日 */}
+            <div className="flex flex-wrap" style={{ gap: 2, marginBottom: 8 }}>
               {([
                 { k: "all" as const, label: "全部", n: pendingCounts.all },
+                { k: "賣貨便" as const, label: "賣貨便", n: pendingCounts.賣貨便 },
                 { k: "KOL" as const, label: "KOL", n: pendingCounts.KOL },
                 { k: "面交" as const, label: "面交", n: pendingCounts.面交 },
+                { k: "指定日" as const, label: "指定日", n: pendingCounts.指定日 },
               ]).map((t) => {
                 const active = pendingTab === t.k;
                 return (
@@ -490,7 +497,13 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
             <div style={{ display: "flex", flexDirection: "column", gap: 9, maxHeight: "50vh", overflowY: "auto" }}>
               {pendingFiltered.length === 0 && (
                 <div style={{ fontFamily: F.mono, fontSize: 11, color: "#6C6C74", padding: "16px 0", textAlign: "center" }}>
-                  {pendingQuery ? "無符合搜尋的待排單" : pendingTab === "all" ? "✓ 全部已排入" : `此通路無待排單`}
+                  {pendingQuery
+                    ? "無符合搜尋的待排單"
+                    : pendingTab === "all"
+                      ? "✓ 全部已排入"
+                      : pendingTab === "指定日"
+                        ? "無指定日期的待排單"
+                        : "此通路無待排單"}
                 </div>
               )}
               {pendingFiltered.map((o) => (
