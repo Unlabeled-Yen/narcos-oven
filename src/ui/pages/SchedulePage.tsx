@@ -461,25 +461,34 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   }
   const hasOverrides = Object.keys(dayOverrides).length > 0;
 
-  // 週工時 = 「本週最後出貨日」的前一組工作日 + 出貨日排單合集
-  // Yen 新規則：以最後出貨日為 anchor · 往前掃、工作日納入、休息日跳過、遇到前一個出貨日就停
-  // 具體日期層級（dayTypeOf(iso)）· 不再用星期幾規則
-  function workingRangeForLastShipping(lastShipISO: string): string[] {
-    const range: string[] = [lastShipISO]; // anchor 自己納入
-    const d = new Date(lastShipISO);
-    for (let i = 1; i < 60; i++) { // 上限 60 天避免無限迴圈
+  // 週工時 = 本週的出貨日 + 前一組工作日（Yen 新規則）
+  //   Anchor = 本週最後出貨日
+  //   往前掃、納入所有工作日與本週其他出貨日
+  //   遇到「上一週的出貨日」（iso < 本週週一）才 break
+  //   休息日跳過但繼續
+  //   assignedByDay 只有本週 iso · 所以 range 只納入本週日子（dayHours 對非本週日回 0）
+  function workingRangeForCurrentWeek(): string[] {
+    const shipsInWeek = weekISO.filter((iso) => dayTypeOf(iso) === "ship");
+    if (shipsInWeek.length === 0) return [];
+    const anchor = shipsInWeek[shipsInWeek.length - 1]!; // 本週最後出貨日
+    const weekStart = weekISO[0]!; // 本週週一 ISO
+    const range: string[] = [anchor];
+    const d = new Date(anchor);
+    for (let i = 1; i < 30; i++) {
       d.setDate(d.getDate() - 1);
       const iso = toISO(d);
+      // 過到上一週 · 若那天是 shipping 就是 Yen 說的「前一個出貨日」→ break
+      if (iso < weekStart && dayTypeOf(iso) === "ship") break;
+      // 越過週界後不再累加（本週工時 = 只算本週的日子）
+      if (iso < weekStart) continue;
       const t = dayTypeOf(iso);
-      if (t === "ship") break; // 遇到前一個出貨日 = 前一批的 anchor、停
-      if (t === "work") range.unshift(iso);
-      // 休息日：跳過但繼續往前掃、不進 range
+      if (t === "ship" || t === "work") range.unshift(iso);
+      // 休息日跳過
     }
     return range;
   }
+  const workingRangeISO = workingRangeForCurrentWeek();
   const weekShipDaysISO = weekISO.filter((iso) => dayTypeOf(iso) === "ship");
-  const lastShipISO = weekShipDaysISO[weekShipDaysISO.length - 1] ?? null;
-  const workingRangeISO = lastShipISO ? workingRangeForLastShipping(lastShipISO) : [];
   const shipHours = workingRangeISO.reduce((sum, iso) => sum + dayHours(iso), 0);
 
   return (
