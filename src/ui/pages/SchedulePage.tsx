@@ -447,8 +447,9 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   }
 
   // 主出貨日（本週的週二，getDay===2）
-  const shipISO = weekISO.find((iso) => new Date(iso).getDay() === 2) ?? weekISO[1];
-  const shipHours = dayHours(shipISO);
+  // 週工時 = 本週 7 天工時合計（非只算週二）
+  // 這樣拖訂單到任意日子、gauge 都會即時反映
+  const shipHours = weekISO.reduce((sum, iso) => sum + dayHours(iso), 0);
 
   return (
     <div
@@ -514,7 +515,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
           return (
             <div className="ml-auto flex items-center" style={{ gap: 10, minWidth: 320 }}>
               <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".1em", whiteSpace: "nowrap" }}>
-                本週工時 · 批 {mdOf(shipISO)}
+                本週工時 · {mdOf(weekISO[0])}–{mdOf(weekISO[6])}
               </span>
               <span className="flex items-baseline" style={{ gap: 4 }}>
                 <span style={{ fontFamily: F.anton, fontSize: 20, color: barColor, lineHeight: 0.85 }}>{shipHours}</span>
