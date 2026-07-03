@@ -459,13 +459,6 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
               )}
             </div>
           </div>
-
-          <div style={{ background: "#0F0F12", border: "1px solid #26262C", borderLeft: "3px solid #43B23C", padding: "14px 16px" }}>
-            <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: "#43B23C" }}>憲章 #12 · 產能超載守恆</div>
-            <div style={{ fontFamily: F.tc, fontWeight: 500, fontSize: 11, color: "#8A8A93", marginTop: 5 }}>
-              拖入超過週上限一律警示 · 需雇主二次確認 · 絕不自動指派
-            </div>
-          </div>
         </div>
       </div>
 
