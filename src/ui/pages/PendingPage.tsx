@@ -324,6 +324,17 @@ export function PendingPage(props: PageProps) {
                         </span>
                       </div>
                     )}
+                    {/* 孤兒防禦：reason 已清空但 status 仍 pending_*（資料一致性 bug 的殘留） */}
+                    {!reason && o.status.startsWith("pending_") && (
+                      <div style={{ marginBottom: 14, padding: "10px 12px", background: "#1a1206", borderLeft: `3px solid ${C.orange}`, fontFamily: F.tc, fontSize: 12, color: C.ink3 }}>
+                        <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: C.orange, marginBottom: 4 }}>
+                          ⚠ 此單無 pending reason、但 status 仍是「{o.status}」
+                        </div>
+                        <div style={{ fontFamily: F.mono, fontSize: 11, color: C.mut }}>
+                          資料一致性殘留 · 下次 refresh 會由 sanitize 自動轉為 confirmed
+                        </div>
+                      </div>
+                    )}
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                       {opts.map((opt, oi) => (
                         <OptionBtn key={opt.label} num={oi + 1} label={opt.label} isSuggest={opt.isSuggest}

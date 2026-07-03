@@ -73,6 +73,20 @@ export async function sanitizeDirtyDates(orders: Order[]): Promise<SanitizeResul
       fixes.push({ id: o.id, reason: "backfill-order-date-from-snapshot", detail: o.snapshot.c1_order_date });
     }
 
+    // 5. status ↔ pendingReasons 一致性 invariant：
+    //    若 reason 清空（本次或之前）、status 仍是 pending_*、視為 confirmed
+    //    修待處理桶「顯示但無選項」的孤兒單
+    const willBeReasons = changes.pendingReasons ?? o.pendingReasons;
+    const willBeStatus = changes.status ?? o.status;
+    if (willBeReasons.length === 0 && willBeStatus.startsWith("pending_")) {
+      changes.status = "confirmed";
+      fixes.push({
+        id: o.id,
+        reason: "legacy-missing-batch-date-reason",
+        detail: `一致性修復 ${willBeStatus} → confirmed（reason 已清空）`,
+      });
+    }
+
     if (Object.keys(changes).length > 0) {
       patches.push({ id: o.id, changes });
     }
