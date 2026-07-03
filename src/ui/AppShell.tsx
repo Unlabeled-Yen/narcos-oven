@@ -13,10 +13,11 @@ import { MenuEditorPage } from "./pages/MenuEditorPage";
 import { PayoutPage } from "./pages/PayoutPage";
 import { StatsMatrixPage } from "./pages/StatsMatrixPage";
 import { KolPage } from "./pages/KolPage";
-import { CapacityPage } from "./pages/CapacityPage";
 import { LabelsPage } from "./pages/LabelsPage";
 
-const PAGES: Record<NavKey, (p: PageProps) => JSX.Element> = {
+// capacity page 已依 Yen 決策拿掉（不需工時計算、不需產能上限）
+// NavKey.capacity 若被 hash routing 誤觸、fallback 到 dashboard
+const PAGES: Record<Exclude<NavKey, "capacity">, (p: PageProps) => JSX.Element> = {
   dashboard: DashboardPage,
   schedule: SchedulePage,
   pending: PendingPage,
@@ -25,7 +26,6 @@ const PAGES: Record<NavKey, (p: PageProps) => JSX.Element> = {
   payout: PayoutPage,
   stats: StatsMatrixPage,
   kol: KolPage,
-  capacity: CapacityPage,
   labels: LabelsPage,
 };
 
@@ -92,19 +92,19 @@ export function AppShell({
     ],
     schedule: [
       { key: "schedule", label: "排程系統" },
-      { key: "capacity", label: "產能設定" },
       { key: "labels", label: "出貨明細" },
     ],
   };
   // 次頁 → 所屬主項
   const GROUP_OF: Partial<Record<NavKey, NavKey>> = {
     dashboard: "dashboard", payout: "dashboard", stats: "dashboard", kol: "dashboard",
-    schedule: "schedule", capacity: "schedule", labels: "schedule",
+    schedule: "schedule", labels: "schedule",
   };
   const activeGroup = GROUP_OF[active] ?? active;
   const subItems = SUBNAV[activeGroup] ?? null;
 
-  const ActivePage = PAGES[active];
+  // capacity 已停用、fallback 回 dashboard 避免 hash 誤觸崩掉
+  const ActivePage = active === "capacity" ? PAGES.dashboard : PAGES[active as Exclude<NavKey, "capacity">];
   const pageProps: PageProps = {
     orders,
     menu,

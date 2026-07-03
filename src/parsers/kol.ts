@@ -24,7 +24,7 @@ import type {
 import { explodeToAtoms, lookupSku } from "../domain/menu";
 import { readSheetTolerant } from "../domain/xlsx-tolerant";
 import { extractKolShippingDate } from "../domain/batch-date";
-import { deriveOrderWishPriority, estimateOrderHours } from "../domain/production-time";
+// 工時 / wish_priority 依 Yen 2026-07-03 決策拿掉、parser 不填
 import { kolOrderId } from "../domain/id-hash";
 
 const SHEET_NAME = "未完成";
@@ -102,10 +102,7 @@ export function parseKol(
   }
   if (current) orders.push(finalizeKol(current, menu));
 
-  for (const o of orders) {
-    o.wish_priority = deriveOrderWishPriority(o, menu);
-    o.estimated_production_hours = estimateOrderHours(o, menu);
-  }
+  // wish_priority / estimated_production_hours 拿掉、Order 物件建構時已預設 null
   return { orders, raw_row_count: rawCount, source_file: sourceFile };
 }
 

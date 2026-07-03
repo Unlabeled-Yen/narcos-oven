@@ -26,7 +26,7 @@ import {
   dateToIso,
   parseSellerBuyOrderDate,
 } from "../domain/batch-date";
-import { deriveOrderWishPriority, estimateOrderHours } from "../domain/production-time";
+// 工時 / wish_priority 依 Yen 2026-07-03 決策拿掉、parser 不填
 
 const SHEET_NAME = "非訂單匯入";
 const HEADER_ROW_COUNT = 3; // 前 3 列是 header/title
@@ -76,11 +76,7 @@ export function parseSellerBuy(
   }
   if (current) orders.push(finalizeOrder(current, menu));
 
-  // Derive wish_priority + estimated_hours per order
-  for (const o of orders) {
-    o.wish_priority = deriveOrderWishPriority(o, menu);
-    o.estimated_production_hours = estimateOrderHours(o, menu);
-  }
+  // wish_priority / estimated_production_hours 拿掉、Order 物件建構時已預設 null
 
   return {
     orders,

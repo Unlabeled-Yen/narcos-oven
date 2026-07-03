@@ -76,6 +76,8 @@ export const WeeklyBudgetSchema = z.object({
 export type WeeklyBudget = z.infer<typeof WeeklyBudgetSchema>;
 
 export const SchedulingConfigSchema = z.object({
+  // lead_time_days / max_retry_weeks 依 Yen 2026-07-03 決策不再影響 UI
+  //   保留 default 讓 scheduler-v2 / MCP tools（arb legacy）能繼續 typecheck
   lead_time_days: z.number().int().default(5),
   regular_shipping_weekday: z.number().int().default(2), // 0=Sun,2=Tue（legacy · 單一出貨日）
   max_retry_weeks: z.number().int().default(10),

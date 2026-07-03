@@ -10,11 +10,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Menu, Order } from "../../domain/models";
 import { getDisplayName } from "../../domain/menu";
-import {
-  accumulateAtoms,
-  calculateBatchHours,
-  estimateOrderHours,
-} from "../../domain/production-time";
+import { accumulateAtoms } from "../../domain/production-time";
 import { upsertOrder, clearAll } from "../../db/orders";
 import type { PageProps } from "./types";
 
@@ -85,8 +81,6 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   const [warn, setWarn] = useState<string | null>(null);
 
   const today = useMemo(() => new Date(), []);
-  const budget = menu.weekly_production_budget?.total_hours_max ?? 30;
-  const stdBudget = menu.weekly_production_budget?.total_hours_min ?? 24;
 
   const monday = useMemo(() => mondayOf(today, weekOffset), [today, weekOffset]);
   const week = useMemo(
@@ -379,11 +373,13 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
     return { year: y, month: mo, weeks };
   }, [today, monthOffset]);
 
-  // 該日工時
-  function dayHours(iso: string): number {
+  // 該日訂單顆數（依 accumulateAtoms 統計）
+  function dayCount(iso: string): number {
     const list = assignedByDay.get(iso) ?? [];
     if (list.length === 0) return 0;
-    return calculateBatchHours(accumulateAtoms(list), menu);
+    let total = 0;
+    for (const qty of accumulateAtoms(list).values()) total += qty;
+    return total;
   }
 
   // 拖放持久化（憲章 #11 拍板）
@@ -392,13 +388,12 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
     if (!o) return;
     const updated: Order =
       toISO === null
-        ? { ...o, batchDate: null, assignment_source: "pending", estimated_production_hours: null }
+        ? { ...o, batchDate: null, assignment_source: "pending" }
         : {
             ...o,
             batchDate: toISO,
             system_suggested_date: o.system_suggested_date ?? toISO,
             assignment_source: "boss_scheduled", // 憲章 #11：雇主拍板
-            estimated_production_hours: estimateOrderHours(o, menu),
           };
     await upsertOrder(updated);
     await refreshOrders();
@@ -462,28 +457,10 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   }
   const hasOverrides = Object.keys(dayOverrides).length > 0;
 
-  // 本週工時 = 本週 anchor（最後出貨日）+ 前一組工作日的 dayHours 合計
-  // Yen 澄清：本週六日若在本週最後出貨日之後、那些排單歸下週出貨批、不算本週
-  //   Range = 從 anchor 往前掃、遇到任何 shipping day 就 break（前一批的 anchor）
-  //   跨週界可繼續（assignedByDay 已放寬跨週 lookup）
-  //   休息日跳過、工作日納入
-  function workingRangeForAnchor(anchor: string): string[] {
-    const range: string[] = [anchor];
-    const d = new Date(anchor);
-    for (let i = 1; i < 30; i++) {
-      d.setDate(d.getDate() - 1);
-      const iso = toISO(d);
-      const t = dayTypeOf(iso);
-      if (t === "ship") break; // 前一批 anchor · 停
-      if (t === "work") range.unshift(iso);
-      // rest 跳過
-    }
-    return range;
-  }
-  const weekShipDaysISO = weekISO.filter((iso) => dayTypeOf(iso) === "ship");
-  const lastShipISO = weekShipDaysISO[weekShipDaysISO.length - 1] ?? null;
-  const workingRangeISO = lastShipISO ? workingRangeForAnchor(lastShipISO) : [];
-  const shipHours = workingRangeISO.reduce((sum, iso) => sum + dayHours(iso), 0);
+  // Yen 2026-07-03 決策：拿掉工時計算
+  // 保留簡單「本週統計」給雇主人工評估：訂單數 + 總顆數
+  const weekOrderCount = weekISO.reduce((n, iso) => n + (assignedByDay.get(iso)?.length ?? 0), 0);
+  const weekAtomCount = weekISO.reduce((n, iso) => n + dayCount(iso), 0);
 
   return (
     <div
@@ -540,33 +517,18 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
           🩺 診斷
         </button>
 
-        {/* 本週工時 gauge — 水平薄款、貼齊工具列右側 */}
-        {(() => {
-          const barColor = shipHours > budget ? "#E5352B" : shipHours > stdBudget ? "#E5622A" : "#43B23C";
-          const pct = Math.min(100, (shipHours / budget) * 100);
-          const stdPct = (stdBudget / budget) * 100;
-          const over = shipHours > stdBudget;
-          return (
-            <div className="ml-auto flex items-center" style={{ gap: 10, minWidth: 320 }}>
-              <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".1em", whiteSpace: "nowrap" }}>
-                本週工時 · 出貨 {weekShipDaysISO.length} · 工作日 {workingRangeISO.length - weekShipDaysISO.length} 天
-              </span>
-              <span className="flex items-baseline" style={{ gap: 4 }}>
-                <span style={{ fontFamily: F.anton, fontSize: 20, color: barColor, lineHeight: 0.85 }}>{shipHours}</span>
-                <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82" }}>/ {stdBudget}–{budget}h</span>
-              </span>
-              <div style={{ flex: 1, minWidth: 120, height: 16, background: "#161619", position: "relative" }}>
-                <div style={{ width: `${pct}%`, height: 16, background: barColor }} />
-                <div style={{ position: "absolute", top: -3, bottom: -3, left: `${stdPct}%`, width: 2, background: "#F5F4EF" }} />
-              </div>
-              {over && (
-                <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 10, color: "#E5622A", whiteSpace: "nowrap" }}>
-                  ⚠ 近上限 · 可 +{menu.weekly_production_budget?.overflow_tuesday_extra_hours ?? 8}h
-                </span>
-              )}
-            </div>
-          );
-        })()}
+        {/* 本週統計 · 純文字（Yen 拿掉工時規則後改為簡單數量顯示） */}
+        <div className="ml-auto flex items-baseline" style={{ gap: 16 }}>
+          <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".1em" }}>本週</span>
+          <span className="flex items-baseline" style={{ gap: 4 }}>
+            <span style={{ fontFamily: F.anton, fontSize: 20, color: "#F5F4EF", lineHeight: 0.85 }}>{weekOrderCount}</span>
+            <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 11, color: "#8A8A93" }}>單</span>
+          </span>
+          <span className="flex items-baseline" style={{ gap: 4 }}>
+            <span style={{ fontFamily: F.anton, fontSize: 20, color: "var(--acc,#F5D400)", lineHeight: 0.85 }}>{weekAtomCount}</span>
+            <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 11, color: "#8A8A93" }}>顆</span>
+          </span>
+        </div>
       </div>
 
       {warn && (
