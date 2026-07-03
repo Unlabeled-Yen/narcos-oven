@@ -275,25 +275,23 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
     }
   }
 
-  // 清空所有訂單資料（重新測試用 · 破壞性、二次確認）
+  // 清空所有訂單資料（重新測試用 · inline 二次確認、不依賴 browser dialog）
   const [wiping, setWiping] = useState(false);
-  async function wipeAllData() {
+  const [wipeMode, setWipeMode] = useState<"idle" | "arm" | "done">("idle");
+  const [wipeInput, setWipeInput] = useState("");
+  async function executeWipe() {
     if (wiping) return;
-    const total = orders.length;
-    const first = confirm(`⚠ 即將清空所有 ${total} 單訂單資料！\n\n這個動作無法復原。\n主要用於重新測試匯入流程。\n\n確定要繼續嗎？`);
-    if (!first) return;
-    const second = prompt(`最後確認：輸入「清空」二字繼續（total=${total}）`);
-    if (second !== "清空") {
-      alert("已取消（未輸入正確確認字）");
-      return;
-    }
+    if (wipeInput.trim() !== "清空") return; // guard
     setWiping(true);
     try {
       await clearAll();
       await refreshOrders();
-      alert("✓ 已清空 · 現在可重新拖檔上傳測試");
-      setDiagOpen(false);
+      setWipeMode("done");
+      setWipeInput("");
+      // 3 秒後自動 reset
+      setTimeout(() => setWipeMode("idle"), 3000);
     } catch (err) {
+      // eslint-disable-next-line no-console
       console.error("[wipeAllData]", err);
       alert(`✗ 清空失敗：${(err as Error).message}`);
     } finally {
@@ -1143,27 +1141,83 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
               ))}
             </div>
 
-            {/* Danger zone · 破壞性操作、二次確認 */}
+            {/* Danger zone · inline 二次確認、不依賴 browser dialog */}
             <div style={{ marginTop: 32, padding: "14px 16px", background: "#2a1010", border: "2px dashed #E5352B" }}>
               <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: "#E5352B", marginBottom: 4 }}>
                 ⚠ DANGER ZONE
               </div>
               <div style={{ fontFamily: F.mono, fontSize: 10, color: "#C9C9CF", marginBottom: 10 }}>
-                下方按鈕會清空所有訂單資料、只用於重新測試匯入流程 · 無法復原。
+                下方會清空所有訂單資料、只用於重新測試匯入流程 · 無法復原。
               </div>
-              <button
-                type="button"
-                onClick={wipeAllData}
-                disabled={wiping}
-                style={{
-                  fontFamily: F.tc, fontWeight: 900, fontSize: 12,
-                  color: "#F5F4EF", background: "#E5352B",
-                  border: "none", padding: "9px 16px",
-                  cursor: wiping ? "wait" : "pointer",
-                }}
-              >
-                {wiping ? "清空中…" : `🗑 清空所有訂單（${orders.length}）· 重新測試用`}
-              </button>
+
+              {wipeMode === "idle" && (
+                <button
+                  type="button"
+                  onClick={() => { setWipeMode("arm"); setWipeInput(""); }}
+                  style={{
+                    fontFamily: F.tc, fontWeight: 900, fontSize: 12,
+                    color: "#F5F4EF", background: "#E5352B",
+                    border: "none", padding: "9px 16px", cursor: "pointer",
+                  }}
+                >
+                  🗑 清空所有訂單（{orders.length}）· 重新測試用
+                </button>
+              )}
+
+              {wipeMode === "arm" && (
+                <div>
+                  <div style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 12, color: "#F5F4EF", marginBottom: 8 }}>
+                    最後確認：輸入「<span style={{ color: "#E5352B", fontWeight: 900 }}>清空</span>」二字後按執行、將刪除 {orders.length} 單。
+                  </div>
+                  <div className="flex items-center flex-wrap" style={{ gap: 8 }}>
+                    <input
+                      type="text"
+                      value={wipeInput}
+                      onChange={(e) => setWipeInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && wipeInput.trim() === "清空") { void executeWipe(); } }}
+                      autoFocus
+                      placeholder="輸入 清空"
+                      style={{
+                        fontFamily: F.mono, fontSize: 13, color: "#F5F4EF",
+                        background: "#111114", border: "1px solid #E5352B",
+                        padding: "8px 12px", width: 160, outline: "none", borderRadius: 0,
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void executeWipe()}
+                      disabled={wiping || wipeInput.trim() !== "清空"}
+                      style={{
+                        fontFamily: F.tc, fontWeight: 900, fontSize: 12,
+                        color: wipeInput.trim() === "清空" ? "#F5F4EF" : "#7A7A82",
+                        background: wipeInput.trim() === "清空" ? "#E5352B" : "#3a3a40",
+                        border: "none", padding: "9px 16px",
+                        cursor: wiping ? "wait" : wipeInput.trim() === "清空" ? "pointer" : "not-allowed",
+                      }}
+                    >
+                      {wiping ? "清空中…" : "🗑 執行清空"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setWipeMode("idle"); setWipeInput(""); }}
+                      disabled={wiping}
+                      style={{
+                        fontFamily: F.tc, fontWeight: 700, fontSize: 12,
+                        color: "#C9C9CF", background: "transparent",
+                        border: "1px solid #3a3a40", padding: "9px 16px", cursor: "pointer",
+                      }}
+                    >
+                      取消
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {wipeMode === "done" && (
+                <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: "#43B23C", padding: "8px 0" }}>
+                  ✓ 已清空 · 現在可關閉此 modal、拖檔上傳測試
+                </div>
+              )}
             </div>
           </div>
         </div>
