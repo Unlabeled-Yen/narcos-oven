@@ -455,7 +455,6 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   });
   const shippingWeekdays = new Set(ruleOverride?.shipping_weekdays ?? menu.scheduling?.shipping_weekdays ?? [2]);
   const workingWeekdays = new Set(ruleOverride?.working_weekdays ?? menu.scheduling?.working_weekdays ?? [0,1,2,3,4,5,6]);
-  const isWorkingDayISO = (iso: string) => workingWeekdays.has(new Date(iso).getDay());
 
   // 點 header 三態循環：休息 → 工作 → 出貨 → 休息
   function cycleWeekdayType(weekday: number) {
@@ -486,10 +485,31 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
     catch { /* noop */ }
   }
 
-  // 週工時 = 本週「工作日」工時合計（非工作日不計）
-  // 這樣拖訂單到任意工作日、gauge 都會即時反映；排到非工作日不會誤算
-  const workingDaysISO = weekISO.filter(isWorkingDayISO);
-  const shipHours = workingDaysISO.reduce((sum, iso) => sum + dayHours(iso), 0);
+  // 週工時 = 本週所有「出貨日的前一組工作日」的合集
+  // 前一組工作日 = 從出貨日往前掃連續工作日、遇到非工作日（休息或另一出貨日）就停
+  // 例：出貨日 週五、工作日 一二三四 → 前一組 = 週一~週四
+  function workingRangeForShipping(shipISO: string): string[] {
+    const shipDate = new Date(shipISO);
+    const range: string[] = [];
+    for (let i = 1; i < 30; i++) {
+      const d = new Date(shipDate);
+      d.setDate(d.getDate() - i);
+      const wd = d.getDay();
+      if (workingWeekdays.has(wd)) {
+        range.unshift(toISO(d));
+      } else {
+        break; // 遇到休息或另一出貨日 → 中斷連續性
+      }
+    }
+    return range;
+  }
+  const weekShipDaysISO = weekISO.filter((iso) => shippingWeekdays.has(new Date(iso).getDay()));
+  const workingRangeSet = new Set<string>();
+  for (const shipISO of weekShipDaysISO) {
+    for (const iso of workingRangeForShipping(shipISO)) workingRangeSet.add(iso);
+  }
+  const workingRangeISO = [...workingRangeSet].sort();
+  const shipHours = workingRangeISO.reduce((sum, iso) => sum + dayHours(iso), 0);
 
   return (
     <div
@@ -555,7 +575,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
           return (
             <div className="ml-auto flex items-center" style={{ gap: 10, minWidth: 320 }}>
               <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".1em", whiteSpace: "nowrap" }}>
-                本週工時 · {mdOf(weekISO[0])}–{mdOf(weekISO[6])} · 工作日 {workingDaysISO.length} 天
+                本週工時 · 出貨批 {weekShipDaysISO.length} · 前組工作日 {workingRangeISO.length} 天
               </span>
               <span className="flex items-baseline" style={{ gap: 4 }}>
                 <span style={{ fontFamily: F.anton, fontSize: 20, color: barColor, lineHeight: 0.85 }}>{shipHours}</span>
