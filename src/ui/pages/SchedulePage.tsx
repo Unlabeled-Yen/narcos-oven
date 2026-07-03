@@ -97,12 +97,13 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
 
   const orderById = useMemo(() => new Map(orders.map((o) => [o.id, o])), [orders]);
 
-  // 各日已排訂單
+  // 各日已排訂單（含跨週查詢：允許 anchor 往前掃到上週工作日）
   const assignedByDay = useMemo(() => {
     const m = new Map<string, Order[]>();
-    for (const iso of weekISO) m.set(iso, []);
+    for (const iso of weekISO) m.set(iso, []); // 本週 preload 空陣列 · 給週檢視 render 用
     for (const o of orders) {
-      if (o.batchDate && m.has(o.batchDate) && o.assignment_source !== "pending") {
+      if (o.batchDate && o.assignment_source !== "pending") {
+        if (!m.has(o.batchDate)) m.set(o.batchDate, []);
         m.get(o.batchDate)!.push(o);
       }
     }
@@ -461,15 +462,27 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   }
   const hasOverrides = Object.keys(dayOverrides).length > 0;
 
-  // 本週工時 = 本週所有工作日+出貨日的 dayHours 合計
-  // Yen 澄清：跨週界時（本週六日的排單屬於下週出貨批的 range），
-  //   view 在本週時 gauge 仍應顯示「本週實際會做的所有工作」
-  //   （不是「anchor 到 anchor」的範圍語意 · 那是批次明細用的）
-  const workingRangeISO = weekISO.filter((iso) => {
-    const t = dayTypeOf(iso);
-    return t === "ship" || t === "work"; // 休息日不算
-  });
+  // 本週工時 = 本週 anchor（最後出貨日）+ 前一組工作日的 dayHours 合計
+  // Yen 澄清：本週六日若在本週最後出貨日之後、那些排單歸下週出貨批、不算本週
+  //   Range = 從 anchor 往前掃、遇到任何 shipping day 就 break（前一批的 anchor）
+  //   跨週界可繼續（assignedByDay 已放寬跨週 lookup）
+  //   休息日跳過、工作日納入
+  function workingRangeForAnchor(anchor: string): string[] {
+    const range: string[] = [anchor];
+    const d = new Date(anchor);
+    for (let i = 1; i < 30; i++) {
+      d.setDate(d.getDate() - 1);
+      const iso = toISO(d);
+      const t = dayTypeOf(iso);
+      if (t === "ship") break; // 前一批 anchor · 停
+      if (t === "work") range.unshift(iso);
+      // rest 跳過
+    }
+    return range;
+  }
   const weekShipDaysISO = weekISO.filter((iso) => dayTypeOf(iso) === "ship");
+  const lastShipISO = weekShipDaysISO[weekShipDaysISO.length - 1] ?? null;
+  const workingRangeISO = lastShipISO ? workingRangeForAnchor(lastShipISO) : [];
   const shipHours = workingRangeISO.reduce((sum, iso) => sum + dayHours(iso), 0);
 
   return (
