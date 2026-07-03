@@ -13,7 +13,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { extractLabels } from "../../output/label-data";
 import { BatchDetailPanel } from "./BatchDetail";
-import { db } from "../../db/schema";
 import type { PageProps } from "./types";
 import { F, C, LABELS_PER_PAGE, LabelPage } from "./LabelsPage.helpers";
 
@@ -42,7 +41,6 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
   );
   const [size, setSize] = useState<SizeKey>("60x90");
   const [previewPage, setPreviewPage] = useState(0);
-  const [frozen, setFrozen] = useState(false);
   const [freezing, setFreezing] = useState(false);
 
   const sizeObj = SIZES.find((s) => s.key === size) ?? SIZES[0]!;
@@ -94,43 +92,16 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
     ).length;
   }, [orders]);
 
-  // 本批是否已凍結（state 或 db）
-  const alreadyFrozen = useMemo(() => {
-    if (!selectedBatch) return false;
-    return orders.some(
-      (o) => o.batchDate === selectedBatch && o.frozen_after_label_print === true
-    );
-  }, [orders, selectedBatch]);
-
-  const isBatchFrozen = alreadyFrozen || frozen;
   const isEmpty = batchDates.length === 0 || allLabels.length === 0;
 
-  // 印出即凍結（憲章 #10）
+  // 列印（憲章 #10 凍結已依 Yen 決策取消 · 標籤是純輸出動作、不改狀態）
   const handlePrintAndFreeze = useCallback(async () => {
     if (allLabels.length === 0) return;
     setFreezing(true);
     try {
-      const batchOrderIds = orders
-        .filter(
-          (o) =>
-            o.batchDate === selectedBatch &&
-            (o.status === "confirmed" || o.status === "kol_shipped")
-        )
-        .map((o) => o.id);
-
-      // 先列印（native browser print）
       window.print();
-
-      // 標記凍結
-      await db.orders
-        .where("id")
-        .anyOf(batchOrderIds)
-        .modify({ frozen_after_label_print: true });
-
-      setFrozen(true);
-      await refreshOrders();
     } catch (err) {
-      console.error("[LabelsPage] freeze failed:", err);
+      console.error("[LabelsPage] print failed:", err);
     } finally {
       setFreezing(false);
     }
@@ -190,7 +161,7 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
                     <button
                       key={d}
                       type="button"
-                      onClick={() => { setSelectedBatch(d); setPreviewPage(0); setFrozen(false); }}
+                      onClick={() => { setSelectedBatch(d); setPreviewPage(0); }}
                       style={{
                         fontFamily: F.mono,
                         fontSize: 12,
@@ -269,50 +240,28 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
             </div>
           </div>
 
-          {/* 印出即凍結（憲章 #10） */}
-          <div
-            style={{
-              background: C.panel,
-              border: `1px solid ${C.line}`,
-              borderLeft: `3px solid ${isBatchFrozen ? "#43B23C" : C.orange}`,
-              padding: "14px 16px",
-            }}
-          >
-            <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 12, color: isBatchFrozen ? "#43B23C" : C.orange }}>
-              {isBatchFrozen ? "🔒 已凍結 · frozen_after_label_print" : "🔒 印出即凍結 · 憲章 #10"}
-            </div>
-            <div style={{ fontFamily: F.tc, fontWeight: 500, fontSize: 11, color: C.mut, marginTop: 5, lineHeight: 1.6 }}>
-              {isBatchFrozen
-                ? "本批訂單已標記凍結。若需重印，雇主需明確「接受並重印」才可覆蓋。"
-                : "frozen_after_label_print · 之後若訂單變動，需雇主明確「接受並重印」才會覆蓋。"}
-            </div>
-            {!isEmpty && (
-              <button
-                type="button"
-                onClick={handlePrintAndFreeze}
-                disabled={freezing || isBatchFrozen}
-                style={{
-                  marginTop: 12,
-                  width: "100%",
-                  fontFamily: F.tc,
-                  fontWeight: 900,
-                  fontSize: 12,
-                  color: isBatchFrozen ? C.mut : "#111",
-                  background: isBatchFrozen ? C.line2 : C.acc,
-                  border: "none",
-                  padding: "10px 0",
-                  cursor: isBatchFrozen || freezing ? "not-allowed" : "pointer",
-                  opacity: freezing ? 0.6 : 1,
-                }}
-              >
-                {freezing
-                  ? "列印中…"
-                  : isBatchFrozen
-                  ? "已列印（重印需雇主確認）"
-                  : "🖨 列印 / 存 PDF（印出即凍結）"}
-              </button>
-            )}
-          </div>
+          {/* 列印按鈕（不再凍結 · Yen 決策） */}
+          {!isEmpty && (
+            <button
+              type="button"
+              onClick={handlePrintAndFreeze}
+              disabled={freezing}
+              style={{
+                width: "100%",
+                fontFamily: F.tc,
+                fontWeight: 900,
+                fontSize: 13,
+                color: "#111",
+                background: C.acc,
+                border: "none",
+                padding: "12px 0",
+                cursor: freezing ? "wait" : "pointer",
+                opacity: freezing ? 0.6 : 1,
+              }}
+            >
+              {freezing ? "列印中…" : "🖨 列印 / 存 PDF"}
+            </button>
+          )}
         </div>
 
         {/* ── 右預覽（flex-1 min-h-0 overflow-y-auto） ────── */}
