@@ -254,9 +254,9 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                 <span style={{ fontFamily: F.anton, fontSize: 20, color: barColor, lineHeight: 0.85 }}>{shipHours}</span>
                 <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82" }}>/ {stdBudget}–{budget}h</span>
               </span>
-              <div style={{ flex: 1, minWidth: 120, height: 8, background: "#161619", position: "relative" }}>
-                <div style={{ width: `${pct}%`, height: 8, background: barColor }} />
-                <div style={{ position: "absolute", top: -2, bottom: -2, left: `${stdPct}%`, width: 2, background: "#F5F4EF" }} />
+              <div style={{ flex: 1, minWidth: 120, height: 16, background: "#161619", position: "relative" }}>
+                <div style={{ width: `${pct}%`, height: 16, background: barColor }} />
+                <div style={{ position: "absolute", top: -3, bottom: -3, left: `${stdPct}%`, width: 2, background: "#F5F4EF" }} />
               </div>
               {over && (
                 <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 10, color: "#E5622A", whiteSpace: "nowrap" }}>
