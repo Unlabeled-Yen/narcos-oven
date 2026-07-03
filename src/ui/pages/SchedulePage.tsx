@@ -137,6 +137,19 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, list]) => ({ date, count: list.length }));
 
+    // status × assignment_source 交叉分佈（快速看整體卡在哪裡）
+    const crossTable = new Map<string, number>();
+    for (const o of orders) {
+      const key = `${o.status}|${o.assignment_source ?? "null"}|${o.batchDate ? "有date" : "無date"}`;
+      crossTable.set(key, (crossTable.get(key) ?? 0) + 1);
+    }
+    const crossRows = [...crossTable.entries()]
+      .map(([key, n]) => {
+        const [status, source, hasDate] = key.split("|");
+        return { status: status!, source: source!, hasDate: hasDate!, n };
+      })
+      .sort((a, b) => b.n - a.n);
+
     return {
       total: orders.length,
       waitCount: wait.length,
@@ -150,6 +163,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
       confirmedScheduledCount: confirmedScheduled.length,
       confirmedUnscheduledCount: confirmedUnscheduled.length,
       confirmedDateRows,
+      crossRows,
     };
   }, [orders]);
 
@@ -694,6 +708,68 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* status × assignment_source × batchDate 交叉分佈（每列 = 一種組合） */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: "#F5F4EF", marginBottom: 8 }}>
+                訂單交叉分佈 · status × assignment_source × 有無 batchDate
+                <span style={{ fontFamily: F.mono, fontWeight: 400, fontSize: 10, color: "#7A7A82", marginLeft: 8 }}>
+                  = 每一單卡在哪個組合、靜默失效就會現形
+                </span>
+              </div>
+              <div style={{ background: "#111114", padding: "6px 12px", display: "grid", gridTemplateColumns: "2fr 1.4fr 0.8fr 0.6fr", gap: 8, fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".1em", borderBottom: "1px solid #26262C" }}>
+                <span>status</span>
+                <span>assignment_source</span>
+                <span>batchDate</span>
+                <span style={{ textAlign: "right" }}>n</span>
+              </div>
+              {diag.crossRows.length === 0 && (
+                <div style={{ background: "#111114", padding: "10px 12px", fontFamily: F.mono, fontSize: 11, color: "#6C6C74" }}>—</div>
+              )}
+              {diag.crossRows.map((row, i) => {
+                // 高亮潛在異常組合
+                const isConfirmedScheduledPending = row.status === "confirmed" && row.source === "pending" && row.hasDate === "有date";
+                const highlight = isConfirmedScheduledPending ? "#E5622A" : "#C9C9CF";
+                return (
+                  <div key={i} style={{ background: "#111114", padding: "8px 12px", display: "grid", gridTemplateColumns: "2fr 1.4fr 0.8fr 0.6fr", gap: 8, fontFamily: F.mono, fontSize: 11, color: highlight, borderBottom: "1px solid #1a1a1e" }}>
+                    <span>{row.status}</span>
+                    <span>{row.source}</span>
+                    <span style={{ color: row.hasDate === "有date" ? "#43B23C" : "#E5622A" }}>{row.hasDate}</span>
+                    <span style={{ textAlign: "right", fontFamily: F.anton, fontSize: 14, color: "#F5F4EF" }}>{row.n}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 當前 UI filter 狀態（排除 tab/query 藏單造成的錯覺） */}
+            <div style={{ marginBottom: 20, background: "#161619", padding: "12px 14px", borderLeft: "3px solid #F5D400" }}>
+              <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 12, color: "#F5F4EF", marginBottom: 6 }}>
+                當前排程頁待排列表 UI 狀態
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, fontFamily: F.mono, fontSize: 10, color: "#C9C9CF" }}>
+                <div>
+                  <div style={{ color: "#7A7A82", fontSize: 9, marginBottom: 2 }}>pending 總數</div>
+                  <div style={{ fontFamily: F.anton, fontSize: 20, color: "#F5F4EF" }}>{pending.length}</div>
+                </div>
+                <div>
+                  <div style={{ color: "#7A7A82", fontSize: 9, marginBottom: 2 }}>UI 顯示（filtered）</div>
+                  <div style={{ fontFamily: F.anton, fontSize: 20, color: pendingFiltered.length !== pending.length ? "#E5622A" : "#F5F4EF" }}>{pendingFiltered.length}</div>
+                </div>
+                <div>
+                  <div style={{ color: "#7A7A82", fontSize: 9, marginBottom: 2 }}>當前 tab</div>
+                  <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 14, color: pendingTab !== "all" ? "#E5622A" : "#C9C9CF" }}>{pendingTab}</div>
+                </div>
+                <div>
+                  <div style={{ color: "#7A7A82", fontSize: 9, marginBottom: 2 }}>搜尋字串</div>
+                  <div style={{ fontFamily: F.mono, fontSize: 12, color: pendingQuery ? "#E5622A" : "#6C6C74" }}>{pendingQuery ? `"${pendingQuery}"` : "（空）"}</div>
+                </div>
+              </div>
+              {pendingFiltered.length !== pending.length && (
+                <div style={{ marginTop: 8, fontFamily: F.mono, fontSize: 10, color: "#E5622A" }}>
+                  ⚠ 當前 tab／搜尋隱藏了 {pending.length - pendingFiltered.length} 單 · 切「全部」+ 清搜尋看完整清單
+                </div>
+              )}
             </div>
 
             {/* 差集統計（原本的四卡片） */}
