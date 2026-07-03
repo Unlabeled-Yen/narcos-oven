@@ -509,6 +509,47 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   const currentBatchTotal = currentBatchBreakdown.reduce((s, r) => s + r.qty, 0);
   const currentBatchAnchor = currentBatchRangeISO[currentBatchRangeISO.length - 1] ?? null;
 
+  // 內嵌工具列（月/週切換 + range + 上週本週下週 + 診斷）· 週用挪入 grid header · 拿掉頂端獨立工具列讓 grid 拉高
+  const toolbarNav = (
+    <div className="flex items-center flex-wrap" style={{ gap: 8 }}>
+      <div className="flex" style={{ gap: 2 }}>
+        <button type="button" onClick={() => setViewMode("month")} style={viewMode === "month" ? btnActive : btn}>月</button>
+        <button type="button" onClick={() => setViewMode("week")} style={viewMode === "week" ? btnActive : btn}>週</button>
+      </div>
+      {viewMode === "week" ? (
+        <>
+          <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 14, color: "#8A8A93" }}>
+            {mdOf(weekISO[0])}–{mdOf(weekISO[6])}
+          </span>
+          <div className="flex" style={{ gap: 2 }}>
+            <button type="button" onClick={() => setWeekOffset((w) => w - 1)} style={btn}>‹ 上週</button>
+            <button type="button" onClick={() => setWeekOffset(0)} style={weekOffset === 0 ? btnActive : btn}>本週</button>
+            <button type="button" onClick={() => setWeekOffset((w) => w + 1)} style={btn}>下週 ›</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 14, color: "#8A8A93" }}>
+            {monthInfo.year} / {String(monthInfo.month + 1).padStart(2, "0")}
+          </span>
+          <div className="flex" style={{ gap: 2 }}>
+            <button type="button" onClick={() => setMonthOffset((m) => m - 1)} style={btn}>‹ 上月</button>
+            <button type="button" onClick={() => setMonthOffset(0)} style={monthOffset === 0 ? btnActive : btn}>本月</button>
+            <button type="button" onClick={() => setMonthOffset((m) => m + 1)} style={btn}>下月 ›</button>
+          </div>
+        </>
+      )}
+      <button
+        type="button"
+        onClick={() => setDiagOpen(true)}
+        title="診斷 待排 vs 待處理桶"
+        style={{ fontFamily: F.mono, fontSize: 10, color: "#8A8A93", background: "transparent", border: "1px solid #3a3a40", padding: "4px 8px", cursor: "pointer", letterSpacing: ".1em" }}
+      >
+        🩺 診斷
+      </button>
+    </div>
+  );
+
   return (
     <div
       className="h-full flex flex-col min-h-0"
@@ -524,49 +565,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
         }
       }}
     >
-      {/* 薄工具列：月/週切換 + 週/月導覽 + 本週工時 gauge（取代 PageHeader，把版面高度讓給月/週曆與待排訂單） */}
-      <div className="flex items-center gap-[10px] flex-wrap px-6 py-2" style={{ flexShrink: 0, borderBottom: "1px solid #26262C" }}>
-        <div className="flex gap-[2px]">
-          <button type="button" onClick={() => setViewMode("month")} style={viewMode === "month" ? btnActive : btn}>月</button>
-          <button type="button" onClick={() => setViewMode("week")} style={viewMode === "week" ? btnActive : btn}>週</button>
-        </div>
-        {viewMode === "week" ? (
-          <>
-            <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 16, color: "#8A8A93" }}>
-              {mdOf(weekISO[0])}–{mdOf(weekISO[6])}
-            </span>
-            <div className="flex gap-[2px]">
-              <button type="button" onClick={() => setWeekOffset((w) => w - 1)} style={btn}>‹ 上週</button>
-              <button type="button" onClick={() => setWeekOffset(0)} style={weekOffset === 0 ? btnActive : btn}>本週</button>
-              <button type="button" onClick={() => setWeekOffset((w) => w + 1)} style={btn}>下週 ›</button>
-            </div>
-          </>
-        ) : (
-          <>
-            <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 16, color: "#8A8A93" }}>
-              {monthInfo.year} / {String(monthInfo.month + 1).padStart(2, "0")}
-            </span>
-            <div className="flex gap-[2px]">
-              <button type="button" onClick={() => setMonthOffset((m) => m - 1)} style={btn}>‹ 上月</button>
-              <button type="button" onClick={() => setMonthOffset(0)} style={monthOffset === 0 ? btnActive : btn}>本月</button>
-              <button type="button" onClick={() => setMonthOffset((m) => m + 1)} style={btn}>下月 ›</button>
-            </div>
-          </>
-        )}
-
-        {/* 診斷按鈕：查待排 vs 待處理桶差集 */}
-        <button
-          type="button"
-          onClick={() => setDiagOpen(true)}
-          title="診斷 待排 vs 待處理桶"
-          style={{ fontFamily: F.mono, fontSize: 10, color: "#8A8A93", background: "transparent", border: "1px solid #3a3a40", padding: "5px 8px", cursor: "pointer", letterSpacing: ".1em" }}
-        >
-          🩺 診斷
-        </button>
-
-        {/* 右上角統計已挪到右軌「當週統計」面板（Yen 2026-07-03） */}
-      </div>
-
+      {/* 頂端獨立工具列已拿掉（Yen 2026-07-03）· 內容挪入 week-grid / month header 條 · 排程板塊拉高 */}
       {warn && (
         <div className="mx-6 mt-2 px-4 py-3 flex items-center justify-between" style={{ background: "#2a1010", border: "1px solid #E5352B" }}>
           <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 12, color: "#E5352B" }}>⚠ {warn}</span>
@@ -577,36 +576,41 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
       {/* 內容區：月/週檢視 */}
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
       {viewMode === "month" ? (
-        <MonthCalendar
-          weeks={monthInfo.weeks}
-          month={monthInfo.month}
-          today={today}
-          ordersByDate={ordersByDate}
-          menu={menu}
-          onPickDay={(d) => { setViewMode("week"); setWeekOffset(weekOffsetForDate(d, today)); }}
-        />
+        <div className="px-6 py-2" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+          <div style={{ background: "#0F0F12", border: "1px solid #26262C", padding: 16, flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            <div className="flex justify-between items-center flex-wrap" style={{ marginBottom: 10, gap: 8, flexShrink: 0 }}>
+              {toolbarNav}
+            </div>
+            <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+              <MonthCalendar
+                weeks={monthInfo.weeks}
+                month={monthInfo.month}
+                today={today}
+                ordersByDate={ordersByDate}
+                menu={menu}
+                onPickDay={(d) => { setViewMode("week"); setWeekOffset(weekOffsetForDate(d, today)); }}
+              />
+            </div>
+          </div>
+        </div>
       ) : (
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
       <div className="px-6 py-2" style={{ display: "grid", gridTemplateColumns: "2.7fr 1fr", gap: 12, flex: 1, minHeight: 0 }}>
         {/* WEEK GRID */}
         <div style={{ background: "#0F0F12", border: "1px solid #26262C", padding: 16, minWidth: 0, display: "flex", flexDirection: "column" }}>
-          <div className="flex justify-between items-baseline flex-wrap" style={{ marginBottom: 12, gap: 6, flexShrink: 0 }}>
-            <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 15, color: "#F5F4EF" }}>
-              本週工作排程 <span style={{ fontFamily: F.mono, fontWeight: 400, fontSize: 11, color: "#6C6C74" }}>出貨日回推備料</span>
-            </span>
-            <span className="flex items-center" style={{ gap: 10 }}>
-              {hasOverrides && (
-                <button
-                  type="button"
-                  onClick={resetRuleOverride}
-                  title="清空所有自訂日規則、回到 menu.yaml 預設"
-                  style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", background: "transparent", border: "1px solid #3a3a40", padding: "3px 8px", cursor: "pointer" }}
-                >
-                  ⤺ 清 {Object.keys(dayOverrides).length} 筆自訂
-                </button>
-              )}
-              <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 11, color: "var(--acc,#F5D400)" }}>⠿ 拖曳待排訂單 → 出貨日 · 點日欄 header 切換此日（只影響此日）</span>
-            </span>
+          {/* Grid header 條：工具列（月/週 · range · 導覽 · 診斷）+ 清 N 自訂 · 拿掉拖曳提示與 title 讓 grid 拉高 */}
+          <div className="flex justify-between items-center flex-wrap" style={{ marginBottom: 10, gap: 8, flexShrink: 0 }}>
+            {toolbarNav}
+            {hasOverrides && (
+              <button
+                type="button"
+                onClick={resetRuleOverride}
+                title="清空所有自訂日規則、回到 menu.yaml 預設"
+                style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", background: "transparent", border: "1px solid #3a3a40", padding: "3px 8px", cursor: "pointer" }}
+              >
+                ⤺ 清 {Object.keys(dayOverrides).length} 筆自訂
+              </button>
+            )}
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6, flex: 1, minHeight: 0 }}>
