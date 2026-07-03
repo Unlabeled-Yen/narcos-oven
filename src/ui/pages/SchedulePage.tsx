@@ -36,6 +36,25 @@ function mdOf(iso: string): string {
   const [, m, d] = iso.split("-");
   return `${m}/${d}`;
 }
+/**
+ * 防禦性顯示日期字串（處理非 ISO 舊資料，避免 UI 出現 undefined/undefined）
+ * 接受：YYYY-MM-DD / YYYY/MM/DD / MM/DD / Date serial / 其他 → 用 fallback。
+ */
+function formatDateShort(raw: string | null | undefined): string {
+  if (raw === null || raw === undefined || raw === "") return "—";
+  const s = String(raw);
+  // ISO YYYY-MM-DD
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[2]}/${iso[3]}`;
+  // YYYY/MM/DD
+  const slash = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  if (slash) return `${slash[2].padStart(2, "0")}/${slash[3].padStart(2, "0")}`;
+  // MM/DD or M/D
+  const md = s.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (md) return `${md[1].padStart(2, "0")}/${md[2].padStart(2, "0")}`;
+  // 其他格式 → 原樣顯示（不騙用戶）
+  return s;
+}
 function mondayOf(ref: Date, weekOffset: number): Date {
   const d = new Date(ref);
   d.setHours(0, 0, 0, 0);
@@ -174,6 +193,24 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
         o.pendingReasons.some((r) => r.code === "MISSING_BATCH_DATE")
     );
 
+    // customer_wish_date 原始值格式分佈（幫 Yen 排查非 ISO 髒資料造成的 undefined 顯示）
+    const wishFormatCount = new Map<string, number>();
+    const nonIsoWishSamples: { id: string; raw: string }[] = [];
+    for (const o of orders) {
+      if (!o.customer_wish_date) continue;
+      const s = String(o.customer_wish_date);
+      let format = "其他";
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) format = "YYYY-MM-DD (ISO)";
+      else if (/^\d{4}\/\d{1,2}\/\d{1,2}/.test(s)) format = "YYYY/MM/DD";
+      else if (/^\d{1,2}\/\d{1,2}$/.test(s)) format = "MM/DD";
+      else if (/^\d+$/.test(s)) format = "純數字（Excel serial?）";
+      wishFormatCount.set(format, (wishFormatCount.get(format) ?? 0) + 1);
+      if (format !== "YYYY-MM-DD (ISO)" && nonIsoWishSamples.length < 6) {
+        nonIsoWishSamples.push({ id: o.id, raw: s });
+      }
+    }
+    const wishFormatRows = [...wishFormatCount.entries()].map(([format, n]) => ({ format, n }));
+
     return {
       total: orders.length,
       waitCount: wait.length,
@@ -191,6 +228,8 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
       dirtyBatchDate,
       orphanWithWish,
       legacyMissingDate,
+      wishFormatRows,
+      nonIsoWishSamples,
     };
   }, [orders]);
 
@@ -707,7 +746,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                   <div style={{ marginBottom: 8 }}>
                     {o.customer_wish_date ? (
                       <span style={{ fontFamily: F.mono, fontSize: 10, color: "#43B23C", background: "#0c140c", padding: "2px 7px", border: "1px solid #43B23C" }}>
-                        📌 指定 {mdOf(o.customer_wish_date)}
+                        📌 指定 {formatDateShort(o.customer_wish_date)}
                       </span>
                     ) : (
                       <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", background: "#161619", padding: "2px 7px", border: "1px solid #3a3a40" }}>
@@ -718,7 +757,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                   <div className="flex items-center" style={{ gap: 8 }}>
                     {o.system_suggested_date && (
                       <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 10, color: "#111", background: "var(--acc,#F5D400)", padding: "3px 9px" }}>
-                        建議 {mdOf(o.system_suggested_date)}
+                        建議 {formatDateShort(o.system_suggested_date)}
                       </span>
                     )}
                     {o.wish_priority === "strict" && (
@@ -849,6 +888,39 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                   </div>
                 );
               })}
+            </div>
+
+            {/* customer_wish_date 原始值格式分佈（找 undefined/undefined 顯示的根因） */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: "#F5F4EF", marginBottom: 8 }}>
+                customer_wish_date 格式分佈
+                <span style={{ fontFamily: F.mono, fontWeight: 400, fontSize: 10, color: "#7A7A82", marginLeft: 8 }}>
+                  = 排查 UI「指定 undefined/undefined」的根因、非 ISO 格式現形
+                </span>
+              </div>
+              {diag.wishFormatRows.length === 0 && (
+                <div style={{ background: "#111114", padding: "10px 12px", fontFamily: F.mono, fontSize: 11, color: "#6C6C74" }}>—</div>
+              )}
+              {diag.wishFormatRows.map((row, i) => {
+                const isBad = !row.format.includes("ISO");
+                return (
+                  <div key={i} style={{ background: "#111114", padding: "8px 12px", display: "grid", gridTemplateColumns: "2fr 0.6fr", gap: 8, fontFamily: F.mono, fontSize: 11, color: isBad ? "#E5622A" : "#43B23C", borderBottom: "1px solid #1a1a1e" }}>
+                    <span>{row.format}</span>
+                    <span style={{ textAlign: "right", fontFamily: F.anton, fontSize: 14, color: "#F5F4EF" }}>{row.n}</span>
+                  </div>
+                );
+              })}
+              {diag.nonIsoWishSamples.length > 0 && (
+                <div style={{ marginTop: 8, background: "#2a1a10", padding: "8px 12px", borderLeft: "3px solid #E5622A" }}>
+                  <div style={{ fontFamily: F.mono, fontSize: 10, color: "#E5622A", marginBottom: 6 }}>非 ISO 訂單樣本（前 6 筆）</div>
+                  {diag.nonIsoWishSamples.map((s) => (
+                    <div key={s.id} style={{ display: "grid", gridTemplateColumns: "1.4fr 2fr", gap: 8, fontFamily: F.mono, fontSize: 10, color: "#C9C9CF", padding: "2px 0" }}>
+                      <span>{s.id}</span>
+                      <span style={{ color: "#E5622A" }}>wish = "{s.raw}"</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* 靜默失效：batchDate 非 ISO 的訂單 */}
