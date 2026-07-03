@@ -101,6 +101,31 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
 
   const pending = useMemo(() => orders.filter(isPendingSchedule), [orders]);
 
+  // 待排訂單分頁 + 搜尋（供雇主插單搜尋）
+  const [pendingTab, setPendingTab] = useState<"all" | "KOL" | "面交">("all");
+  const [pendingQuery, setPendingQuery] = useState("");
+  const pendingFiltered = useMemo(() => {
+    const q = pendingQuery.trim().toLowerCase();
+    return pending.filter((o) => {
+      if (pendingTab === "KOL" && o.channel !== "KOL") return false;
+      if (pendingTab === "面交" && !o.channel.startsWith("面交")) return false;
+      if (!q) return true;
+      // 搜尋：訂單編號、收件人、IG、品項顯示名
+      const hay = [
+        o.id,
+        o.recipient.name ?? "",
+        o.recipient.igOrLine ?? "",
+        ...o.items.map((it) => it.productSkuId ? getDisplayName(it.productSkuId, menu) : it.rawName),
+      ].join(" ").toLowerCase();
+      return hay.includes(q);
+    });
+  }, [pending, pendingTab, pendingQuery, menu]);
+  const pendingCounts = useMemo(() => ({
+    all: pending.length,
+    KOL: pending.filter((o) => o.channel === "KOL").length,
+    面交: pending.filter((o) => o.channel.startsWith("面交")).length,
+  }), [pending]);
+
   // 全部有日期的訂單（月曆計數用）
   const ordersByDate = useMemo(() => {
     const m = new Map<string, Order[]>();
@@ -417,13 +442,58 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
             onDrop={(e) => { e.preventDefault(); if (dragId) attemptDrop(dragId, "pending"); }}
             style={{ background: overDay === "pending" ? "#141008" : "#0F0F12", border: "1px solid #26262C", padding: 16 }}
           >
-            <div className="flex justify-between items-baseline" style={{ marginBottom: 4 }}>
+            <div className="flex justify-between items-baseline" style={{ marginBottom: 10 }}>
               <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 15, color: "#F5F4EF" }}>待排訂單</span>
               <span style={{ fontFamily: F.anton, fontSize: 22, color: pending.length ? "#E5622A" : "#43B23C" }}>{pending.length}</span>
             </div>
-            <div style={{ fontFamily: F.mono, fontSize: 10, color: "#6C6C74", marginBottom: 12 }}>憲章 #11 · 拖到出貨日即拍板</div>
+
+            {/* 分頁：全部 / KOL / 面交 */}
+            <div className="flex" style={{ gap: 2, marginBottom: 8 }}>
+              {([
+                { k: "all" as const, label: "全部", n: pendingCounts.all },
+                { k: "KOL" as const, label: "KOL", n: pendingCounts.KOL },
+                { k: "面交" as const, label: "面交", n: pendingCounts.面交 },
+              ]).map((t) => {
+                const active = pendingTab === t.k;
+                return (
+                  <button
+                    key={t.k}
+                    type="button"
+                    onClick={() => setPendingTab(t.k)}
+                    style={{
+                      fontFamily: F.tc, fontWeight: 900, fontSize: 11,
+                      color: active ? "#111" : "#9A9AA2",
+                      background: active ? "var(--acc,#F5D400)" : "#161619",
+                      padding: "5px 10px", border: "none", cursor: active ? "default" : "pointer",
+                    }}
+                  >
+                    {t.label} <span style={{ fontFamily: F.mono, fontSize: 10, opacity: 0.75 }}>{t.n}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* 搜尋：雇主插單用（訂單編號 / 收件人 / IG / 品項） */}
+            <input
+              type="text"
+              value={pendingQuery}
+              onChange={(e) => setPendingQuery(e.target.value)}
+              placeholder="🔍 搜尋 訂單編號 / 收件人 / IG / 品項…"
+              style={{
+                fontFamily: F.mono, fontSize: 11, color: "#E7E7EA",
+                background: "#111114", border: "1px solid #3a3a40",
+                padding: "7px 10px", width: "100%", outline: "none", borderRadius: 0,
+                marginBottom: 10, boxSizing: "border-box",
+              }}
+            />
+
             <div style={{ display: "flex", flexDirection: "column", gap: 9, maxHeight: "50vh", overflowY: "auto" }}>
-              {pending.map((o) => (
+              {pendingFiltered.length === 0 && (
+                <div style={{ fontFamily: F.mono, fontSize: 11, color: "#6C6C74", padding: "16px 0", textAlign: "center" }}>
+                  {pendingQuery ? "無符合搜尋的待排單" : pendingTab === "all" ? "✓ 全部已排入" : `此通路無待排單`}
+                </div>
+              )}
+              {pendingFiltered.map((o) => (
                 <div
                   key={o.id}
                   draggable
