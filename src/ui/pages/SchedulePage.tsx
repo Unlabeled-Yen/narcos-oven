@@ -7,7 +7,7 @@
  *   #14 最低前置期：拖到 < lead_time_days（預設 5 天）→ 警示。
  * 主軌 0 LLM。所有數字由 domain（production-time.ts）即時算。
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Menu, Order } from "../../domain/models";
 import { getDisplayName } from "../../domain/menu";
 import {
@@ -419,61 +419,65 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   }
 
   // 主出貨日（本週的週二，getDay===2）
-  // 排程規則（星期幾層級）· 排程頁 header 點擊三態循環
-  // 存 localStorage · override menu.scheduling · 不需動 menu.yaml
-  const [ruleOverride, setRuleOverride] = useState<{ shipping_weekdays: number[]; working_weekdays: number[] } | null>(() => {
-    try { return JSON.parse(localStorage.getItem("narcos-schedule-rule") ?? "null"); }
-    catch { return null; }
+  // 排程規則（具體日期層級）· Yen 新政策：每一天彈性獨立、點日 X 只影響 X
+  // 不再用「星期幾規則」讓所有同名星期幾自動套用同類型
+  // 存 localStorage：{ "2026-07-03": "ship" | "work" | "rest", ... }
+  // 沒 override 的日期 → 回退 menu.scheduling 的星期幾預設（menu.yaml 可設模板）
+  //                   → 兩者都無 → 預設「工作」
+  type DayType = "ship" | "work" | "rest";
+  const [dayOverrides, setDayOverrides] = useState<Record<string, DayType>>(() => {
+    try { return JSON.parse(localStorage.getItem("narcos-day-overrides") ?? "{}"); }
+    catch { return {}; }
   });
-  const shippingWeekdays = new Set(ruleOverride?.shipping_weekdays ?? menu.scheduling?.shipping_weekdays ?? [2]);
-  const workingWeekdays = new Set(ruleOverride?.working_weekdays ?? menu.scheduling?.working_weekdays ?? [0,1,2,3,4,5,6]);
-
-  // 點 header 三態循環：休息 → 工作 → 出貨 → 休息
-  function cycleWeekdayType(weekday: number) {
-    const isShip = shippingWeekdays.has(weekday);
-    const isWork = workingWeekdays.has(weekday);
-    const newShip = new Set(shippingWeekdays);
-    const newWork = new Set(workingWeekdays);
-    if (isShip) {
-      newShip.delete(weekday);
-      newWork.delete(weekday);
-    } else if (isWork) {
-      newWork.delete(weekday);
-      newShip.add(weekday);
-    } else {
-      newWork.add(weekday);
-    }
-    const next = {
-      shipping_weekdays: [...newShip].sort((a, b) => a - b),
-      working_weekdays: [...newWork].sort((a, b) => a - b),
-    };
-    setRuleOverride(next);
-    try { localStorage.setItem("narcos-schedule-rule", JSON.stringify(next)); }
-    catch { /* quota 或 disabled、無害 */ }
-  }
-  function resetRuleOverride() {
-    setRuleOverride(null);
+  // 舊 star-based override：靜默清、避免混淆（本輪政策改變）
+  useEffect(() => {
     try { localStorage.removeItem("narcos-schedule-rule"); }
     catch { /* noop */ }
+  }, []);
+
+  const menuShippingWeekdays = new Set(menu.scheduling?.shipping_weekdays ?? [2]);
+  const menuWorkingWeekdays = new Set(menu.scheduling?.working_weekdays ?? [0,1,2,3,4,5,6]);
+  function dayTypeOf(iso: string): DayType {
+    if (iso in dayOverrides) return dayOverrides[iso]!;
+    const wd = new Date(iso).getDay();
+    if (menuShippingWeekdays.has(wd)) return "ship";
+    if (menuWorkingWeekdays.has(wd)) return "work";
+    return "rest";
   }
 
+  // 點日欄 header 三態循環 · 只 override 那一天
+  function cycleDayType(iso: string) {
+    const cur = dayTypeOf(iso);
+    const next: DayType = cur === "rest" ? "work" : cur === "work" ? "ship" : "rest";
+    const nextOverrides = { ...dayOverrides, [iso]: next };
+    setDayOverrides(nextOverrides);
+    try { localStorage.setItem("narcos-day-overrides", JSON.stringify(nextOverrides)); }
+    catch { /* quota、無害 */ }
+  }
+  function resetRuleOverride() {
+    setDayOverrides({});
+    try { localStorage.removeItem("narcos-day-overrides"); }
+    catch { /* noop */ }
+  }
+  const hasOverrides = Object.keys(dayOverrides).length > 0;
+
   // 週工時 = 「本週最後出貨日」的前一組工作日 + 出貨日排單合集
-  // Yen 新規則：多個出貨日以最後那個為主 · 往前掃工作日、出貨日排單、跳過休息日、遇到前一個出貨日就停
-  // 例：出貨日 = 週三&週六、以週六為 anchor · 往前掃 週五(工)、週四(工)、週三(出貨) → break
-  //   range = [週三本身] ∪ [週四、週五] ∪ [週六(anchor)]
+  // Yen 新規則：以最後出貨日為 anchor · 往前掃、工作日納入、休息日跳過、遇到前一個出貨日就停
+  // 具體日期層級（dayTypeOf(iso)）· 不再用星期幾規則
   function workingRangeForLastShipping(lastShipISO: string): string[] {
     const range: string[] = [lastShipISO]; // anchor 自己納入
     const d = new Date(lastShipISO);
-    for (let i = 1; i < 30; i++) {
+    for (let i = 1; i < 60; i++) { // 上限 60 天避免無限迴圈
       d.setDate(d.getDate() - 1);
-      const wd = d.getDay();
-      if (shippingWeekdays.has(wd)) break; // 遇到前一個出貨日 = 前一批的 anchor、停
-      if (workingWeekdays.has(wd)) range.unshift(toISO(d));
+      const iso = toISO(d);
+      const t = dayTypeOf(iso);
+      if (t === "ship") break; // 遇到前一個出貨日 = 前一批的 anchor、停
+      if (t === "work") range.unshift(iso);
       // 休息日：跳過但繼續往前掃、不進 range
     }
     return range;
   }
-  const weekShipDaysISO = weekISO.filter((iso) => shippingWeekdays.has(new Date(iso).getDay()));
+  const weekShipDaysISO = weekISO.filter((iso) => dayTypeOf(iso) === "ship");
   const lastShipISO = weekShipDaysISO[weekShipDaysISO.length - 1] ?? null;
   const workingRangeISO = lastShipISO ? workingRangeForLastShipping(lastShipISO) : [];
   const shipHours = workingRangeISO.reduce((sum, iso) => sum + dayHours(iso), 0);
@@ -590,26 +594,27 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
               本週工作排程 <span style={{ fontFamily: F.mono, fontWeight: 400, fontSize: 11, color: "#6C6C74" }}>出貨日回推備料</span>
             </span>
             <span className="flex items-center" style={{ gap: 10 }}>
-              {ruleOverride && (
+              {hasOverrides && (
                 <button
                   type="button"
                   onClick={resetRuleOverride}
-                  title="回到 menu.yaml 預設規則"
+                  title="清空所有自訂日規則、回到 menu.yaml 預設"
                   style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", background: "transparent", border: "1px solid #3a3a40", padding: "3px 8px", cursor: "pointer" }}
                 >
-                  ⤺ 重設規則
+                  ⤺ 清 {Object.keys(dayOverrides).length} 筆自訂
                 </button>
               )}
-              <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 11, color: "var(--acc,#F5D400)" }}>⠿ 拖曳待排訂單 → 出貨日 · 點日欄 header 切換工作/出貨/休息</span>
+              <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 11, color: "var(--acc,#F5D400)" }}>⠿ 拖曳待排訂單 → 出貨日 · 點日欄 header 切換此日（只影響此日）</span>
             </span>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6, flex: 1, minHeight: 0 }}>
             {week.map((d) => {
               const iso = toISO(d);
-              const isShip = shippingWeekdays.has(d.getDay());
-              const isWork = workingWeekdays.has(d.getDay()) && !isShip;
-              const isRest = !isShip && !isWork; // 休息日
+              const t = dayTypeOf(iso);
+              const isShip = t === "ship";
+              const isWork = t === "work";
+              const isRest = t === "rest";
               const list = assignedByDay.get(iso) ?? [];
               const isOver = overDay === iso;
               // 顏色：出貨日 = 黃、工作日 = 青藍 (cyan)、休息 = 深灰虛線
@@ -633,8 +638,8 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                 >
                   <button
                     type="button"
-                    onClick={() => cycleWeekdayType(d.getDay())}
-                    title="點擊切換：休息 → 工作 → 出貨"
+                    onClick={() => cycleDayType(iso)}
+                    title="點擊切換此日：休息 → 工作 → 出貨（只影響此日）"
                     className="flex items-baseline justify-between"
                     style={{ padding: "8px 9px", background: isShip ? "var(--acc,#F5D400)" : "transparent", borderBottom: isShip ? undefined : "1px solid #26262C", border: "none", cursor: "pointer", width: "100%", textAlign: "left" }}
                   >
