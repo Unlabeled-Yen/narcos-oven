@@ -497,7 +497,6 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   }, [currentBatchOrders]);
   const currentBatchTotal = currentBatchBreakdown.reduce((s, r) => s + r.qty, 0);
   const currentBatchAnchor = currentBatchRangeISO[currentBatchRangeISO.length - 1] ?? null;
-  const currentBatchStart = currentBatchRangeISO[0] ?? null;
 
   return (
     <div
@@ -724,13 +723,11 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
           {currentBatchAnchor && (
             <div style={{ background: "#0F0F12", border: "1px solid #26262C", borderLeft: "3px solid var(--acc,#F5D400)", padding: "12px 14px", flexShrink: 0 }}>
               <div className="flex items-baseline justify-between flex-wrap" style={{ gap: 8, marginBottom: 8 }}>
-                <div className="flex items-baseline" style={{ gap: 8 }}>
+                <div className="flex items-baseline" style={{ gap: 6 }}>
                   <span style={{ fontFamily: F.mono, fontSize: 10, color: "var(--acc,#F5D400)", letterSpacing: ".14em" }}>當週</span>
-                  {currentBatchStart && (
-                    <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82" }}>
-                      {mdOf(currentBatchStart)}–{mdOf(currentBatchAnchor)}
-                    </span>
-                  )}
+                  <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 12, color: "#F5F4EF" }}>
+                    {(() => { const [, m, d] = currentBatchAnchor.split("-"); return `${Number(m)}/${Number(d)}`; })()}批次
+                  </span>
                 </div>
                 <div className="flex items-baseline" style={{ gap: 12 }}>
                   <span className="flex items-baseline" style={{ gap: 3 }}>
