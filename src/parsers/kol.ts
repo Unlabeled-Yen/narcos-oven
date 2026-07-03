@@ -151,6 +151,7 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
     disappeared_resolution: null as "shipped" | "canceled" | "kept_active" | null,
     frozen_after_label_print: false,
     changes: [] as import("../domain/models").OrderChange[],
+    order_date: null as string | null, // KOL Excel 沒有明確下單日欄，先 null（fallback first_seen_at）
     customer_wish_date: _ship,
     system_suggested_date: null as string | null,
     assignment_source: (_ship ? "customer_wish_kept" : "pending") as import("../domain/models").AssignmentSource,

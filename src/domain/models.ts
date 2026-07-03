@@ -228,6 +228,9 @@ export const OrderSchema = z.object({
   status: OrderStatusSchema,
   batchDate: z.string().nullable(),  // 系統認定的最終出爐日（M6 之後 = assigned_batch_date）
 
+  // 客戶下單日（ISO YYYY-MM-DD）· 供待排列表排序 + chip 顯示
+  order_date: z.string().nullable().default(null),
+
   // M6 新增（backward-compat）
   customer_wish_date: z.string().nullable().default(null),
   system_suggested_date: z.string().nullable().default(null),

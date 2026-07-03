@@ -23,6 +23,7 @@ import { explodeToAtoms, lookupSku } from "../domain/menu";
 import { readSheetTolerant } from "../domain/xlsx-tolerant";
 import {
   extractSellerBuyShippingDate,
+  dateToIso,
   parseSellerBuyOrderDate,
 } from "../domain/batch-date";
 import { deriveOrderWishPriority, estimateOrderHours } from "../domain/production-time";
@@ -264,6 +265,7 @@ function finalizeOrder(w: WipOrder, menu: Menu): Order {
       c21_total: w.total,
       c22_label_count: w.c22,
     },
+    order_date: dateToIso(w.order_date),
     customer_wish_date: batchDate,
     system_suggested_date: null,
     assignment_source: batchDate ? "customer_wish_kept" : "pending",

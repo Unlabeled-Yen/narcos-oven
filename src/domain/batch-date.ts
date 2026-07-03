@@ -98,6 +98,12 @@ function fmt(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Date → ISO YYYY-MM-DD（null-safe），供 parser 統一寫 order_date 用。 */
+export function dateToIso(d: Date | null | undefined): string | null {
+  if (!d) return null;
+  return fmt(d);
+}
+
 /** Excel serial date → JS Date（1900-01-00 為 base、忽略閏年 bug 因為只影響 1900/02/29）。 */
 function excelSerialToDate(n: number): Date | null {
   if (!Number.isFinite(n) || n <= 0) return null;

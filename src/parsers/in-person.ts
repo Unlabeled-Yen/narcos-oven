@@ -25,7 +25,7 @@ import type {
 import { toNum } from "../domain/utils";
 import { explodeToAtoms } from "../domain/menu";
 import { readSheetTolerant } from "../domain/xlsx-tolerant";
-import { extractInPersonDate } from "../domain/batch-date";
+import { extractInPersonDate, dateToIso } from "../domain/batch-date";
 import { deriveOrderWishPriority, estimateOrderHours } from "../domain/production-time";
 import { inPersonOrderId } from "../domain/id-hash";
 
@@ -221,6 +221,7 @@ export function parseInPerson(
         c21_total: toNum(c23),
         c22_label_count: null,
       },
+      order_date: dateToIso(submitDate),
       customer_wish_date: batchDate,
       system_suggested_date: null,
       assignment_source: batchDate ? "customer_wish_kept" : "pending",

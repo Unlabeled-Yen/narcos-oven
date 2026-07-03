@@ -316,13 +316,13 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
       ].join(" ").toLowerCase();
       return hay.includes(q);
     });
-    // 排序：有指定日的照日期升冪（早的優先）在前 · 無指定日按 id 排最後
+    // 排序：所有分頁一律「按下單日期升冪」（先入先排）
+    // order_date 若 null（KOL 或舊資料）用 first_seen_at 當 fallback
     return [...list].sort((a, b) => {
-      const aw = a.customer_wish_date;
-      const bw = b.customer_wish_date;
-      if (aw && bw) return aw.localeCompare(bw);
-      if (aw && !bw) return -1;
-      if (!aw && bw) return 1;
+      const ao = a.order_date ?? a.first_seen_at ?? "";
+      const bo = b.order_date ?? b.first_seen_at ?? "";
+      const cmp = ao.localeCompare(bo);
+      if (cmp !== 0) return cmp;
       return a.id.localeCompare(b.id);
     });
   }, [pending, pendingTab, pendingQuery, menu]);
@@ -726,9 +726,15 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                   onDragEnd={() => { setDragId(null); setOverDay(null); }}
                   style={{ cursor: "grab", background: "#111114", border: "1px solid #26262C", padding: "10px 11px", opacity: dragId === o.id ? 0.35 : 1 }}
                 >
-                  <div className="flex justify-between items-center">
-                    <span style={{ fontFamily: F.mono, fontSize: 11, color: "#C9C9CF" }}>{o.id}</span>
-                    <span style={{ fontFamily: F.mono, fontSize: 13, color: "#4a4a52" }}>⠿</span>
+                  <div className="flex justify-between items-center" style={{ gap: 6 }}>
+                    <span style={{ fontFamily: F.mono, fontSize: 11, color: "#C9C9CF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.id}</span>
+                    <span style={{ fontFamily: F.mono, fontSize: 13, color: "#4a4a52", flexShrink: 0 }}>⠿</span>
+                  </div>
+                  {/* 下單日期（給雇主看排序、匯入日 fallback） */}
+                  <div style={{ fontFamily: F.mono, fontSize: 9, color: "#6C6C74", marginTop: 2, letterSpacing: ".05em" }}>
+                    {o.order_date
+                      ? `下單 ${formatDateShort(o.order_date)}`
+                      : `匯入 ${formatDateShort(o.first_seen_at)}`}
                   </div>
                   {/* 訂單人名字 · 亦供搜尋（搜尋 hay 早已含 recipient.name / igOrLine） */}
                   <div style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 12, color: "#F5F4EF", marginTop: 3 }}>
