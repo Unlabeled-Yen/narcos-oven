@@ -152,7 +152,7 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
     order_date: null as string | null, // KOL Excel 沒有明確下單日欄，先 null（fallback first_seen_at）
     customer_wish_date: _ship,
     system_suggested_date: null as string | null,
-    assignment_source: (_ship ? "customer_wish_kept" : "pending") as import("../domain/models").AssignmentSource,
+    assignment_source: "pending" as import("../domain/models").AssignmentSource,
     wish_priority: null as import("../domain/models").WishPriority | null,
     estimated_production_hours: null as number | null,
   };
@@ -186,9 +186,8 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
     };
   }
 
-  // ---- Stage 4: 出爐日 ----
-  const batchDate = extractKolShippingDate(w.ship_raw, null);
-  // 新政策（2026-07-03）：無指定日不再是 pending reason，直接進待排讓雇主拖入
+  // Stage 4 出爐日抓取已拿掉（Yen 2026-07-03：客人指定日不再自動排入 batchDate）
+  // customer_wish_date 供待排 chip 提示、由雇主拖入拍板
 
   // ---- Stage 2: 品項 lookup + 擇一 handling ----
   const items: OrderItem[] = [];
@@ -232,11 +231,12 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
       ? "pending_kol_choice"
       : "pending_product";
 
+  // Yen 2026-07-03：拿掉「客人指定日自動排入」· batchDate 匯入時一律 null（已寄出 kol_shipped 分支不受影響）
   return {
     id: kolId(w),
     channel: "KOL",
     status,
-    batchDate,
+    batchDate: null,
     recipient: {
       name: w.recipient_name,
       igOrLine: w.ig,

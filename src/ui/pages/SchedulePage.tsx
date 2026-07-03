@@ -390,11 +390,10 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
     if (!o) return;
     const updated: Order =
       toISO === null
-        ? { ...o, batchDate: null, assignment_source: "pending" }
+        ? { ...o, batchDate: null, system_suggested_date: null, assignment_source: "pending" }
         : {
             ...o,
             batchDate: toISO,
-            system_suggested_date: o.system_suggested_date ?? toISO,
             assignment_source: "boss_scheduled", // 憲章 #11：雇主拍板
           };
     await upsertOrder(updated);
@@ -470,13 +469,25 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
     if (shipsInWeek.length === 0) return [];
     const anchor = shipsInWeek[shipsInWeek.length - 1]!;
     const range: string[] = [anchor];
+    let sawWork = false;
     const d = new Date(anchor);
     for (let i = 1; i < 30; i++) {
       d.setDate(d.getDate() - 1);
       const iso = toISO(d);
       const t = dayTypeOf(iso);
-      if (t === "ship") break;
-      if (t === "work") range.unshift(iso);
+      if (t === "ship") {
+        // 見過 work 之後才遇 ship = 前一批 anchor · break
+        // 沒見過 work（連續 ship 段）= 這批的 ship day · 納入
+        if (sawWork) break;
+        range.unshift(iso);
+        continue;
+      }
+      if (t === "work") {
+        range.unshift(iso);
+        sawWork = true;
+        continue;
+      }
+      // rest：跳過但繼續往前掃
     }
     return range;
   }, [weekISO.join(","), dayOverrides, menu.scheduling?.shipping_weekdays, menu.scheduling?.working_weekdays]);
@@ -863,11 +874,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                     )}
                   </div>
                   <div className="flex items-center" style={{ gap: 8 }}>
-                    {o.system_suggested_date && (
-                      <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 10, color: "#111", background: "var(--acc,#F5D400)", padding: "3px 9px" }}>
-                        建議 {formatDateShort(o.system_suggested_date)}
-                      </span>
-                    )}
+                    {/* Yen 2026-07-03：拿掉「建議 MM/DD」自動 chip · 待排單只保留客人指定日提示 */}
                     {o.wish_priority === "strict" && (
                       <span style={{ fontFamily: F.mono, fontSize: 9, color: "#E5352B", border: "1px solid #E5352B", padding: "2px 6px" }}>STRICT</span>
                     )}

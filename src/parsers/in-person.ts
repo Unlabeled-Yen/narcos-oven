@@ -184,11 +184,12 @@ export function parseInPerson(
     const status = derivePendingStatus(pendingReasons);
 
     const now = new Date().toISOString();
+    // Yen 2026-07-03：拿掉「客人指定日自動排入」· batchDate 匯入時一律 null、雇主拖入才拍板
     orders.push({
       id: orderId,
       channel,
       status,
-      batchDate,
+      batchDate: null,
       recipient: {
         name: recipientName,
         igOrLine,
@@ -225,7 +226,7 @@ export function parseInPerson(
       order_date: dateToIso(submitDate),
       customer_wish_date: batchDate,
       system_suggested_date: null,
-      assignment_source: batchDate ? "customer_wish_kept" : "pending",
+      assignment_source: "pending",
       wish_priority: null,
       estimated_production_hours: null,
       first_seen_at: now,

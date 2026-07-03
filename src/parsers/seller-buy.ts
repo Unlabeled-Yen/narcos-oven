@@ -224,11 +224,13 @@ function finalizeOrder(w: WipOrder, menu: Menu): Order {
     .map((it) => it.name)
     .join("\n");
 
+  // Yen 2026-07-03：拿掉「客人指定日自動排入」· batchDate 匯入時一律 null、雇主拖入才拍板
+  //   customer_wish_date 仍保留、供待排 chip「📌 指定 MM/DD」提示
   return {
     id: w.order_id,
     channel: "賣貨便",
     status,
-    batchDate,
+    batchDate: null,
     recipient: {
       name: w.recipient_name,
       igOrLine: null,
@@ -265,7 +267,7 @@ function finalizeOrder(w: WipOrder, menu: Menu): Order {
     order_date: dateToIso(w.order_date),
     customer_wish_date: batchDate,
     system_suggested_date: null,
-    assignment_source: batchDate ? "customer_wish_kept" : "pending",
+    assignment_source: "pending",
     wish_priority: null, // 稍後 derive
     estimated_production_hours: null, // 稍後 derive
     first_seen_at: now,
