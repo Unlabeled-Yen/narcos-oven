@@ -75,7 +75,26 @@ export function recipientStr(o: Order): string {
 }
 
 // ── Option list builder ───────────────────────────────────────────────────
-export type OptionEntry = { label: string; isSuggest: boolean };
+export type OptionEntry = { label: string; isSuggest: boolean; value?: string };
+
+// Sentinel for "leave in bucket, don't resolve"（避免文字被誤存為 batchDate）
+export const DEFER_SENTINEL = "__DEFER__";
+
+// 計算下次週二 ISO（若今天已是週二、跳到下週二）
+function nextTuesdayISO(from: Date = new Date()): string {
+  const d = new Date(from);
+  d.setHours(0, 0, 0, 0);
+  const day = d.getDay(); // 0=日 2=二
+  const delta = ((2 - day + 7) % 7) || 7;
+  d.setDate(d.getDate() + delta);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// 判定 ISO YYYY-MM-DD
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function buildOptions(o: Order, menu: Menu): OptionEntry[] {
   const reason = primaryReason(o);
@@ -109,11 +128,19 @@ export function buildOptions(o: Order, menu: Menu): OptionEntry[] {
       }
       break;
     }
-    case "MISSING_BATCH_DATE":
-      if (reason.suggestion) opts.push({ label: reason.suggestion, isSuggest: highConf });
-      opts.push({ label: "下次週二", isSuggest: false });
-      opts.push({ label: "保留待定", isSuggest: false });
+    case "MISSING_BATCH_DATE": {
+      // 憲章 #2：value 一律用 ISO YYYY-MM-DD、label 給雇主看的中文
+      // 靜默失效根因：舊版直接把「下次週二」label 存進 batchDate、月曆比對失敗
+      if (reason.suggestion && ISO_DATE_RE.test(reason.suggestion)) {
+        const [, mm, dd] = reason.suggestion.match(/^(\d{4})-(\d{2})-(\d{2})$/) ?? [];
+        opts.push({ label: `建議 ${mm}/${dd}`, isSuggest: highConf, value: reason.suggestion });
+      }
+      const nextTue = nextTuesdayISO();
+      const nextTueDisplay = `${nextTue.slice(5, 7)}/${nextTue.slice(8, 10)}`;
+      opts.push({ label: `下次週二 · ${nextTueDisplay}`, isSuggest: false, value: nextTue });
+      opts.push({ label: "保留待定", isSuggest: false, value: DEFER_SENTINEL });
       break;
+    }
     case "UNKNOWN_PRODUCT": {
       const allSkus = Object.keys(menu.products).slice(0, 9);
       if (reason.suggestion) {
@@ -165,6 +192,12 @@ async function resolveChannel(o: Order, channel: string): Promise<void> {
 }
 
 async function resolveBatchDate(o: Order, date: string): Promise<void> {
+  // 憲章 #2 靜默失效零容忍：拒絕非 ISO 日期，loud 失敗
+  if (!ISO_DATE_RE.test(date)) {
+    // eslint-disable-next-line no-console
+    console.error(`[resolveBatchDate] 拒絕非 ISO batchDate: ${JSON.stringify(date)} · order ${o.id}`);
+    throw new Error(`batchDate 必須是 YYYY-MM-DD、收到「${date}」（憲章 #2）`);
+  }
   const filteredReasons = o.pendingReasons.filter((r) => r.code !== "MISSING_BATCH_DATE");
   await db.orders.update(o.id, {
     batchDate: date,
@@ -201,9 +234,12 @@ async function clearPrimaryReason(o: Order): Promise<void> {
 }
 
 /** Route to the appropriate DB call given a chosen option label. */
-export async function resolveOrderByOption(o: Order, optionLabel: string, menu: Menu): Promise<void> {
+export async function resolveOrderByOption(o: Order, optionValue: string, menu: Menu): Promise<void> {
   const reason = primaryReason(o);
   if (!reason) return;
+
+  // 「保留待定」sentinel：不 resolve、留在桶裡（避免 label 被誤存為 batchDate）
+  if (optionValue === DEFER_SENTINEL) return;
 
   const findSku = (label: string) =>
     Object.keys(menu.products).find(
@@ -212,16 +248,16 @@ export async function resolveOrderByOption(o: Order, optionLabel: string, menu: 
 
   switch (reason.code) {
     case "KOL_CHOICE_UNRESOLVED":
-      await resolveKolChoice(o, findSku(optionLabel), menu);
+      await resolveKolChoice(o, findSku(optionValue), menu);
       break;
     case "AMBIGUOUS_CHANNEL":
-      await resolveChannel(o, optionLabel);
+      await resolveChannel(o, optionValue);
       break;
     case "MISSING_BATCH_DATE":
-      await resolveBatchDate(o, optionLabel);
+      await resolveBatchDate(o, optionValue); // 內部強制 ISO 檢查
       break;
     case "UNKNOWN_PRODUCT":
-      await resolveProduct(o, findSku(optionLabel), menu);
+      await resolveProduct(o, findSku(optionValue), menu);
       break;
     default:
       await clearPrimaryReason(o);

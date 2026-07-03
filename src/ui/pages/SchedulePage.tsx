@@ -150,6 +150,12 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
       })
       .sort((a, b) => b.n - a.n);
 
+    // 靜默失效偵測：batchDate 非 ISO YYYY-MM-DD 的訂單（例如 "下次週二"）
+    const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
+    const dirtyBatchDate = orders.filter(
+      (o) => o.batchDate !== null && !ISO_RE.test(o.batchDate)
+    );
+
     return {
       total: orders.length,
       waitCount: wait.length,
@@ -164,8 +170,30 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
       confirmedUnscheduledCount: confirmedUnscheduled.length,
       confirmedDateRows,
       crossRows,
+      dirtyBatchDate,
     };
   }, [orders]);
+
+  // 一鍵修復：把 batchDate 非 ISO 的訂單退回待排
+  const [fixing, setFixing] = useState(false);
+  async function fixDirtyBatchDate() {
+    if (fixing || diag.dirtyBatchDate.length === 0) return;
+    if (!confirm(`確定退回 ${diag.dirtyBatchDate.length} 單（batchDate 非 ISO）到待排？`)) return;
+    setFixing(true);
+    try {
+      for (const o of diag.dirtyBatchDate) {
+        await upsertOrder({
+          ...o,
+          batchDate: null,
+          assignment_source: "pending",
+          estimated_production_hours: null,
+        });
+      }
+      await refreshOrders();
+    } finally {
+      setFixing(false);
+    }
+  }
 
   // 待排訂單分頁 + 搜尋（供雇主插單搜尋）
   const [pendingTab, setPendingTab] = useState<"all" | "賣貨便" | "KOL" | "面交" | "指定日">("all");
@@ -741,6 +769,40 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                 );
               })}
             </div>
+
+            {/* 靜默失效：batchDate 非 ISO 的訂單 */}
+            {diag.dirtyBatchDate.length > 0 && (
+              <div style={{ marginBottom: 20, background: "#2a1010", padding: "14px 16px", borderLeft: "3px solid #E5352B" }}>
+                <div className="flex items-baseline justify-between flex-wrap" style={{ gap: 10, marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: "#E5352B" }}>
+                      ⚠ 靜默失效 · batchDate 非 ISO 格式（{diag.dirtyBatchDate.length} 單）
+                    </div>
+                    <div style={{ fontFamily: F.mono, fontSize: 10, color: "#C9C9CF", marginTop: 4 }}>
+                      這些單的 batchDate 是「下次週二」等文字、月曆/週檢視認不出來 → 靜默消失
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fixDirtyBatchDate}
+                    disabled={fixing}
+                    style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 12, color: "#111", background: "#F5D400", border: "none", padding: "7px 14px", cursor: fixing ? "wait" : "pointer" }}
+                  >
+                    {fixing ? "修復中…" : `一鍵退回 ${diag.dirtyBatchDate.length} 單到待排`}
+                  </button>
+                </div>
+                {diag.dirtyBatchDate.slice(0, 10).map((o) => (
+                  <div key={o.id} style={{ padding: "6px 0", display: "grid", gridTemplateColumns: "1.4fr 1fr 1.4fr", gap: 8, fontFamily: F.mono, fontSize: 10, color: "#C9C9CF" }}>
+                    <span>{o.id}</span>
+                    <span style={{ color: "#E5622A" }}>batchDate = "{o.batchDate}"</span>
+                    <span>{o.recipient?.name ?? "—"} · {o.channel}</span>
+                  </div>
+                ))}
+                {diag.dirtyBatchDate.length > 10 && (
+                  <div style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", marginTop: 6 }}>… 還有 {diag.dirtyBatchDate.length - 10} 單</div>
+                )}
+              </div>
+            )}
 
             {/* 當前 UI filter 狀態（排除 tab/query 藏單造成的錯覺） */}
             <div style={{ marginBottom: 20, background: "#161619", padding: "12px 14px", borderLeft: "3px solid #F5D400" }}>

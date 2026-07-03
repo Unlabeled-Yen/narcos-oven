@@ -111,15 +111,20 @@ export function PendingPage(props: PageProps) {
   }, [visibleOrders.length]);
 
   // ── Mutation helpers ────────────────────────────────────────────────────
-  const pickOption = useCallback(async (orderId: string, optionLabel: string) => {
+  const pickOption = useCallback(async (orderId: string, optionValue: string) => {
     if (busy) return;
     const o = pendingOrders.find((x) => x.id === orderId);
     if (!o) return;
     setBusy(true);
     try {
-      await resolveOrderByOption(o, optionLabel, menu);
+      await resolveOrderByOption(o, optionValue, menu);
       setResolvedSet((prev) => new Set(prev).add(orderId));
       await refreshOrders();
+    } catch (err) {
+      // 憲章 #2 loud 失敗（例如 batchDate 非 ISO）
+      // eslint-disable-next-line no-console
+      console.error("[PendingPage.pickOption] resolve 失敗:", err);
+      alert(`resolve 失敗：${(err as Error).message}`);
     } finally { setBusy(false); }
   }, [busy, pendingOrders, menu, refreshOrders]);
 
@@ -175,7 +180,7 @@ export function PendingPage(props: PageProps) {
         if (!o) return;
         const opts = buildOptions(o, menu);
         const opt = opts[parseInt(k, 10) - 1];
-        if (opt) { e.preventDefault(); pickOption(o.id, opt.label); }
+        if (opt) { e.preventDefault(); pickOption(o.id, opt.value ?? opt.label); }
       }
     }
     document.addEventListener("keydown", onKey);
@@ -322,7 +327,7 @@ export function PendingPage(props: PageProps) {
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                       {opts.map((opt, oi) => (
                         <OptionBtn key={opt.label} num={oi + 1} label={opt.label} isSuggest={opt.isSuggest}
-                          onClick={() => pickOption(o.id, opt.label)} />
+                          onClick={() => pickOption(o.id, opt.value ?? opt.label)} />
                       ))}
                     </div>
                     <div style={{ fontFamily: F.mono, fontSize: 10, color: "#6C6C74", marginTop: 12 }}>
