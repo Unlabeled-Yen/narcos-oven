@@ -17,7 +17,6 @@ import {
   batchesAndHoursForAtom,
 } from "../../domain/production-time";
 import { upsertOrder } from "../../db/orders";
-import { PageHeader } from "../brand/PageHeader";
 import type { PageProps } from "./types";
 
 const F = {
@@ -197,42 +196,36 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
 
   return (
     <div className="h-full flex flex-col min-h-0">
-      <PageHeader
-        caption="SCHEDULE · 出爐排程 · 雇主拍板為準"
-        title="PRODUCTION"
-        right={
-          <div className="flex items-center gap-[10px] flex-wrap">
-            {/* 月/週 切換 */}
+      {/* 薄工具列：月/週切換 + 週/月導覽（取代 PageHeader，把版面高度讓給月/週曆與待排訂單） */}
+      <div className="flex items-center gap-[10px] flex-wrap px-6 py-2" style={{ flexShrink: 0, borderBottom: "1px solid #26262C" }}>
+        <div className="flex gap-[2px]">
+          <button type="button" onClick={() => setViewMode("month")} style={viewMode === "month" ? btnActive : btn}>月</button>
+          <button type="button" onClick={() => setViewMode("week")} style={viewMode === "week" ? btnActive : btn}>週</button>
+        </div>
+        {viewMode === "week" ? (
+          <>
+            <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 16, color: "#8A8A93" }}>
+              {mdOf(weekISO[0])}–{mdOf(weekISO[6])}
+            </span>
             <div className="flex gap-[2px]">
-              <button type="button" onClick={() => setViewMode("month")} style={viewMode === "month" ? btnActive : btn}>月</button>
-              <button type="button" onClick={() => setViewMode("week")} style={viewMode === "week" ? btnActive : btn}>週</button>
+              <button type="button" onClick={() => setWeekOffset((w) => w - 1)} style={btn}>‹ 上週</button>
+              <button type="button" onClick={() => setWeekOffset(0)} style={weekOffset === 0 ? btnActive : btn}>本週</button>
+              <button type="button" onClick={() => setWeekOffset((w) => w + 1)} style={btn}>下週 ›</button>
             </div>
-            {viewMode === "week" ? (
-              <>
-                <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 18, color: "#8A8A93" }}>
-                  {mdOf(weekISO[0])}–{mdOf(weekISO[6])}
-                </span>
-                <div className="flex gap-[2px]">
-                  <button type="button" onClick={() => setWeekOffset((w) => w - 1)} style={btn}>‹ 上週</button>
-                  <button type="button" onClick={() => setWeekOffset(0)} style={weekOffset === 0 ? btnActive : btn}>本週</button>
-                  <button type="button" onClick={() => setWeekOffset((w) => w + 1)} style={btn}>下週 ›</button>
-                </div>
-              </>
-            ) : (
-              <>
-                <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 18, color: "#8A8A93" }}>
-                  {monthInfo.year} / {String(monthInfo.month + 1).padStart(2, "0")}
-                </span>
-                <div className="flex gap-[2px]">
-                  <button type="button" onClick={() => setMonthOffset((m) => m - 1)} style={btn}>‹ 上月</button>
-                  <button type="button" onClick={() => setMonthOffset(0)} style={monthOffset === 0 ? btnActive : btn}>本月</button>
-                  <button type="button" onClick={() => setMonthOffset((m) => m + 1)} style={btn}>下月 ›</button>
-                </div>
-              </>
-            )}
-          </div>
-        }
-      />
+          </>
+        ) : (
+          <>
+            <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 16, color: "#8A8A93" }}>
+              {monthInfo.year} / {String(monthInfo.month + 1).padStart(2, "0")}
+            </span>
+            <div className="flex gap-[2px]">
+              <button type="button" onClick={() => setMonthOffset((m) => m - 1)} style={btn}>‹ 上月</button>
+              <button type="button" onClick={() => setMonthOffset(0)} style={monthOffset === 0 ? btnActive : btn}>本月</button>
+              <button type="button" onClick={() => setMonthOffset((m) => m + 1)} style={btn}>下月 ›</button>
+            </div>
+          </>
+        )}
+      </div>
 
       {warn && (
         <div className="mx-6 mt-2 px-4 py-3 flex items-center justify-between" style={{ background: "#2a1010", border: "1px solid #E5352B" }}>

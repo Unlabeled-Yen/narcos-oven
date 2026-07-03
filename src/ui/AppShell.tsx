@@ -91,7 +91,7 @@ export function AppShell({
       { key: "kol", label: "KOL ROI" },
     ],
     schedule: [
-      { key: "schedule", label: "週排程" },
+      { key: "schedule", label: "排程系統" },
       { key: "capacity", label: "產能設定" },
       { key: "labels", label: "出貨標籤" },
     ],
