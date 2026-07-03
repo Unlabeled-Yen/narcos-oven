@@ -34,7 +34,7 @@ export const F = {
 // ── Reason display config ─────────────────────────────────────────────────
 export const REASON_CONFIG: Record<PendingReasonCode, { label: string; color: string }> = {
   PAYMENT_NOT_CONFIRMED:  { label: "未付款",   color: C.orange },
-  MISSING_BATCH_DATE:     { label: "缺出爐日", color: C.cyan   },
+  MISSING_BATCH_DATE:     { label: "缺出貨日", color: C.cyan   },
   CONFLICT_DATE_C12_C28:  { label: "日期衝突", color: C.red    },
   AMBIGUOUS_CHANNEL:      { label: "通路",     color: C.green  },
   UNKNOWN_PRODUCT:        { label: "品項未歸類", color: C.red  },

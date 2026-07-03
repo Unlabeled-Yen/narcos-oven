@@ -238,7 +238,7 @@ export function OrdersPage({ orders, menu }: PageProps) {
               fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".08em",
             }}>
               <span>訂單編號</span><span>通路</span><span>收件</span><span>品項</span>
-              <span>出爐日</span>
+              <span>出貨日</span>
               <span style={{ textAlign: "right" }}>金額</span>
               <span style={{ textAlign: "center" }}>標</span>
               <span style={{ textAlign: "right" }}>狀態</span>

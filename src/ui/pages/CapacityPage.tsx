@@ -334,7 +334,7 @@ export function CapacityPage(props: PageProps) {
           </div>
           <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: C.ink3, marginBottom: 4 }}>超載檢核邏輯</div>
           <div style={{ fontFamily: F.tc, fontWeight: 500, fontSize: 12, color: C.mut, lineHeight: 1.7 }}>
-            排程引擎在 Stage 9 對每個出爐日加總確認訂單的原子需求，與此頁的{" "}
+            排程引擎在 Stage 9 對每個出貨日加總確認訂單的原子需求，與此頁的{" "}
             <span style={{ color: C.ink3, fontFamily: F.mono, fontSize: 11 }}>daily_max × weekly_pattern</span>{" "}
             比對。任何 atom 超出上限時，該訂單一律退回「待排」桶，不自動分配到下一批次。
             超載批次顯示於儀表板警示區，由雇主手動決定如何調配。
