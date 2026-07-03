@@ -437,13 +437,13 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
         </div>
 
         {/* RIGHT RAIL */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0, minHeight: 0, overflowY: "auto" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0, minHeight: 0 }}>
           <div
             data-day="pending"
             onDragOver={(e) => { e.preventDefault(); setOverDay("pending"); }}
             onDragLeave={() => setOverDay((x) => (x === "pending" ? null : x))}
             onDrop={(e) => { e.preventDefault(); if (dragId) attemptDrop(dragId, "pending"); }}
-            style={{ background: overDay === "pending" ? "#141008" : "#0F0F12", border: "1px solid #26262C", padding: 16 }}
+            style={{ background: overDay === "pending" ? "#141008" : "#0F0F12", border: "1px solid #26262C", padding: 16, flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}
           >
             <div className="flex justify-between items-baseline" style={{ marginBottom: 10 }}>
               <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 15, color: "#F5F4EF" }}>待排訂單</span>
@@ -492,7 +492,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
               }}
             />
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 9, maxHeight: "50vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 9, flex: 1, minHeight: 0, overflowY: "auto" }}>
               {pendingFiltered.length === 0 && (
                 <div style={{ fontFamily: F.mono, fontSize: 11, color: "#6C6C74", padding: "16px 0", textAlign: "center" }}>
                   {pendingQuery
