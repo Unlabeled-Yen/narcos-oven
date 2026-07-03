@@ -529,17 +529,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   return (
     <div
       className="h-full flex flex-col min-h-0"
-      onDragOver={(e) => { if (dragId) e.preventDefault(); }}
-      onDrop={(e) => {
-        if (!dragId) return;
-        // 判斷 drop target 是否落在任何 [data-day]（日欄或待排軌）內；
-        // 若在框外 → 自動退回待排（batchDate=null, assignment_source="pending"）
-        const inZone = (e.target as HTMLElement).closest?.("[data-day]");
-        if (!inZone) {
-          e.preventDefault();
-          attemptDrop(dragId, "pending");
-        }
-      }}
+      /* 舊 root onDragOver/onDrop 拿掉 · 已由每張卡片 onDragEnd (dropEffect="none") 全域覆蓋 · 含 nav 位置 */
     >
       {/* 頂端獨立工具列已拿掉（Yen 2026-07-03）· 內容挪入 week-grid / month header 條 · 排程板塊拉高 */}
       {warn && (
@@ -653,7 +643,12 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                         key={o.id}
                         draggable
                         onDragStart={() => setDragId(o.id)}
-                        onDragEnd={() => { setDragId(null); setOverDay(null); }}
+                        onDragEnd={(e) => {
+                          // Yen 2026-07-03：取消範圍擴大 · dropEffect="none" = 掉在無效區（含 nav / 外框）→ 退回待排
+                          if (e.dataTransfer.dropEffect === "none") void commitAssign(o.id, null);
+                          setDragId(null);
+                          setOverDay(null);
+                        }}
                         title={o.id}
                         style={{
                           cursor: "grab",
