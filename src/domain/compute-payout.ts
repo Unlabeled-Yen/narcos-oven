@@ -38,15 +38,32 @@ function logisticsCostFor(o: Order, menu: Menu): { cost: number; isEstimated: bo
   return { cost: 0, isEstimated: false };
 }
 
-/** 品項成本：所有 items 的 product.cost × quantity */
+/**
+ * 品項成本：主軌 product.cost × quantity；product.cost=null 時 fallback 到 atoms 加總
+ *   fallback 依 menu.atoms[*].cost（成本總覽 PDF · 2026-07-03 寫入）· item.atoms.count 已含 quantity
+ *   atom fallback 是精確資料（非估算）· isEstimated 只在真的缺資料時才 true
+ */
 function cogsFor(o: Order, menu: Menu): { cost: number; isEstimated: boolean } {
   let total = 0;
   let hasNull = false;
   for (const item of o.items) {
     if (!item.productSkuId) { hasNull = true; continue; }
     const product = menu.products[item.productSkuId];
-    if (!product || product.cost === null) { hasNull = true; continue; }
-    total += product.cost * item.quantity;
+    if (!product) { hasNull = true; continue; }
+    if (product.cost !== null) {
+      total += product.cost * item.quantity;
+      continue;
+    }
+    // fallback → atoms 加總
+    let itemAtomCost = 0;
+    let itemHasNull = false;
+    for (const a of item.atoms) {
+      const atom = menu.atoms[a.atomId];
+      if (!atom || atom.cost == null) { itemHasNull = true; break; }
+      itemAtomCost += atom.cost * a.count;
+    }
+    if (itemHasNull) { hasNull = true; continue; }
+    total += itemAtomCost;
   }
   return { cost: total, isEstimated: hasNull };
 }
@@ -141,7 +158,7 @@ export function computePayout(orders: Order[], menu: Menu): PayoutResult {
     acc.cogs += cogsR.cost;
     if (cogsR.isEstimated) {
       acc.isEstimated = true;
-      estimatedReasonSet.add("部分品項缺 cost，COGS 為估算");
+      estimatedReasonSet.add("部分品項缺 product.cost 且 atoms 也缺 cost，COGS 未含此部分");
     }
 
     const pkgR = packagingFor(o, menu);
