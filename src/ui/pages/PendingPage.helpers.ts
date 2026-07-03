@@ -165,6 +165,29 @@ export function buildOptions(o: Order, menu: Menu): OptionEntry[] {
 }
 
 // ── DB mutation helpers (mirroring PendingBucket.tsx) ───────────────────
+
+/**
+ * 桶清空 → 自動排入 helper
+ * 當 filteredReasons 為空（訂單將轉 confirmed）、且 order 已有 batchDate（原本就有）
+ * 或有 ISO 格式的 customer_wish_date、就同步設 assignment_source = customer_wish_kept
+ * 讓月曆/週檢視能顯示。避免 confirmed + pending + 無date 的孤兒單。
+ */
+function autoScheduleIfCleared(
+  o: Order,
+  filteredReasons: Order["pendingReasons"]
+): { batchDate?: string; assignment_source?: Order["assignment_source"] } {
+  if (filteredReasons.length !== 0) return {}; // 還有未 resolve 的 reason、不動
+  // 已有 batchDate 且 ISO → 保留、只把 source 從 pending 升成 customer_wish_kept
+  if (o.batchDate && ISO_DATE_RE.test(o.batchDate) && o.assignment_source === "pending") {
+    return { assignment_source: "customer_wish_kept" };
+  }
+  // 沒 batchDate 但 wish_date ISO → 用 wish_date
+  if (!o.batchDate && o.customer_wish_date && ISO_DATE_RE.test(o.customer_wish_date)) {
+    return { batchDate: o.customer_wish_date, assignment_source: "customer_wish_kept" };
+  }
+  return {};
+}
+
 async function resolveKolChoice(o: Order, skuId: string, menu: Menu): Promise<void> {
   const atoms = explodeToAtoms(skuId, menu);
   const newItems = [{
@@ -179,6 +202,7 @@ async function resolveKolChoice(o: Order, skuId: string, menu: Menu): Promise<vo
     items: [...o.items.filter((it) => it.productSkuId !== null), ...newItems],
     pendingReasons: filteredReasons,
     status: filteredReasons.length === 0 ? "confirmed" : o.status,
+    ...autoScheduleIfCleared(o, filteredReasons),
   });
 }
 
@@ -188,6 +212,7 @@ async function resolveChannel(o: Order, channel: string): Promise<void> {
     channel: channel as Order["channel"],
     pendingReasons: filteredReasons,
     status: filteredReasons.length === 0 ? "confirmed" : o.status,
+    ...autoScheduleIfCleared(o, filteredReasons),
   });
 }
 
@@ -220,6 +245,7 @@ async function resolveProduct(o: Order, skuId: string, menu: Menu): Promise<void
     items: newItems,
     pendingReasons: filteredReasons,
     status: filteredReasons.length === 0 ? "confirmed" : o.status,
+    ...autoScheduleIfCleared(o, filteredReasons),
   });
 }
 
@@ -230,6 +256,7 @@ async function clearPrimaryReason(o: Order): Promise<void> {
   await db.orders.update(o.id, {
     pendingReasons: filteredReasons,
     status: filteredReasons.length === 0 ? "confirmed" : o.status,
+    ...autoScheduleIfCleared(o, filteredReasons),
   });
 }
 

@@ -156,6 +156,16 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
       (o) => o.batchDate !== null && !ISO_RE.test(o.batchDate)
     );
 
+    // 孤兒 confirmed 未拍板但有 ISO wish_date：可自動排入（避免 confirmed+pending+無date 沉在待排）
+    const orphanWithWish = orders.filter(
+      (o) =>
+        o.status === "confirmed" &&
+        o.assignment_source === "pending" &&
+        !o.batchDate &&
+        o.customer_wish_date &&
+        ISO_RE.test(o.customer_wish_date)
+    );
+
     return {
       total: orders.length,
       waitCount: wait.length,
@@ -171,6 +181,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
       confirmedDateRows,
       crossRows,
       dirtyBatchDate,
+      orphanWithWish,
     };
   }, [orders]);
 
@@ -192,6 +203,26 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
       await refreshOrders();
     } finally {
       setFixing(false);
+    }
+  }
+
+  // 一鍵補救：把「confirmed + pending + 無date + 有 ISO wish_date」的訂單自動排到 wish_date
+  const [autoScheduling, setAutoScheduling] = useState(false);
+  async function autoScheduleOrphans() {
+    if (autoScheduling || diag.orphanWithWish.length === 0) return;
+    if (!confirm(`確定自動排入 ${diag.orphanWithWish.length} 單（用 customer_wish_date）？assignment_source 會設為 customer_wish_kept。`)) return;
+    setAutoScheduling(true);
+    try {
+      for (const o of diag.orphanWithWish) {
+        await upsertOrder({
+          ...o,
+          batchDate: o.customer_wish_date,
+          assignment_source: "customer_wish_kept",
+        });
+      }
+      await refreshOrders();
+    } finally {
+      setAutoScheduling(false);
     }
   }
 
@@ -800,6 +831,40 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                 ))}
                 {diag.dirtyBatchDate.length > 10 && (
                   <div style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", marginTop: 6 }}>… 還有 {diag.dirtyBatchDate.length - 10} 單</div>
+                )}
+              </div>
+            )}
+
+            {/* 孤兒 confirmed 未拍板 · 有 ISO wish_date 可一鍵自動排 */}
+            {diag.orphanWithWish.length > 0 && (
+              <div style={{ marginBottom: 20, background: "#1a1206", padding: "14px 16px", borderLeft: "3px solid #E5622A" }}>
+                <div className="flex items-baseline justify-between flex-wrap" style={{ gap: 10, marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: "#E5622A" }}>
+                      ⚠ 孤兒 confirmed 未拍板 · 有 customer_wish_date（{diag.orphanWithWish.length} 單）
+                    </div>
+                    <div style={{ fontFamily: F.mono, fontSize: 10, color: "#C9C9CF", marginTop: 4 }}>
+                      這些單已 resolve、但 assignment_source 仍 pending → 卡在待排。有 wish_date 可自動排入。
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={autoScheduleOrphans}
+                    disabled={autoScheduling}
+                    style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 12, color: "#111", background: "#F5D400", border: "none", padding: "7px 14px", cursor: autoScheduling ? "wait" : "pointer" }}
+                  >
+                    {autoScheduling ? "排入中…" : `一鍵自動排 ${diag.orphanWithWish.length} 單 (customer_wish_kept)`}
+                  </button>
+                </div>
+                {diag.orphanWithWish.slice(0, 10).map((o) => (
+                  <div key={o.id} style={{ padding: "6px 0", display: "grid", gridTemplateColumns: "1.4fr 1fr 1.4fr", gap: 8, fontFamily: F.mono, fontSize: 10, color: "#C9C9CF" }}>
+                    <span>{o.id}</span>
+                    <span style={{ color: "#43B23C" }}>wish → {o.customer_wish_date}</span>
+                    <span>{o.recipient?.name ?? "—"} · {o.channel}</span>
+                  </div>
+                ))}
+                {diag.orphanWithWish.length > 10 && (
+                  <div style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", marginTop: 6 }}>… 還有 {diag.orphanWithWish.length - 10} 單</div>
                 )}
               </div>
             )}
