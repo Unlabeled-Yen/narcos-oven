@@ -101,7 +101,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
 
   const pending = useMemo(() => orders.filter(isPendingSchedule), [orders]);
 
-  // 診斷：待排（排程頁）vs 待處理桶 差集 · 排查同步問題
+  // 診斷：待排（排程頁）vs 待處理桶 差集 · 訂單分佈 · confirmed 去向
   const diag = useMemo(() => {
     const bucket = orders.filter((o) =>
       o.status.startsWith("pending_") ||
@@ -114,11 +114,42 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
     );
     const bSet = new Set(bucket.map((o) => o.id));
     const wSet = new Set(wait.map((o) => o.id));
+
+    // 訂單分佈總覽（互斥分類、Σ = 全部訂單）
+    const shipped = orders.filter((o) => o.status === "shipped" || o.status === "kol_shipped");
+    const canceled = orders.filter((o) => o.status === "canceled");
+    const confirmedAll = orders.filter((o) => o.status === "confirmed");
+    const confirmedScheduled = confirmedAll.filter(
+      (o) => o.batchDate !== null && o.assignment_source !== "pending"
+    );
+    const confirmedUnscheduled = confirmedAll.filter(
+      (o) => o.batchDate === null || o.assignment_source === "pending"
+    );
+    // confirmed 已排入的按 batchDate 分佈（給 Yen 找他的 confirmed 訂單去了哪些日子）
+    const confirmedByDate = new Map<string, Order[]>();
+    for (const o of confirmedScheduled) {
+      const d = o.batchDate!;
+      const arr = confirmedByDate.get(d) ?? [];
+      arr.push(o);
+      confirmedByDate.set(d, arr);
+    }
+    const confirmedDateRows = [...confirmedByDate.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, list]) => ({ date, count: list.length }));
+
     return {
+      total: orders.length,
       waitCount: wait.length,
       bucketCount: bucket.length,
       inWaitOnly: wait.filter((o) => !bSet.has(o.id)),
       inBucketOnly: bucket.filter((o) => !wSet.has(o.id)),
+      // 分佈
+      shippedCount: shipped.length,
+      canceledCount: canceled.length,
+      confirmedTotalCount: confirmedAll.length,
+      confirmedScheduledCount: confirmedScheduled.length,
+      confirmedUnscheduledCount: confirmedUnscheduled.length,
+      confirmedDateRows,
     };
   }, [orders]);
 
@@ -606,7 +637,67 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
               <button type="button" onClick={() => setDiagOpen(false)} style={{ fontFamily: F.mono, fontSize: 13, color: "#8A8A93", background: "transparent", border: "none", cursor: "pointer" }}>✕</button>
             </div>
 
-            {/* 統計 */}
+            {/* 訂單分佈總覽（互斥、Σ = 全部訂單） */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: "#F5F4EF", marginBottom: 10 }}>
+                訂單分佈總覽
+                <span style={{ fontFamily: F.mono, fontWeight: 400, fontSize: 10, color: "#7A7A82", marginLeft: 8 }}>
+                  總 {diag.total} = 已出貨 + confirmed(已排+未排) + 待處理桶 + 已取消
+                </span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 8 }}>
+                <div style={{ background: "#111114", padding: 10, borderLeft: "3px solid #43B23C" }}>
+                  <div style={{ fontFamily: F.mono, fontSize: 9, color: "#7A7A82" }}>已出貨</div>
+                  <div style={{ fontFamily: F.anton, fontSize: 22, color: "#F5F4EF" }}>{diag.shippedCount}</div>
+                </div>
+                <div style={{ background: "#111114", padding: 10, borderLeft: "3px solid #F5D400" }}>
+                  <div style={{ fontFamily: F.mono, fontSize: 9, color: "#7A7A82" }}>confirmed 已排</div>
+                  <div style={{ fontFamily: F.anton, fontSize: 22, color: "#F5F4EF" }}>{diag.confirmedScheduledCount}</div>
+                  <div style={{ fontFamily: F.mono, fontSize: 9, color: "#43B23C", marginTop: 2 }}>拍板 · 週/月曆</div>
+                </div>
+                <div style={{ background: "#111114", padding: 10, borderLeft: "3px solid #E5622A" }}>
+                  <div style={{ fontFamily: F.mono, fontSize: 9, color: "#7A7A82" }}>confirmed 未排</div>
+                  <div style={{ fontFamily: F.anton, fontSize: 22, color: "#F5F4EF" }}>{diag.confirmedUnscheduledCount}</div>
+                  <div style={{ fontFamily: F.mono, fontSize: 9, color: "#E5622A", marginTop: 2 }}>在待排列表</div>
+                </div>
+                <div style={{ background: "#111114", padding: 10, borderLeft: "3px solid #8557C9" }}>
+                  <div style={{ fontFamily: F.mono, fontSize: 9, color: "#7A7A82" }}>待處理桶</div>
+                  <div style={{ fontFamily: F.anton, fontSize: 22, color: "#F5F4EF" }}>{diag.bucketCount}</div>
+                </div>
+                <div style={{ background: "#111114", padding: 10, borderLeft: "3px solid #6C6C74" }}>
+                  <div style={{ fontFamily: F.mono, fontSize: 9, color: "#7A7A82" }}>已取消</div>
+                  <div style={{ fontFamily: F.anton, fontSize: 22, color: "#F5F4EF" }}>{diag.canceledCount}</div>
+                </div>
+              </div>
+              <div style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", marginTop: 8 }}>
+                Σ 檢查：{diag.shippedCount + diag.confirmedScheduledCount + diag.confirmedUnscheduledCount + diag.bucketCount + diag.canceledCount} / {diag.total}
+                {(diag.shippedCount + diag.confirmedScheduledCount + diag.confirmedUnscheduledCount + diag.bucketCount + diag.canceledCount) === diag.total
+                  ? <span style={{ color: "#43B23C" }}> ✓ 一致</span>
+                  : <span style={{ color: "#E5352B" }}> ✗ 有訂單狀態不在分類內</span>}
+              </div>
+            </div>
+
+            {/* confirmed 已排 · 按 batchDate 分佈 */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: "#F5D400", marginBottom: 8 }}>
+                confirmed 已排 · 按出貨日分佈（{diag.confirmedScheduledCount} 單）
+                <span style={{ fontFamily: F.mono, fontWeight: 400, fontSize: 10, color: "#7A7A82", marginLeft: 8 }}>
+                  = 這些單去了哪些日子（在排程週/月曆的日欄裡）
+                </span>
+              </div>
+              {diag.confirmedDateRows.length === 0 && <div style={{ fontFamily: F.mono, fontSize: 11, color: "#6C6C74" }}>—</div>}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: 6 }}>
+                {diag.confirmedDateRows.map((row) => (
+                  <div key={row.date} style={{ background: "#111114", padding: "8px 10px", display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                    <span style={{ fontFamily: F.mono, fontSize: 11, color: "#C9C9CF" }}>{row.date}</span>
+                    <span style={{ fontFamily: F.anton, fontSize: 18, color: "#F5D400" }}>{row.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 差集統計（原本的四卡片） */}
+            <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: "#F5F4EF", marginBottom: 10 }}>差集分析</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
               <div style={{ background: "#111114", padding: 12, borderLeft: "3px solid #E5622A" }}>
                 <div style={{ fontFamily: F.mono, fontSize: 9, color: "#7A7A82" }}>排程待排</div>
