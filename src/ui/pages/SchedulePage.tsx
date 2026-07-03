@@ -68,13 +68,6 @@ function addDays(d: Date, n: number): Date {
   r.setDate(r.getDate() + n);
   return r;
 }
-function daysBetween(aISO: string, b: Date): number {
-  const a = new Date(aISO);
-  a.setHours(0, 0, 0, 0);
-  const bb = new Date(b);
-  bb.setHours(0, 0, 0, 0);
-  return Math.round((a.getTime() - bb.getTime()) / 86400000);
-}
 
 // 需排程的訂單（待排）：主軌 confirmed / pending_batch_date 且尚未由雇主拍板日期
 function isPendingSchedule(o: Order): boolean {
@@ -90,12 +83,10 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overDay, setOverDay] = useState<string | null>(null);
   const [warn, setWarn] = useState<string | null>(null);
-  const [confirmDrop, setConfirmDrop] = useState<{ id: string; toISO: string; msg: string } | null>(null);
 
   const today = useMemo(() => new Date(), []);
   const budget = menu.weekly_production_budget?.total_hours_max ?? 30;
   const stdBudget = menu.weekly_production_budget?.total_hours_min ?? 24;
-  const leadDays = menu.scheduling?.lead_time_days ?? 5;
 
   const monday = useMemo(() => mondayOf(today, weekOffset), [today, weekOffset]);
   const week = useMemo(
@@ -422,27 +413,8 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
     }
     const toISO = toISOorPending;
     if (o.batchDate === toISO) return;
-
-    // 憲章 #14：前置期檢查
-    const lead = daysBetween(toISO, today);
-    const leadWarn = lead < leadDays ? `前置期只剩 ${lead} 天（< ${leadDays} 天最低前置期，憲章 #14）` : null;
-
-    // 憲章 #12：產能超載檢查
-    const list = (assignedByDay.get(toISO) ?? []).filter((x) => x.id !== id);
-    const projected = calculateBatchHours(
-      accumulateAtoms([...list, o]),
-      menu
-    );
-    const overWarn =
-      projected > budget
-        ? `排入後當日工時 ${projected}h > 週上限 ${budget}h（產能超載，憲章 #12）`
-        : null;
-
-    if (leadWarn || overWarn) {
-      const msg = [overWarn, leadWarn].filter(Boolean).join("；");
-      setConfirmDrop({ id, toISO, msg });
-      return;
-    }
+    // Yen 決策：拿掉排程確認置入通知（原憲章 #12/#14 二次確認 modal）
+    // 若後續要恢復警示、可用 warn banner（不 block）方式取代
     void commitAssign(id, toISO);
   }
 
@@ -594,30 +566,6 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
         <div className="mx-6 mt-2 px-4 py-3 flex items-center justify-between" style={{ background: "#2a1010", border: "1px solid #E5352B" }}>
           <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 12, color: "#E5352B" }}>⚠ {warn}</span>
           <button type="button" onClick={() => setWarn(null)} style={{ fontFamily: F.mono, fontSize: 11, color: "#8A8A93", cursor: "pointer" }}>✕</button>
-        </div>
-      )}
-
-      {/* 超載/前置期 二次確認（憲章 #12 不靜默） */}
-      {confirmDrop && (
-        <div className="mx-6 mt-2 px-4 py-3" style={{ background: "#2a1a10", border: "1px solid #E5622A" }}>
-          <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: "#E5622A" }}>⚠ 需雇主確認</div>
-          <div style={{ fontFamily: F.tc, fontWeight: 500, fontSize: 12, color: "#C9C9CF", marginTop: 4 }}>{confirmDrop.msg}</div>
-          <div className="flex gap-2 mt-3">
-            <button
-              type="button"
-              onClick={() => { const c = confirmDrop; setConfirmDrop(null); void commitAssign(c.id, c.toISO); }}
-              style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 12, color: "#111", background: "#E5622A", padding: "6px 14px", cursor: "pointer" }}
-            >
-              仍要排入 · 我負責
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirmDrop(null)}
-              style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 12, color: "#C9C9CF", background: "#161619", padding: "6px 14px", cursor: "pointer" }}
-            >
-              取消
-            </button>
-          </div>
         </div>
       )}
 
