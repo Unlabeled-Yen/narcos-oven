@@ -485,7 +485,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
               type="text"
               value={pendingQuery}
               onChange={(e) => setPendingQuery(e.target.value)}
-              placeholder="🔍 搜尋 訂單編號 / 收件人 / IG / 品項…"
+              placeholder="🔍 搜尋 姓名 / 訂單編號 / IG / 品項 / 日期…"
               style={{
                 fontFamily: F.mono, fontSize: 11, color: "#E7E7EA",
                 background: "#111114", border: "1px solid #3a3a40",
@@ -517,6 +517,15 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                   <div className="flex justify-between items-center">
                     <span style={{ fontFamily: F.mono, fontSize: 11, color: "#C9C9CF" }}>{o.id}</span>
                     <span style={{ fontFamily: F.mono, fontSize: 13, color: "#4a4a52" }}>⠿</span>
+                  </div>
+                  {/* 訂單人名字 · 亦供搜尋（搜尋 hay 早已含 recipient.name / igOrLine） */}
+                  <div style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 12, color: "#F5F4EF", marginTop: 3 }}>
+                    {o.recipient.name ?? o.recipient.igOrLine ?? "—"}
+                    {o.recipient.name && o.recipient.igOrLine ? (
+                      <span style={{ fontFamily: F.mono, fontWeight: 400, fontSize: 10, color: "#7A7A82", marginLeft: 6 }}>
+                        {o.recipient.igOrLine}
+                      </span>
+                    ) : null}
                   </div>
                   <div style={{ fontFamily: F.tc, fontWeight: 500, fontSize: 11, color: "#8A8A93", margin: "4px 0 8px" }}>
                     {orderItemLabel(o, menu)}
