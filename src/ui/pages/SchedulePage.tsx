@@ -195,7 +195,20 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   const shipList = assignedByDay.get(shipISO) ?? [];
 
   return (
-    <div className="h-full flex flex-col min-h-0">
+    <div
+      className="h-full flex flex-col min-h-0"
+      onDragOver={(e) => { if (dragId) e.preventDefault(); }}
+      onDrop={(e) => {
+        if (!dragId) return;
+        // 判斷 drop target 是否落在任何 [data-day]（日欄或待排軌）內；
+        // 若在框外 → 自動退回待排（batchDate=null, assignment_source="pending"）
+        const inZone = (e.target as HTMLElement).closest?.("[data-day]");
+        if (!inZone) {
+          e.preventDefault();
+          attemptDrop(dragId, "pending");
+        }
+      }}
+    >
       {/* 薄工具列：月/週切換 + 週/月導覽 + 本週工時 gauge（取代 PageHeader，把版面高度讓給月/週曆與待排訂單） */}
       <div className="flex items-center gap-[10px] flex-wrap px-6 py-2" style={{ flexShrink: 0, borderBottom: "1px solid #26262C" }}>
         <div className="flex gap-[2px]">
