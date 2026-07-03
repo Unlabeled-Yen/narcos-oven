@@ -201,6 +201,7 @@ export type OrderChange = z.infer<typeof OrderChangeSchema>;
 
 /** Order 的 raw 摘要（M3 diff 用）——只含關鍵欄位快照供比對。 */
 export const OrderSnapshotSchema = z.object({
+  c1_order_date: z.string().nullable().default(null), // ISO YYYY-MM-DD 下單日（供反查、diff）
   c5_status: z.string(),
   c11_conv_store: z.string().nullable(),
   c12_product: z.string(), // 品項字串合併（多品項用 \n 分隔）

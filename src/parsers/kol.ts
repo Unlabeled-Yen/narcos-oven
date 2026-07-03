@@ -133,6 +133,7 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
 
   const now = new Date().toISOString();
   const snapshot = {
+    c1_order_date: null as string | null, // KOL Excel 無明確下單日欄位
     c5_status: w.shipped ? "kol-shipped" : "kol-pending",
     c11_conv_store: null,
     c12_product: w.products.join("\n"),

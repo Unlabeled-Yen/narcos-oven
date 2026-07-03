@@ -211,6 +211,7 @@ export function parseInPerson(
         rawStatus: "",
       },
       snapshot: {
+        c1_order_date: dateToIso(submitDate),
         c5_status: "in-person",
         c11_conv_store: null,
         c12_product: items.map((it) => `${it.rawName}×${it.quantity}`).join("\n"),

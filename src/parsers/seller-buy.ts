@@ -255,6 +255,7 @@ function finalizeOrder(w: WipOrder, menu: Menu): Order {
       rawStatus: w.status_raw,
     },
     snapshot: {
+      c1_order_date: dateToIso(w.order_date),
       c5_status: w.status_raw,
       c11_conv_store: w.conv_store,
       c12_product: productKey,

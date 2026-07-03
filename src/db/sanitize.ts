@@ -23,7 +23,11 @@ export type SanitizeResult = {
   fixed: number;
   fixes: Array<{
     id: string;
-    reason: "dirty-batchDate" | "dirty-wishDate" | "legacy-missing-batch-date-reason";
+    reason:
+      | "dirty-batchDate"
+      | "dirty-wishDate"
+      | "legacy-missing-batch-date-reason"
+      | "backfill-order-date-from-snapshot";
     detail?: string;
   }>;
 };
@@ -60,6 +64,13 @@ export async function sanitizeDirtyDates(orders: Order[]): Promise<SanitizeResul
         changes.status = "confirmed";
       }
       fixes.push({ id: o.id, reason: "legacy-missing-batch-date-reason" });
+    }
+
+    // 4. 反填 order_date：若欄位 null 但 snapshot.c1_order_date 有 ISO 值、補回去
+    //    這讓 Yen 不用重匯 Excel 就能看到下單日（前提是之前的匯入有存 snapshot）
+    if (!o.order_date && o.snapshot?.c1_order_date && ISO_DATE_RE.test(o.snapshot.c1_order_date)) {
+      changes.order_date = o.snapshot.c1_order_date;
+      fixes.push({ id: o.id, reason: "backfill-order-date-from-snapshot", detail: o.snapshot.c1_order_date });
     }
 
     if (Object.keys(changes).length > 0) {
