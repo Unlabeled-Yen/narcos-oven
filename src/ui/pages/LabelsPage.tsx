@@ -11,7 +11,6 @@
  * 子元件（LabelCard / LabelPage）見 LabelsPage.helpers.tsx。
  */
 import { useState, useMemo, useCallback } from "react";
-import { PageHeader } from "../brand/PageHeader";
 import { extractLabels } from "../../output/label-data";
 import { BatchDetailPanel } from "./BatchDetail";
 import { db } from "../../db/schema";
@@ -150,20 +149,9 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
         }
       `}</style>
 
-      {/* Page Header（flex-none） */}
-      <PageHeader
-        caption={`LABELS · 出貨標籤${selectedBatch ? ` · 批次 ${selectedBatch}` : ""}`}
-        title="SHIP LABELS"
-        right={
-          <span style={{ fontFamily: F.mono, fontSize: 12, color: C.mut }}>
-            {allLabels.length} 張 · {totalPages} 頁
-          </span>
-        }
-      />
-
       {/* 出爐批次明細（排程完 → 對貨 → 印標；憲章 #9 產出閘門） */}
       {selectedBatch && !isEmpty && (
-        <div style={{ padding: "0 24px 12px", flexShrink: 0 }}>
+        <div style={{ padding: "12px 24px", flexShrink: 0 }}>
           <BatchDetailPanel
             shipISO={selectedBatch}
             shipList={batchShipList}

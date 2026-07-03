@@ -93,7 +93,7 @@ export function AppShell({
     schedule: [
       { key: "schedule", label: "排程系統" },
       { key: "capacity", label: "產能設定" },
-      { key: "labels", label: "出貨標籤" },
+      { key: "labels", label: "出貨明細" },
     ],
   };
   // 次頁 → 所屬主項
