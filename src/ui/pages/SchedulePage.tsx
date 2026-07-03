@@ -14,7 +14,6 @@ import {
   accumulateAtoms,
   calculateBatchHours,
   estimateOrderHours,
-  batchesAndHoursForAtom,
 } from "../../domain/production-time";
 import { upsertOrder } from "../../db/orders";
 import type { PageProps } from "./types";
@@ -66,7 +65,6 @@ function isPendingSchedule(o: Order): boolean {
 
 export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   const [viewMode, setViewMode] = useState<"week" | "month">("week");
-  const [slideIdx, setSlideIdx] = useState<0 | 1>(0); // 0 = 排程 / 1 = 批次明細（左右 carousel）
   const [weekOffset, setWeekOffset] = useState(0);
   const [monthOffset, setMonthOffset] = useState(0);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -223,7 +221,6 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   // 主出貨日（本週的週二，getDay===2）
   const shipISO = weekISO.find((iso) => new Date(iso).getDay() === 2) ?? weekISO[1];
   const shipHours = dayHours(shipISO);
-  const shipList = assignedByDay.get(shipISO) ?? [];
 
   return (
     <div
@@ -270,12 +267,6 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
           </>
         )}
 
-        {/* Slide 切換：排程 ↔ 批次明細（carousel） */}
-        <div className="ml-auto flex gap-[2px]">
-          <button type="button" onClick={() => setSlideIdx(0)} style={slideIdx === 0 ? btnActive : btn}>排程</button>
-          <button type="button" onClick={() => setSlideIdx(1)} style={slideIdx === 1 ? btnActive : btn}>批次明細 ›</button>
-        </div>
-
         {/* 本週工時 gauge — 水平薄款、貼齊工具列右側 */}
         {(() => {
           const barColor = shipHours > budget ? "#E5352B" : shipHours > stdBudget ? "#E5622A" : "#43B23C";
@@ -283,7 +274,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
           const stdPct = (stdBudget / budget) * 100;
           const over = shipHours > stdBudget;
           return (
-            <div className="flex items-center" style={{ gap: 10, minWidth: 320 }}>
+            <div className="ml-auto flex items-center" style={{ gap: 10, minWidth: 320 }}>
               <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".1em", whiteSpace: "nowrap" }}>
                 本週工時 · 批 {mdOf(shipISO)}
               </span>
@@ -336,17 +327,8 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
         </div>
       )}
 
-      {/* 內容區：header/banner 固定；水平 carousel 兩張 slide（排程 / 批次明細） */}
-      <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}>
-        <div style={{
-          display: "flex",
-          width: "200%",
-          height: "100%",
-          transform: `translateX(${slideIdx === 0 ? "0" : "-50%"})`,
-          transition: "transform .35s cubic-bezier(.4,0,.2,1)",
-        }}>
-          {/* Slide 1：月/週檢視（原內容，去掉底部批次明細） */}
-          <div style={{ width: "50%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+      {/* 內容區：月/週檢視 */}
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
       {viewMode === "month" ? (
         <MonthCalendar
           weeks={monthInfo.weeks}
@@ -572,39 +554,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
 
       </div>
       )}
-          </div>{/* end Slide 1 wrap */}
-
-          {/* Slide 2：出爐批次明細（右滑進入） */}
-          <div style={{ width: "50%", minHeight: 0, overflowY: "auto", padding: "16px 24px" }}>
-            <div style={{ background: "#0F0F12", border: "1px solid #26262C" }}>
-              <div className="flex items-center justify-between flex-wrap" style={{ gap: 12, padding: "18px 20px 14px" }}>
-                <div className="flex items-baseline flex-wrap" style={{ gap: 12 }}>
-                  <button
-                    type="button"
-                    onClick={() => setSlideIdx(0)}
-                    style={{ fontFamily: F.mono, fontSize: 11, color: "#C9C9CF", background: "#161619", border: "none", padding: "5px 10px", cursor: "pointer" }}
-                  >
-                    ‹ 返回排程
-                  </button>
-                  <span style={{ fontFamily: F.anton, fontSize: 24, color: "var(--acc,#F5D400)" }}>{mdOf(shipISO).replace("/", " / ")}</span>
-                  <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 16, color: "#F5F4EF" }}>出爐批次明細</span>
-                  <span style={{ fontFamily: F.mono, fontSize: 11, color: "#7A7A82" }}>{WD[new Date(shipISO).getDay()]} · {shipList.length} 單</span>
-                </div>
-                <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 12, color: "#111", background: pending.length === 0 ? "#43B23C" : "#E5622A", padding: "7px 14px" }}>
-                  {pending.length === 0 ? "✓ 待排已清空 · 可產出" : `⚠ ${pending.length} 單待排`}
-                </span>
-              </div>
-              <div style={{ height: 9, background: "repeating-linear-gradient(45deg,var(--acc,#F5D400) 0 14px,#111 14px 28px)" }} />
-
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 20, padding: 20 }}>
-                <BatchCapacity shipList={shipList} menu={menu} />
-                <BatchHours shipList={shipList} menu={menu} />
-                <BatchAtoms shipList={shipList} menu={menu} />
-              </div>
-            </div>
-          </div>
-        </div>{/* end slides row wrap */}
-      </div>{/* end 內容區 */}
+      </div>
     </div>
   );
 }
@@ -622,78 +572,6 @@ function orderItemLabel(o: Order, menu: Menu): string {
   if (!first) return o.id;
   const name = first.productSkuId ? getDisplayName(first.productSkuId, menu) : first.rawName;
   return o.items.length > 1 ? `${name} +${o.items.length - 1}` : name;
-}
-
-function BatchCapacity({ shipList, menu }: { shipList: Order[]; menu: Menu }) {
-  const totals = accumulateAtoms(shipList);
-  const caps = menu.production_capacity?.daily_max_by_atom ?? {};
-  const rows = [...totals.entries()].filter(([, q]) => q > 0).sort((a, b) => b[1] - a[1]).slice(0, 6);
-  return (
-    <div>
-      <div style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".14em", marginBottom: 12 }}>當日產能檢核</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, fontFamily: F.mono, fontSize: 11 }}>
-        {rows.length === 0 && <span style={{ color: "#6C6C74" }}>本批尚無訂單</span>}
-        {rows.map(([atom, qty]) => {
-          const cap = caps[atom] ?? 0;
-          const pct = cap > 0 ? Math.min(100, (qty / cap) * 100) : 0;
-          const over = cap > 0 && qty > cap;
-          const near = cap > 0 && qty / cap >= 0.8;
-          const col = over ? "#E5352B" : near ? "#E5622A" : "#43B23C";
-          return (
-            <div key={atom} className="flex items-center" style={{ gap: 10 }}>
-              <span style={{ width: 64, fontFamily: F.tc, fontWeight: 700, color: "#C9C9CF" }}>{getDisplayName(atom, menu)}</span>
-              <div style={{ flex: 1, height: 13, background: "#161619" }}>
-                <div style={{ width: `${pct}%`, height: 13, background: col }} />
-              </div>
-              <span style={{ width: 60, textAlign: "right", color: col }}>{qty}{cap ? `/${cap}` : ""}</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function BatchHours({ shipList, menu }: { shipList: Order[]; menu: Menu }) {
-  const totals = accumulateAtoms(shipList);
-  const rows = [...totals.entries()]
-    .map(([atom, qty]) => ({ atom, ...batchesAndHoursForAtom(atom, qty, menu) }))
-    .filter((r) => r.hours > 0)
-    .sort((a, b) => b.hours - a.hours);
-  const total = calculateBatchHours(totals, menu);
-  return (
-    <div>
-      <div style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".14em", marginBottom: 12 }}>工時分解 · {total}h</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 7, fontFamily: F.mono, fontSize: 11 }}>
-        {rows.length === 0 && <span style={{ color: "#6C6C74" }}>—</span>}
-        {rows.map((r) => (
-          <div key={r.atom} className="flex justify-between" style={{ padding: "7px 11px", background: "#161619" }}>
-            <span style={{ color: "#C9C9CF" }}>{getDisplayName(r.atom, menu)} · {Math.ceil(r.batches)} 爐</span>
-            <span style={{ color: "#F5F4EF", fontWeight: 700 }}>{(r.hours + r.washMoldHours).toFixed(1)}h</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function BatchAtoms({ shipList, menu }: { shipList: Order[]; menu: Menu }) {
-  const totals = accumulateAtoms(shipList);
-  const rows = [...totals.entries()].filter(([, q]) => q > 0).sort((a, b) => b[1] - a[1]);
-  return (
-    <div>
-      <div style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".14em", marginBottom: 12 }}>備料原子總量 <span style={{ color: "#4a4a52" }}>· 配方待雇主補(R3-4)</span></div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 7, fontFamily: F.mono, fontSize: 12 }}>
-        {rows.length === 0 && <span style={{ color: "#6C6C74" }}>—</span>}
-        {rows.map(([atom, qty]) => (
-          <div key={atom} className="flex justify-between" style={{ padding: "8px 12px", background: "#161619" }}>
-            <span style={{ color: "#C9C9CF" }}>{getDisplayName(atom, menu)}</span>
-            <span style={{ color: "#F5F4EF", fontWeight: 700 }}>{qty}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 // 月曆視圖：整月排程一眼（每日已排單數 + 顆數），點某日 → 跳該週檢視

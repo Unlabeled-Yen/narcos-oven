@@ -13,6 +13,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { PageHeader } from "../brand/PageHeader";
 import { extractLabels } from "../../output/label-data";
+import { BatchDetailPanel } from "./BatchDetail";
 import { db } from "../../db/schema";
 import type { PageProps } from "./types";
 import { F, C, LABELS_PER_PAGE, LabelPage } from "./LabelsPage.helpers";
@@ -74,6 +75,25 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
   const nonSellerBuyCount = useMemo(() => {
     return allLabels.filter((l) => l.kind !== "賣貨便").length;
   }, [allLabels]);
+
+  // 本批訂單清單（給 BatchDetailPanel 用：對貨核對當週工作內容）
+  const batchShipList = useMemo(() => {
+    if (!selectedBatch) return [];
+    return orders.filter(
+      (o) =>
+        o.batchDate === selectedBatch &&
+        (o.status === "confirmed" || o.status === "kol_shipped")
+    );
+  }, [orders, selectedBatch]);
+
+  // 全域待排單數（跨批次、給閘門狀態用；憲章 #9 待排未清空前不應產出）
+  const pendingCount = useMemo(() => {
+    return orders.filter(
+      (o) =>
+        (o.status === "confirmed" || o.status === "pending_batch_date") &&
+        (o.assignment_source === "pending" || o.batchDate === null)
+    ).length;
+  }, [orders]);
 
   // 本批是否已凍結（state 或 db）
   const alreadyFrozen = useMemo(() => {
@@ -140,6 +160,18 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
           </span>
         }
       />
+
+      {/* 出爐批次明細（排程完 → 對貨 → 印標；憲章 #9 產出閘門） */}
+      {selectedBatch && !isEmpty && (
+        <div style={{ padding: "0 24px 12px", flexShrink: 0 }}>
+          <BatchDetailPanel
+            shipISO={selectedBatch}
+            shipList={batchShipList}
+            pendingCount={pendingCount}
+            menu={menu}
+          />
+        </div>
+      )}
 
       {/* 主體：左控制欄 + 右預覽（flex-1 min-h-0，各自內滾） */}
       <div
