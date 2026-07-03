@@ -196,7 +196,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
 
   return (
     <div className="h-full flex flex-col min-h-0">
-      {/* 薄工具列：月/週切換 + 週/月導覽（取代 PageHeader，把版面高度讓給月/週曆與待排訂單） */}
+      {/* 薄工具列：月/週切換 + 週/月導覽 + 本週工時 gauge（取代 PageHeader，把版面高度讓給月/週曆與待排訂單） */}
       <div className="flex items-center gap-[10px] flex-wrap px-6 py-2" style={{ flexShrink: 0, borderBottom: "1px solid #26262C" }}>
         <div className="flex gap-[2px]">
           <button type="button" onClick={() => setViewMode("month")} style={viewMode === "month" ? btnActive : btn}>月</button>
@@ -225,6 +225,34 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
             </div>
           </>
         )}
+
+        {/* 本週工時 gauge — 水平薄款、貼齊工具列右側 */}
+        {(() => {
+          const barColor = shipHours > budget ? "#E5352B" : shipHours > stdBudget ? "#E5622A" : "#43B23C";
+          const pct = Math.min(100, (shipHours / budget) * 100);
+          const stdPct = (stdBudget / budget) * 100;
+          const over = shipHours > stdBudget;
+          return (
+            <div className="ml-auto flex items-center" style={{ gap: 10, minWidth: 320 }}>
+              <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".1em", whiteSpace: "nowrap" }}>
+                本週工時 · 批 {mdOf(shipISO)}
+              </span>
+              <span className="flex items-baseline" style={{ gap: 4 }}>
+                <span style={{ fontFamily: F.anton, fontSize: 20, color: barColor, lineHeight: 0.85 }}>{shipHours}</span>
+                <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82" }}>/ {stdBudget}–{budget}h</span>
+              </span>
+              <div style={{ flex: 1, minWidth: 120, height: 8, background: "#161619", position: "relative" }}>
+                <div style={{ width: `${pct}%`, height: 8, background: barColor }} />
+                <div style={{ position: "absolute", top: -2, bottom: -2, left: `${stdPct}%`, width: 2, background: "#F5F4EF" }} />
+              </div>
+              {over && (
+                <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 10, color: "#E5622A", whiteSpace: "nowrap" }}>
+                  ⚠ 近上限 · 可 +{menu.weekly_production_budget?.overflow_tuesday_extra_hours ?? 8}h
+                </span>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {warn && (
@@ -417,31 +445,6 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                 </div>
               )}
             </div>
-          </div>
-
-          {/* 本週工時 gauge */}
-          <div style={{ background: "#0F0F12", border: "1px solid #26262C", padding: 16 }}>
-            <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 15, color: "#F5F4EF", marginBottom: 12 }}>
-              本週工時 · 批 {mdOf(shipISO)}
-            </div>
-            <div className="flex items-baseline" style={{ gap: 8, marginBottom: 10 }}>
-              <span style={{ fontFamily: F.anton, fontSize: 34, color: shipHours > budget ? "#E5352B" : shipHours > stdBudget ? "#E5622A" : "#43B23C", lineHeight: 0.85 }}>
-                {shipHours}
-              </span>
-              <span style={{ fontFamily: F.mono, fontSize: 11, color: "#7A7A82" }}>/ {stdBudget}–{budget} h</span>
-            </div>
-            <div style={{ height: 12, background: "#161619", position: "relative" }}>
-              <div style={{ width: `${Math.min(100, (shipHours / budget) * 100)}%`, height: 12, background: shipHours > budget ? "#E5352B" : "#E5622A" }} />
-              <div style={{ position: "absolute", top: -3, bottom: -3, left: `${(stdBudget / budget) * 100}%`, width: 2, background: "#F5F4EF" }} />
-            </div>
-            <div className="flex justify-between" style={{ fontFamily: F.mono, fontSize: 9, color: "#6C6C74", marginTop: 5 }}>
-              <span>0</span><span style={{ color: "#F5F4EF" }}>{stdBudget} 標準</span><span>{budget} 上限</span>
-            </div>
-            {shipHours > stdBudget && (
-              <div style={{ marginTop: 12, fontFamily: F.tc, fontWeight: 700, fontSize: 11, color: "#E5622A" }}>
-                ⚠ 接近上限 · 爆量可週二加工 +{menu.weekly_production_budget?.overflow_tuesday_extra_hours ?? 8}h
-              </div>
-            )}
           </div>
 
           <div style={{ background: "#0F0F12", border: "1px solid #26262C", borderLeft: "3px solid #43B23C", padding: "14px 16px" }}>
