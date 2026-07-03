@@ -103,16 +103,13 @@ export function WorksheetPage({ orders, menu }: PageProps) {
     <div className="h-full flex flex-col min-h-0" style={{ overflowY: "auto" }}>
       <style>{`
         @media print {
-          nav, .no-print { display: none !important; }
-          body { background: #fff !important; color: #000 !important; }
-          .worksheet-print { background: #fff !important; color: #000 !important; padding: 24px !important; }
-          .worksheet-print * { color: #000 !important; background: transparent !important; border-color: #000 !important; }
-          .worksheet-print .day-block { break-inside: avoid; page-break-inside: avoid; }
-          .worksheet-print .week-summary { break-after: page; page-break-after: always; }
+          .print-area * { color: #000 !important; border-color: #000 !important; }
+          .print-area .day-block { break-inside: avoid; page-break-inside: avoid; }
+          .print-area .week-summary { break-inside: avoid; page-break-inside: avoid; }
         }
       `}</style>
 
-      <div className="worksheet-print px-6 py-4" style={{ flex: 1, minHeight: 0 }}>
+      <div className="print-area px-6 py-4" style={{ flex: 1, minHeight: 0 }}>
         {/* 頂端：批次身份 + 週切換 + 列印 button */}
         <div className="flex items-baseline justify-between flex-wrap no-print" style={{ marginBottom: 16, gap: 12 }}>
           <div>
@@ -147,16 +144,15 @@ export function WorksheetPage({ orders, menu }: PageProps) {
           </div>
         </div>
 
-        {/* 列印用 header */}
-        <div style={{ marginBottom: 20, borderBottom: "2px solid #26262C", paddingBottom: 12 }}>
-          <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 20, color: "#F5F4EF" }}>
-            NARCOS.sugar · 當週工單 {anchor ? `· ${mdOf(anchor)}批次` : ""}
+        {/* 簡潔列印 header（Yen 2026-07-03：不要品牌 nav 設計元素） */}
+        <div style={{ marginBottom: 16, borderBottom: "2px solid #26262C", paddingBottom: 10 }}>
+          <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 18, color: "#F5F4EF" }}>
+            當週工單 {anchor ? `· ${mdOf(anchor)}批次` : ""}
           </div>
-          <div style={{ fontFamily: F.mono, fontSize: 11, color: "#8A8A93", marginTop: 4 }}>
+          <div style={{ fontFamily: F.mono, fontSize: 10, color: "#8A8A93", marginTop: 3 }}>
             {anchor
-              ? <>製作 range：{rangeISO[0] ? mdOf(rangeISO[0]) : "—"} – {mdOf(anchor)}（{rangeISO.length} 天）· 出貨日：{mdOf(anchor)}</>
+              ? <>製作 range {rangeISO[0] ? mdOf(rangeISO[0]) : "—"} – {mdOf(anchor)}（{rangeISO.length} 天）</>
               : <>本週無出貨日</>}
-            {" · "}列印時間：{today.toLocaleString("zh-TW")}
           </div>
         </div>
 
@@ -240,9 +236,7 @@ export function WorksheetPage({ orders, menu }: PageProps) {
           </div>
         )}
 
-        <div style={{ marginTop: 24, paddingTop: 12, borderTop: "1px solid #26262C", fontFamily: F.mono, fontSize: 10, color: "#6C6C74" }}>
-          資料源：narcos-oven schedule · Yen 拍板排程 · 麵包師傅參考製作
-        </div>
+        {/* footer 列印時省略 · 資料源說明不必要 */}
       </div>
     </div>
   );

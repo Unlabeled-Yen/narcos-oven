@@ -44,19 +44,15 @@ export function BatchDetailPanel({
   menu: Menu;
 }) {
   return (
-    <div className="batch-detail-panel" style={{ background: "#0F0F12", border: "1px solid #26262C" }}>
-      {/* Print CSS · 出貨對帳單專用：只印 batch header + 訂單 table · 其他隱藏 */}
+    <div className="batch-detail-panel print-area" style={{ background: "#0F0F12", border: "1px solid #26262C" }}>
+      {/* Print CSS · 只印本 panel · 其他 body 內容全 hidden（見 index.css .print-area）*/}
       <style>{`
         @media print {
-          nav, .no-print, .labels-preview { display: none !important; }
-          body { background: #fff !important; color: #000 !important; }
           .batch-detail-panel, .batch-detail-panel * {
-            background: transparent !important; color: #000 !important; border-color: #000 !important;
-          }
-          .batch-detail-panel table th, .batch-detail-panel table td {
-            border-bottom: 1px solid #000 !important;
+            color: #000 !important; border-color: #000 !important;
           }
           .batch-detail-panel { border: 1px solid #000 !important; }
+          .batch-detail-panel .channel-group { break-inside: avoid; page-break-inside: avoid; }
         }
       `}</style>
       <div className="flex items-center justify-between flex-wrap" style={{ gap: 12, padding: "16px 20px 12px" }}>

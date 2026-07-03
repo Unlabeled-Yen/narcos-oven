@@ -10,7 +10,7 @@
  *
  * 子元件（LabelCard / LabelPage）見 LabelsPage.helpers.tsx。
  */
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { extractLabels } from "../../output/label-data";
 import { BatchDetailPanel } from "./BatchDetail";
 import type { PageProps } from "./types";
@@ -46,6 +46,15 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
   const [selectedBatch, setSelectedBatch] = useState<string>(
     shippingBatchDates[shippingBatchDates.length - 1] ?? ""
   );
+  // Bug fix（Yen 2026-07-03）：初次 render 時 orders 從 IndexedDB async 載入、shippingBatchDates 為空
+  //   → selectedBatch 卡在 "" 造成 UI 顯示 0 單 / 出貨明細空白
+  //   當 shippingBatchDates 變化且 selectedBatch 不在其中、自動選最後一個
+  useEffect(() => {
+    if (shippingBatchDates.length === 0) return;
+    if (!shippingBatchDates.includes(selectedBatch)) {
+      setSelectedBatch(shippingBatchDates[shippingBatchDates.length - 1]!);
+    }
+  }, [shippingBatchDates.join(",")]);
   const [size, setSize] = useState<SizeKey>("60x90");
   const [previewPage, setPreviewPage] = useState(0);
   const [freezing, setFreezing] = useState(false);
@@ -112,27 +121,31 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
 
   const isEmpty = shippingBatchDates.length === 0 || allLabels.length === 0;
 
-  // 列印（憲章 #10 凍結已依 Yen 決策取消 · 標籤是純輸出動作、不改狀態）
+  // 列印標籤 · 用 body.printing-labels class 觸發專用 print CSS（避免跟對帳單.print-area撞）
   const handlePrintAndFreeze = useCallback(async () => {
     if (allLabels.length === 0) return;
     setFreezing(true);
+    document.body.classList.add("printing-labels");
     try {
       window.print();
     } catch (err) {
       console.error("[LabelsPage] print failed:", err);
     } finally {
+      // 等 print dialog 完 · afterprint event 移除 class
+      const cleanup = () => document.body.classList.remove("printing-labels");
+      window.addEventListener("afterprint", cleanup, { once: true });
+      setTimeout(cleanup, 2000); // fallback 若 afterprint 沒觸發
       setFreezing(false);
     }
   }, [allLabels, orders, selectedBatch, refreshOrders]);
 
   return (
     <div className="h-full flex flex-col min-h-0">
-      {/* Print CSS：只列印 .print-area，隱藏其他 */}
+      {/* Print CSS：label 專用（.label-print-area）· 對帳單用 .print-area 在 index.css 統一管 */}
       <style>{`
         @media print {
-          body * { visibility: hidden !important; }
-          .print-area, .print-area * { visibility: visible !important; }
-          .print-area { position: fixed; top: 0; left: 0; width: 100%; overflow: visible !important; }
+          .label-print-area, .label-print-area * { visibility: visible !important; }
+          .label-print-area { position: absolute !important; top: 0 !important; left: 0 !important; width: 100% !important; }
           .label-page { box-shadow: none !important; page-break-after: always; }
           .label-page:last-child { page-break-after: auto; }
         }
@@ -352,8 +365,8 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
         </div>
       </div>
 
-      {/* Print Area（全部頁一次列印，螢幕隱藏；print CSS 讓它 position:fixed 完整浮出） */}
-      <div className="print-area" style={{ display: "none" }} aria-hidden="true">
+      {/* Label Print Area（螢幕隱藏；印標籤時透過 window.print 顯示；跟對帳單 .print-area 分開） */}
+      <div className="label-print-area" style={{ display: "none" }} aria-hidden="true">
         {pages.map((pageLabels, pi) => (
           <LabelPage
             key={pi}
