@@ -135,20 +135,30 @@ function DisappearedSection({
   onDecide: (id: string, r: ImportResolution["resolution"]) => void;
 }) {
   const unresolved = orders.filter((o) => !resolutions[o.id]);
-  const bulkResolve = async (r: "shipped" | "canceled" | "kept_active") => {
-    const label = r === "shipped" ? "已出貨" : r === "canceled" ? "已取消" : "暫留";
-    if (!confirm(`⚠️ 將剩下 ${unresolved.length} 筆全部標為「${label}」？`)) return;
-    for (const o of unresolved) {
-      await onDecide(o.id, r);
+  // 用 useState 記待確認的批次動作、不再依賴 window.confirm（會被 Chrome 阻擋）
+  const [pendingBulk, setPendingBulk] = useState<null | "shipped" | "canceled" | "kept_active">(null);
+  const [busyBulk, setBusyBulk] = useState(false);
+  const bulkResolve = (r: "shipped" | "canceled" | "kept_active") => setPendingBulk(r);
+  const confirmBulk = async () => {
+    if (!pendingBulk || busyBulk) return;
+    setBusyBulk(true);
+    try {
+      for (const o of unresolved) {
+        await onDecide(o.id, pendingBulk);
+      }
+    } finally {
+      setBusyBulk(false);
+      setPendingBulk(null);
     }
   };
+  const pendingLabel = pendingBulk === "shipped" ? "已出貨" : pendingBulk === "canceled" ? "已取消" : pendingBulk === "kept_active" ? "暫留" : "";
   return (
     <section>
       <div className="flex items-center justify-between mb-2">
         <h3 className="font-bold text-red-700">
           ❓ 消失待確認（{orders.length} 筆）—— 憲章 #9 必須逐一拍板
         </h3>
-        {unresolved.length > 1 && (
+        {unresolved.length > 1 && !pendingBulk && (
           <div className="flex gap-1 text-xs">
             <span className="text-gray-500 mr-1 self-center">批次處理剩餘 {unresolved.length}：</span>
             <button
@@ -168,6 +178,27 @@ function DisappearedSection({
               className="px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
             >
               全部暫留
+            </button>
+          </div>
+        )}
+        {pendingBulk && (
+          <div className="flex gap-2 items-center text-xs bg-yellow-100 border border-yellow-400 px-3 py-2 rounded">
+            <span className="text-gray-800">
+              ⚠ 將剩下 {unresolved.length} 筆全部標為「<strong>{pendingLabel}</strong>」？
+            </span>
+            <button
+              onClick={() => void confirmBulk()}
+              disabled={busyBulk}
+              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-60"
+            >
+              {busyBulk ? "處理中…" : "確認"}
+            </button>
+            <button
+              onClick={() => setPendingBulk(null)}
+              disabled={busyBulk}
+              className="px-3 py-1 bg-gray-300 text-gray-800 rounded hover:bg-gray-400"
+            >
+              取消
             </button>
           </div>
         )}
@@ -258,20 +289,29 @@ function ChangedSection({
   onDecide: (id: string, r: ImportResolution["resolution"]) => void;
 }) {
   const unresolved = orders.filter((o) => !resolutions[o.id]);
-  const bulkResolve = async (r: "accept_change" | "reject_change") => {
-    const label = r === "accept_change" ? "接受變動" : "保留舊資料";
-    if (!confirm(`⚠️ 將剩下 ${unresolved.length} 筆全部標為「${label}」？`)) return;
-    for (const o of unresolved) {
-      await onDecide(o.id, r);
+  const [pendingBulk, setPendingBulk] = useState<null | "accept_change" | "reject_change">(null);
+  const [busyBulk, setBusyBulk] = useState(false);
+  const bulkResolve = (r: "accept_change" | "reject_change") => setPendingBulk(r);
+  const confirmBulk = async () => {
+    if (!pendingBulk || busyBulk) return;
+    setBusyBulk(true);
+    try {
+      for (const o of unresolved) {
+        await onDecide(o.id, pendingBulk);
+      }
+    } finally {
+      setBusyBulk(false);
+      setPendingBulk(null);
     }
   };
+  const pendingLabel = pendingBulk === "accept_change" ? "接受變動" : pendingBulk === "reject_change" ? "保留舊資料" : "";
   return (
     <section>
       <div className="flex items-center justify-between mb-2">
         <h3 className="font-bold text-yellow-800">
           📝 資訊變動待確認（{orders.length} 筆）—— 憲章 #10 不 auto-overwrite
         </h3>
-        {unresolved.length > 1 && (
+        {unresolved.length > 1 && !pendingBulk && (
           <div className="flex gap-1 text-xs">
             <span className="text-gray-500 mr-1 self-center">批次處理剩餘 {unresolved.length}：</span>
             <button
@@ -285,6 +325,27 @@ function ChangedSection({
               className="px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
             >
               全部保留舊
+            </button>
+          </div>
+        )}
+        {pendingBulk && (
+          <div className="flex gap-2 items-center text-xs bg-yellow-100 border border-yellow-400 px-3 py-2 rounded">
+            <span className="text-gray-800">
+              ⚠ 將剩下 {unresolved.length} 筆全部標為「<strong>{pendingLabel}</strong>」？
+            </span>
+            <button
+              onClick={() => void confirmBulk()}
+              disabled={busyBulk}
+              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-60"
+            >
+              {busyBulk ? "處理中…" : "確認"}
+            </button>
+            <button
+              onClick={() => setPendingBulk(null)}
+              disabled={busyBulk}
+              className="px-3 py-1 bg-gray-300 text-gray-800 rounded hover:bg-gray-400"
+            >
+              取消
             </button>
           </div>
         )}
