@@ -461,33 +461,14 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   }
   const hasOverrides = Object.keys(dayOverrides).length > 0;
 
-  // 週工時 = 本週的出貨日 + 前一組工作日（Yen 新規則）
-  //   Anchor = 本週最後出貨日
-  //   往前掃、納入所有工作日與本週其他出貨日
-  //   遇到「上一週的出貨日」（iso < 本週週一）才 break
-  //   休息日跳過但繼續
-  //   assignedByDay 只有本週 iso · 所以 range 只納入本週日子（dayHours 對非本週日回 0）
-  function workingRangeForCurrentWeek(): string[] {
-    const shipsInWeek = weekISO.filter((iso) => dayTypeOf(iso) === "ship");
-    if (shipsInWeek.length === 0) return [];
-    const anchor = shipsInWeek[shipsInWeek.length - 1]!; // 本週最後出貨日
-    const weekStart = weekISO[0]!; // 本週週一 ISO
-    const range: string[] = [anchor];
-    const d = new Date(anchor);
-    for (let i = 1; i < 30; i++) {
-      d.setDate(d.getDate() - 1);
-      const iso = toISO(d);
-      // 過到上一週 · 若那天是 shipping 就是 Yen 說的「前一個出貨日」→ break
-      if (iso < weekStart && dayTypeOf(iso) === "ship") break;
-      // 越過週界後不再累加（本週工時 = 只算本週的日子）
-      if (iso < weekStart) continue;
-      const t = dayTypeOf(iso);
-      if (t === "ship" || t === "work") range.unshift(iso);
-      // 休息日跳過
-    }
-    return range;
-  }
-  const workingRangeISO = workingRangeForCurrentWeek();
+  // 本週工時 = 本週所有工作日+出貨日的 dayHours 合計
+  // Yen 澄清：跨週界時（本週六日的排單屬於下週出貨批的 range），
+  //   view 在本週時 gauge 仍應顯示「本週實際會做的所有工作」
+  //   （不是「anchor 到 anchor」的範圍語意 · 那是批次明細用的）
+  const workingRangeISO = weekISO.filter((iso) => {
+    const t = dayTypeOf(iso);
+    return t === "ship" || t === "work"; // 休息日不算
+  });
   const weekShipDaysISO = weekISO.filter((iso) => dayTypeOf(iso) === "ship");
   const shipHours = workingRangeISO.reduce((sum, iso) => sum + dayHours(iso), 0);
 
@@ -555,7 +536,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
           return (
             <div className="ml-auto flex items-center" style={{ gap: 10, minWidth: 320 }}>
               <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".1em", whiteSpace: "nowrap" }}>
-                本週工時 · 出貨批 {weekShipDaysISO.length} · 前組工作日 {workingRangeISO.length} 天
+                本週工時 · 出貨 {weekShipDaysISO.length} · 工作日 {workingRangeISO.length - weekShipDaysISO.length} 天
               </span>
               <span className="flex items-baseline" style={{ gap: 4 }}>
                 <span style={{ fontFamily: F.anton, fontSize: 20, color: barColor, lineHeight: 0.85 }}>{shipHours}</span>
