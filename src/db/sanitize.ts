@@ -23,8 +23,8 @@ export type SanitizeResult = {
   fixed: number;
   fixes: Array<{
     id: string;
-    batchDateBefore: string | null;
-    wishDateBefore: string | null;
+    reason: "dirty-batchDate" | "dirty-wishDate" | "legacy-missing-batch-date-reason";
+    detail?: string;
   }>;
 };
 
@@ -33,33 +33,44 @@ export async function sanitizeDirtyDates(orders: Order[]): Promise<SanitizeResul
   const patches: Array<{ id: string; changes: Partial<Order> }> = [];
 
   for (const o of orders) {
-    const badBatch = isDirtyDate(o.batchDate);
-    const badWish = isDirtyDate(o.customer_wish_date);
-    if (!badBatch && !badWish) continue;
-
     const changes: Partial<Order> = {};
-    if (badBatch) {
+
+    // 1. 非 ISO batchDate → null（+ 若 source 認客戶意願、退回 pending）
+    if (isDirtyDate(o.batchDate)) {
       changes.batchDate = null;
-      // 若原本 assignment_source 認客戶意願，改回 pending（因為日期無效）
       if (o.assignment_source === "customer_wish_kept") {
         changes.assignment_source = "pending";
       }
+      fixes.push({ id: o.id, reason: "dirty-batchDate", detail: String(o.batchDate) });
     }
-    if (badWish) {
+
+    // 2. 非 ISO customer_wish_date → null
+    if (isDirtyDate(o.customer_wish_date)) {
       changes.customer_wish_date = null;
+      fixes.push({ id: o.id, reason: "dirty-wishDate", detail: String(o.customer_wish_date) });
     }
-    patches.push({ id: o.id, changes });
-    fixes.push({
-      id: o.id,
-      batchDateBefore: badBatch ? o.batchDate : null,
-      wishDateBefore: badWish ? o.customer_wish_date : null,
-    });
+
+    // 3. 新政策：MISSING_BATCH_DATE 不再是需要 resolve 的 reason
+    //    若 pendingReasons 含此 code、清掉；若清完全空且 status pending_batch_date → confirmed
+    const hasMissingBatchReason = o.pendingReasons.some((r) => r.code === "MISSING_BATCH_DATE");
+    if (hasMissingBatchReason) {
+      const filteredReasons = o.pendingReasons.filter((r) => r.code !== "MISSING_BATCH_DATE");
+      changes.pendingReasons = filteredReasons;
+      if (filteredReasons.length === 0 && o.status === "pending_batch_date") {
+        changes.status = "confirmed";
+      }
+      fixes.push({ id: o.id, reason: "legacy-missing-batch-date-reason" });
+    }
+
+    if (Object.keys(changes).length > 0) {
+      patches.push({ id: o.id, changes });
+    }
   }
 
   if (patches.length > 0) {
     // eslint-disable-next-line no-console
     console.warn(
-      `[sanitize] 清理 ${patches.length} 單髒日期資料（非 ISO YYYY-MM-DD）`,
+      `[sanitize] 自動遷移 ${patches.length} 單（髒日期或舊政策 reason）`,
       fixes
     );
     await db.transaction("rw", db.orders, async () => {
