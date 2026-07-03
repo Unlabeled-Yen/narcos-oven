@@ -11,7 +11,6 @@ import { useEffect, useMemo, useState } from "react";
 import type { Menu, Order } from "../../domain/models";
 import { getDisplayName } from "../../domain/menu";
 import { accumulateAtoms } from "../../domain/production-time";
-import { shippingDayFor } from "../../domain/day-type";
 import { upsertOrder, clearAll } from "../../db/orders";
 import type { PageProps } from "./types";
 
@@ -460,32 +459,45 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   }
   const hasOverrides = Object.keys(dayOverrides).length > 0;
 
-  // 本週統計 = 訂單歸屬 shipping day ∈ 本週出貨日集合的訂單
-  // Yen 規則：當週出貨日之後的工作日訂單、屬於下週出貨批、不算本週
-  //   例：本週 shipping=06/30、訂單排在 07/05（本週工作日、07/05 之後找 shipping = 07/07 下週）→ 屬下週
-  //   例：訂單排在 06/29（本週工作日、06/29 之後找 shipping = 06/30 本週）→ 屬本週
-  const weekShipSet = useMemo(() => {
-    const s = new Set<string>();
-    for (const iso of weekISO) if (dayTypeOf(iso) === "ship") s.add(iso);
-    return s;
+  // 當週批次 range = 本週最後 shipping 為 anchor · 往前掃到上一個 shipping break
+  //   工作日納入 · 出貨日納入（本週有多個 shipping 時前面也算）· 休息日跳過但繼續掃
+  //   Range 可跨到上週（含上週工作日六日直到上週出貨日）
+  //   例：本週 shipping=[06/30] · anchor=06/30
+  //       06/29(rest·跳) 06/28(work·加) 06/27(work·加) 06/26(rest·跳) 06/25(work·加) 06/24(work·加) 06/23(ship·break)
+  //       Range = [06/24, 06/25, 06/27, 06/28, 06/30]
+  const currentBatchRangeISO = useMemo(() => {
+    const shipsInWeek = weekISO.filter((iso) => dayTypeOf(iso) === "ship");
+    if (shipsInWeek.length === 0) return [];
+    const anchor = shipsInWeek[shipsInWeek.length - 1]!;
+    const range: string[] = [anchor];
+    const d = new Date(anchor);
+    for (let i = 1; i < 30; i++) {
+      d.setDate(d.getDate() - 1);
+      const iso = toISO(d);
+      const t = dayTypeOf(iso);
+      if (t === "ship") break;
+      if (t === "work") range.unshift(iso);
+    }
+    return range;
   }, [weekISO.join(","), dayOverrides, menu.scheduling?.shipping_weekdays, menu.scheduling?.working_weekdays]);
-  const weekBatchOrders = useMemo(() => {
-    if (weekShipSet.size === 0) return [];
-    return orders.filter((o) => {
-      if (!o.batchDate || o.assignment_source === "pending") return false;
-      const shipDay = shippingDayFor(o.batchDate, dayTypeOf);
-      return weekShipSet.has(shipDay);
-    });
-  }, [orders, weekShipSet, dayTypeOf]);
-  const weekOrderCount = weekBatchOrders.length;
-  const weekAtomBreakdownList = useMemo(() => {
-    if (weekBatchOrders.length === 0) return [];
-    return [...accumulateAtoms(weekBatchOrders).entries()]
+  const currentBatchOrders = useMemo(() => {
+    if (currentBatchRangeISO.length === 0) return [];
+    const rangeSet = new Set(currentBatchRangeISO);
+    return orders.filter(
+      (o) => o.batchDate && o.assignment_source !== "pending" && rangeSet.has(o.batchDate)
+    );
+  }, [orders, currentBatchRangeISO]);
+  const currentBatchOrderCount = currentBatchOrders.length;
+  const currentBatchBreakdown = useMemo(() => {
+    if (currentBatchOrders.length === 0) return [];
+    return [...accumulateAtoms(currentBatchOrders).entries()]
       .filter(([, q]) => q > 0)
       .map(([atom, qty]) => ({ atom, qty }))
       .sort((a, b) => b.qty - a.qty);
-  }, [weekBatchOrders]);
-  const weekAtomCount = weekAtomBreakdownList.reduce((s, r) => s + r.qty, 0);
+  }, [currentBatchOrders]);
+  const currentBatchTotal = currentBatchBreakdown.reduce((s, r) => s + r.qty, 0);
+  const currentBatchAnchor = currentBatchRangeISO[currentBatchRangeISO.length - 1] ?? null;
+  const currentBatchStart = currentBatchRangeISO[0] ?? null;
 
   return (
     <div
@@ -542,18 +554,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
           🩺 診斷
         </button>
 
-        {/* 本週統計 · 純文字（Yen 拿掉工時規則後改為簡單數量顯示） */}
-        <div className="ml-auto flex items-baseline" style={{ gap: 16 }}>
-          <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".1em" }}>本週</span>
-          <span className="flex items-baseline" style={{ gap: 4 }}>
-            <span style={{ fontFamily: F.anton, fontSize: 20, color: "#F5F4EF", lineHeight: 0.85 }}>{weekOrderCount}</span>
-            <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 11, color: "#8A8A93" }}>單</span>
-          </span>
-          <span className="flex items-baseline" style={{ gap: 4 }}>
-            <span style={{ fontFamily: F.anton, fontSize: 20, color: "var(--acc,#F5D400)", lineHeight: 0.85 }}>{weekAtomCount}</span>
-            <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 11, color: "#8A8A93" }}>顆</span>
-          </span>
-        </div>
+        {/* 右上角統計已挪到右軌「當週統計」面板（Yen 2026-07-03） */}
       </div>
 
       {warn && (
@@ -708,31 +709,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
             })}
           </div>
 
-          {/* 本週合計 · 各 atom 顆數（讓雇主一眼看全週堆積） */}
-          {(() => {
-            const wk = weekAtomBreakdownList;
-            if (wk.length === 0) return null;
-            return (
-              <div style={{ marginTop: 14, padding: "10px 14px", background: "#141417", border: "1px solid #26262C", borderLeft: "3px solid var(--acc,#F5D400)" }}>
-                <div className="flex items-baseline flex-wrap" style={{ gap: 10, marginBottom: 8 }}>
-                  <span style={{ fontFamily: F.mono, fontSize: 10, color: "var(--acc,#F5D400)", letterSpacing: ".14em" }}>本週合計 · 依批次歸屬</span>
-                  <span className="flex items-baseline" style={{ gap: 3 }}>
-                    <span style={{ fontFamily: F.anton, fontSize: 20, color: "#F5F4EF", lineHeight: 0.85 }}>{weekAtomCount}</span>
-                    <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 11, color: "#8A8A93" }}>顆</span>
-                  </span>
-                </div>
-                <div className="flex flex-wrap" style={{ gap: 10 }}>
-                  {wk.map((r) => (
-                    <div key={r.atom} className="flex items-baseline" style={{ background: "#0F0F12", padding: "5px 10px", gap: 6, border: "1px solid #26262C" }}>
-                      <span style={{ fontFamily: F.tc, fontWeight: 500, fontSize: 11, color: "#C9C9CF" }}>{getDisplayName(r.atom, menu)}</span>
-                      <span style={{ fontFamily: F.anton, fontSize: 15, color: "var(--acc,#F5D400)" }}>{r.qty}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
-
+          {/* 本週合計條已挪到右軌「當週統計」面板 · 底部只留 legend */}
           <div className="flex flex-wrap" style={{ gap: 14, marginTop: 14, fontFamily: F.mono, fontSize: 10, color: "#7A7A82" }}>
             <Legend c="var(--acc,#F5D400)" t="出貨日" />
             <Legend c="#8557C9" t="開麵糰" />
@@ -743,6 +720,43 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
 
         {/* RIGHT RAIL */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0, minHeight: 0 }}>
+          {/* 當週統計 · 上週工作日六日 + 這週工作日 + 這週出貨日 的合計（依批次歸屬 range） */}
+          {currentBatchAnchor && (
+            <div style={{ background: "#0F0F12", border: "1px solid #26262C", borderLeft: "3px solid var(--acc,#F5D400)", padding: "12px 14px", flexShrink: 0 }}>
+              <div className="flex items-baseline justify-between flex-wrap" style={{ gap: 8, marginBottom: 8 }}>
+                <div className="flex items-baseline" style={{ gap: 8 }}>
+                  <span style={{ fontFamily: F.mono, fontSize: 10, color: "var(--acc,#F5D400)", letterSpacing: ".14em" }}>當週</span>
+                  {currentBatchStart && (
+                    <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82" }}>
+                      {mdOf(currentBatchStart)}–{mdOf(currentBatchAnchor)}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-baseline" style={{ gap: 12 }}>
+                  <span className="flex items-baseline" style={{ gap: 3 }}>
+                    <span style={{ fontFamily: F.anton, fontSize: 20, color: "#F5F4EF", lineHeight: 0.85 }}>{currentBatchOrderCount}</span>
+                    <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 10, color: "#8A8A93" }}>單</span>
+                  </span>
+                  <span className="flex items-baseline" style={{ gap: 3 }}>
+                    <span style={{ fontFamily: F.anton, fontSize: 22, color: "var(--acc,#F5D400)", lineHeight: 0.85 }}>{currentBatchTotal}</span>
+                    <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 10, color: "#8A8A93" }}>顆</span>
+                  </span>
+                </div>
+              </div>
+              {currentBatchBreakdown.length === 0 ? (
+                <div style={{ fontFamily: F.mono, fontSize: 10, color: "#6C6C74", padding: "4px 0" }}>本週 range 內無訂單</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  {currentBatchBreakdown.map((r) => (
+                    <div key={r.atom} className="flex items-baseline justify-between" style={{ padding: "4px 8px", background: "#141417" }}>
+                      <span style={{ fontFamily: F.tc, fontWeight: 500, fontSize: 11, color: "#C9C9CF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{getDisplayName(r.atom, menu)}</span>
+                      <span style={{ fontFamily: F.anton, fontSize: 14, color: "#F5F4EF", marginLeft: 8 }}>{r.qty}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <div
             data-day="pending"
             onDragOver={(e) => { e.preventDefault(); setOverDay("pending"); }}
