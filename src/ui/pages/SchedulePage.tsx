@@ -485,30 +485,25 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
     catch { /* noop */ }
   }
 
-  // 週工時 = 本週所有「出貨日的前一組工作日」的合集
-  // 前一組工作日 = 從出貨日往前掃連續工作日、遇到非工作日（休息或另一出貨日）就停
-  // 例：出貨日 週五、工作日 一二三四 → 前一組 = 週一~週四
-  function workingRangeForShipping(shipISO: string): string[] {
-    const shipDate = new Date(shipISO);
-    const range: string[] = [];
+  // 週工時 = 「本週最後出貨日」的前一組工作日 + 出貨日排單合集
+  // Yen 新規則：多個出貨日以最後那個為主 · 往前掃工作日、出貨日排單、跳過休息日、遇到前一個出貨日就停
+  // 例：出貨日 = 週三&週六、以週六為 anchor · 往前掃 週五(工)、週四(工)、週三(出貨) → break
+  //   range = [週三本身] ∪ [週四、週五] ∪ [週六(anchor)]
+  function workingRangeForLastShipping(lastShipISO: string): string[] {
+    const range: string[] = [lastShipISO]; // anchor 自己納入
+    const d = new Date(lastShipISO);
     for (let i = 1; i < 30; i++) {
-      const d = new Date(shipDate);
-      d.setDate(d.getDate() - i);
+      d.setDate(d.getDate() - 1);
       const wd = d.getDay();
-      if (workingWeekdays.has(wd)) {
-        range.unshift(toISO(d));
-      } else {
-        break; // 遇到休息或另一出貨日 → 中斷連續性
-      }
+      if (shippingWeekdays.has(wd)) break; // 遇到前一個出貨日 = 前一批的 anchor、停
+      if (workingWeekdays.has(wd)) range.unshift(toISO(d));
+      // 休息日：跳過但繼續往前掃、不進 range
     }
     return range;
   }
   const weekShipDaysISO = weekISO.filter((iso) => shippingWeekdays.has(new Date(iso).getDay()));
-  const workingRangeSet = new Set<string>();
-  for (const shipISO of weekShipDaysISO) {
-    for (const iso of workingRangeForShipping(shipISO)) workingRangeSet.add(iso);
-  }
-  const workingRangeISO = [...workingRangeSet].sort();
+  const lastShipISO = weekShipDaysISO[weekShipDaysISO.length - 1] ?? null;
+  const workingRangeISO = lastShipISO ? workingRangeForLastShipping(lastShipISO) : [];
   const shipHours = workingRangeISO.reduce((sum, iso) => sum + dayHours(iso), 0);
 
   return (
@@ -669,9 +664,12 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
               const isRest = !isShip && !isWork; // 休息日
               const list = assignedByDay.get(iso) ?? [];
               const isOver = overDay === iso;
-              // 顏色：出貨日 = 黃、工作日 = 深灰、休息 = 更暗
-              const bgColor = isShip ? "#1c1600" : isRest ? "#0a0a0c" : "#111114";
-              const borderColor = isShip ? "2px solid var(--acc,#F5D400)" : isRest ? "1px dashed #26262C" : "1px solid #26262C";
+              // 顏色：出貨日 = 黃、工作日 = 青藍 (cyan)、休息 = 深灰虛線
+              const bgColor = isShip ? "#1c1600" : isWork ? "#0a1620" : "#0a0a0c";
+              const borderColor = isShip
+                ? "2px solid var(--acc,#F5D400)"
+                : isWork ? "1px solid #2AC7E8"
+                : "1px dashed #26262C";
               return (
                 <div
                   key={iso}
@@ -692,17 +690,17 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                     className="flex items-baseline justify-between"
                     style={{ padding: "8px 9px", background: isShip ? "var(--acc,#F5D400)" : "transparent", borderBottom: isShip ? undefined : "1px solid #26262C", border: "none", cursor: "pointer", width: "100%", textAlign: "left" }}
                   >
-                    <span style={{ fontFamily: isShip ? F.tc : F.mono, fontWeight: isShip ? 900 : 400, fontSize: isShip ? 11 : 10, color: isShip ? "#111" : isWork ? "#8A8A93" : "#4a4a52" }}>
-                      {isShip ? `${WD[d.getDay()]} · 出貨` : isRest ? `${WD[d.getDay()]} · 休` : WD[d.getDay()]}
+                    <span style={{ fontFamily: isShip ? F.tc : F.mono, fontWeight: isShip ? 900 : 400, fontSize: isShip ? 11 : 10, color: isShip ? "#111" : isWork ? "#2AC7E8" : "#4a4a52" }}>
+                      {isShip ? `${WD[d.getDay()]} · 出貨` : isWork ? `${WD[d.getDay()]} · 工` : `${WD[d.getDay()]} · 休`}
                     </span>
-                    <span style={{ fontFamily: F.anton, fontSize: isShip ? 20 : 18, color: isShip ? "#111" : isRest ? "#4a4a52" : "#8A8A93" }}>{d.getDate()}</span>
+                    <span style={{ fontFamily: F.anton, fontSize: isShip ? 20 : 18, color: isShip ? "#111" : isWork ? "#F5F4EF" : "#4a4a52" }}>{d.getDate()}</span>
                   </button>
 
                   <div
-                    data-day={iso}
-                    onDragOver={(e) => { e.preventDefault(); setOverDay(iso); }}
-                    onDragLeave={() => setOverDay((x) => (x === iso ? null : x))}
-                    onDrop={(e) => { e.preventDefault(); if (dragId) attemptDrop(dragId, iso); }}
+                    data-day={isRest ? undefined : iso}
+                    onDragOver={isRest ? undefined : (e) => { e.preventDefault(); setOverDay(iso); }}
+                    onDragLeave={isRest ? undefined : () => setOverDay((x) => (x === iso ? null : x))}
+                    onDrop={isRest ? undefined : (e) => { e.preventDefault(); if (dragId) attemptDrop(dragId, iso); }}
                     style={{
                       flex: 1,
                       minHeight: 0,
