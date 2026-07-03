@@ -8,6 +8,7 @@ import { detectFileKind, type FileKind } from "./parsers/detect";
 import { planDiff } from "./domain/diff";
 import type { ChannelId, ImportRun, Order } from "./domain/models";
 import { getActiveByChannels, getAll, upsertMany, markDisappeared } from "./db/orders";
+import { sanitizeDirtyDates } from "./db/sanitize";
 import { saveImportRun, getLatestUnresolved } from "./db/import-runs";
 import { ImportSummaryModal } from "./ui/ImportSummaryModal";
 import { AppShell } from "./ui/AppShell";
@@ -46,7 +47,14 @@ export default function App() {
   }, []);
 
   async function refreshOrders() {
-    const list = await getAll();
+    let list = await getAll();
+    // 自動清理歷史政策留下的髒日期（非 ISO YYYY-MM-DD）· 靜默失效零容忍
+    // idempotent：乾淨的 orders 不會被動、有髒的清完會 console.warn
+    const result = await sanitizeDirtyDates(list);
+    if (result.fixed > 0) {
+      // 有清、重讀最新
+      list = await getAll();
+    }
     setAllOrders(list);
   }
 
