@@ -15,6 +15,7 @@ import { extractLabels } from "../../output/label-data";
 import { BatchDetailPanel } from "./BatchDetail";
 import type { PageProps } from "./types";
 import { F, C, LABELS_PER_PAGE, LabelPage } from "./LabelsPage.helpers";
+import { loadDayOverrides, makeDayTypeOf, shippingDayFor } from "../../domain/day-type";
 
 // ── 標籤紙尺寸選項 ─────────────────────────────────────────────
 const SIZES = [
@@ -23,21 +24,27 @@ const SIZES = [
 ] as const;
 type SizeKey = (typeof SIZES)[number]["key"];
 
-// ── 批次日期抽取 ───────────────────────────────────────────────
-function uniqueBatchDates(orders: PageProps["orders"]): string[] {
-  const seen = new Set<string>();
-  for (const o of orders) {
-    if (o.batchDate) seen.add(o.batchDate);
-  }
-  return Array.from(seen).sort();
-}
-
 // ── LabelsPage ─────────────────────────────────────────────────
 export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
-  const batchDates = useMemo(() => uniqueBatchDates(orders), [orders]);
+  // 判定每張訂單歸屬的「出貨批」= 從 batchDate 往後找第一個 shipping day
+  // 訂單若排在工作日、會被歸到後面那個 shipping day 出貨批
+  const dayTypeOf = useMemo(() => makeDayTypeOf(menu, loadDayOverrides()), [menu]);
+  const orderBatchMap = useMemo(() => {
+    // Map<orderId, shippingDay>
+    const m = new Map<string, string>();
+    for (const o of orders) {
+      if (o.batchDate) m.set(o.id, shippingDayFor(o.batchDate, dayTypeOf));
+    }
+    return m;
+  }, [orders, dayTypeOf]);
+  const shippingBatchDates = useMemo(() => {
+    const seen = new Set<string>();
+    for (const shipDay of orderBatchMap.values()) seen.add(shipDay);
+    return Array.from(seen).sort();
+  }, [orderBatchMap]);
 
   const [selectedBatch, setSelectedBatch] = useState<string>(
-    batchDates[batchDates.length - 1] ?? ""
+    shippingBatchDates[shippingBatchDates.length - 1] ?? ""
   );
   const [size, setSize] = useState<SizeKey>("60x90");
   const [previewPage, setPreviewPage] = useState(0);
@@ -45,11 +52,25 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
 
   const sizeObj = SIZES.find((s) => s.key === size) ?? SIZES[0]!;
 
-  // 標籤資料（憲章 #1：從 menu.label_short_forms 抽簡碼）
-  const allLabels = useMemo(() => {
+  // 該批的訂單（訂單 batchDate 對應 shippingDay = selectedBatch）
+  const batchOrders = useMemo(() => {
     if (!selectedBatch) return [];
-    return extractLabels(orders, menu, { batchDate: selectedBatch });
-  }, [orders, menu, selectedBatch]);
+    return orders.filter((o) => orderBatchMap.get(o.id) === selectedBatch);
+  }, [orders, orderBatchMap, selectedBatch]);
+
+  // 標籤資料（憲章 #1：從 menu.label_short_forms 抽簡碼）
+  // 用 batch 內每個 order.batchDate 逐一 extract、合併
+  const allLabels = useMemo(() => {
+    if (!selectedBatch || batchOrders.length === 0) return [];
+    // extractLabels 只吃 batchDate filter · 但 batch 內可能含多個 batchDate
+    // → 對每個 unique batchDate 各自 extract 再合併
+    const rawDates = new Set(batchOrders.map((o) => o.batchDate).filter(Boolean) as string[]);
+    const out: ReturnType<typeof extractLabels> = [];
+    for (const bd of rawDates) {
+      out.push(...extractLabels(batchOrders, menu, { batchDate: bd }));
+    }
+    return out;
+  }, [batchOrders, menu, selectedBatch]);
 
   // 分頁（每頁 3 張）
   const pages = useMemo(() => {
@@ -75,13 +96,10 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
 
   // 本批訂單清單（給 BatchDetailPanel 用：對貨核對當週工作內容）
   const batchShipList = useMemo(() => {
-    if (!selectedBatch) return [];
-    return orders.filter(
-      (o) =>
-        o.batchDate === selectedBatch &&
-        (o.status === "confirmed" || o.status === "kol_shipped")
+    return batchOrders.filter(
+      (o) => o.status === "confirmed" || o.status === "kol_shipped"
     );
-  }, [orders, selectedBatch]);
+  }, [batchOrders]);
 
   // 全域待排單數（跨批次、給閘門狀態用；憲章 #9 待排未清空前不應產出）
   const pendingCount = useMemo(() => {
@@ -92,7 +110,7 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
     ).length;
   }, [orders]);
 
-  const isEmpty = batchDates.length === 0 || allLabels.length === 0;
+  const isEmpty = shippingBatchDates.length === 0 || allLabels.length === 0;
 
   // 列印（憲章 #10 凍結已依 Yen 決策取消 · 標籤是純輸出動作、不改狀態）
   const handlePrintAndFreeze = useCallback(async () => {
@@ -151,11 +169,11 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
             <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut2, letterSpacing: ".12em", marginBottom: 8 }}>
               批次
             </div>
-            {batchDates.length === 0 ? (
+            {shippingBatchDates.length === 0 ? (
               <div style={{ fontFamily: F.mono, fontSize: 12, color: C.mut3 }}>（無批次）</div>
             ) : (
               <div style={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
-                {batchDates.map((d) => {
+                {shippingBatchDates.map((d) => {
                   const isActive = d === selectedBatch;
                   return (
                     <button
@@ -287,7 +305,7 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
             >
               <div style={{ fontFamily: F.anton, fontSize: 32, color: C.mut3 }}>NO LABELS</div>
               <div style={{ fontFamily: F.tc, fontWeight: 500, fontSize: 13, color: C.mut, marginTop: 10 }}>
-                {batchDates.length === 0
+                {shippingBatchDates.length === 0
                   ? "尚無任何出爐批次。請先匯入訂單並確認批次日期。"
                   : "此批次沒有 confirmed 訂單，無法產生標籤。"}
               </div>
