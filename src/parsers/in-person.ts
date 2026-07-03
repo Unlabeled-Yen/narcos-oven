@@ -127,13 +127,7 @@ export function parseInPerson(
       });
     }
 
-    if (!batchDate) {
-      pendingReasons.push({
-        code: "MISSING_BATCH_DATE",
-        humanMessage: `「在哪邊取貨」欄=「${c2Text.slice(0, 40)}」無法抓到出爐日`,
-        suggestionConfidence: 0,
-      });
-    }
+    // 新政策（2026-07-03）：無指定日不再是 pending reason，直接進待排讓雇主拖入
 
     // ---- Stage 2: 品項 (c7-c20 checkbox 數字) ----
     const items: OrderItem[] = [];

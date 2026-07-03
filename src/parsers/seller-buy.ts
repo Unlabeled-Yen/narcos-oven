@@ -165,13 +165,8 @@ function finalizeOrder(w: WipOrder, menu: Menu): Order {
       break;
     }
   }
-  if (!batchDate) {
-    pendingReasons.push({
-      code: "MISSING_BATCH_DATE",
-      humanMessage: `賣貨便訂單客人沒選「⚠️必填！指定出貨日」→ 等雇主排批次（M6 排程系統會建議下次週二）`,
-      suggestionConfidence: 0,
-    });
-  }
+  // 憲章新政策（2026-07-03）：無指定日不再是需要 resolve 的 pending reason
+  // 訂單直接進待排列表、由雇主拖到日欄拍板；待排 UI 已有「有指定日 / 無指定日」分類
 
   // ---- Stage 2: Menu lookup + Combo 拆解 ----
   const items: OrderItem[] = [];

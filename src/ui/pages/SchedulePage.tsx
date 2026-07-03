@@ -166,6 +166,14 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
         ISO_RE.test(o.customer_wish_date)
     );
 
+    // 新政策清理：既存 pending_batch_date 訂單（只因為 MISSING_BATCH_DATE 卡在待處理桶）
+    // → 直接轉 confirmed + 清 MISSING_BATCH_DATE reason，進待排列表等雇主拖入
+    const legacyMissingDate = orders.filter(
+      (o) =>
+        o.status === "pending_batch_date" &&
+        o.pendingReasons.some((r) => r.code === "MISSING_BATCH_DATE")
+    );
+
     return {
       total: orders.length,
       waitCount: wait.length,
@@ -182,6 +190,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
       crossRows,
       dirtyBatchDate,
       orphanWithWish,
+      legacyMissingDate,
     };
   }, [orders]);
 
@@ -203,6 +212,27 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
       await refreshOrders();
     } finally {
       setFixing(false);
+    }
+  }
+
+  // 一鍵清理：既存 MISSING_BATCH_DATE 資料 → confirmed（新政策：無日期直接進待排）
+  const [cleaningLegacy, setCleaningLegacy] = useState(false);
+  async function cleanLegacyMissingDate() {
+    if (cleaningLegacy || diag.legacyMissingDate.length === 0) return;
+    if (!confirm(`確定清理 ${diag.legacyMissingDate.length} 單（既存 MISSING_BATCH_DATE reason）？\n新政策：無指定日不再需要處理、直接在待排列表按順序等排。\n這些單將轉 confirmed、reason 清除、進待排。`)) return;
+    setCleaningLegacy(true);
+    try {
+      for (const o of diag.legacyMissingDate) {
+        const filteredReasons = o.pendingReasons.filter((r) => r.code !== "MISSING_BATCH_DATE");
+        await upsertOrder({
+          ...o,
+          pendingReasons: filteredReasons,
+          status: filteredReasons.length === 0 ? "confirmed" : o.status,
+        });
+      }
+      await refreshOrders();
+    } finally {
+      setCleaningLegacy(false);
     }
   }
 
@@ -231,7 +261,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   const [pendingQuery, setPendingQuery] = useState("");
   const pendingFiltered = useMemo(() => {
     const q = pendingQuery.trim().toLowerCase();
-    return pending.filter((o) => {
+    const list = pending.filter((o) => {
       if (pendingTab === "賣貨便" && o.channel !== "賣貨便") return false;
       if (pendingTab === "KOL" && o.channel !== "KOL") return false;
       if (pendingTab === "面交" && !o.channel.startsWith("面交")) return false;
@@ -246,6 +276,15 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
         ...o.items.map((it) => it.productSkuId ? getDisplayName(it.productSkuId, menu) : it.rawName),
       ].join(" ").toLowerCase();
       return hay.includes(q);
+    });
+    // 排序：有指定日的照日期升冪（早的優先）在前 · 無指定日按 id 排最後
+    return [...list].sort((a, b) => {
+      const aw = a.customer_wish_date;
+      const bw = b.customer_wish_date;
+      if (aw && bw) return aw.localeCompare(bw);
+      if (aw && !bw) return -1;
+      if (!aw && bw) return 1;
+      return a.id.localeCompare(b.id);
     });
   }, [pending, pendingTab, pendingQuery, menu]);
   const pendingCounts = useMemo(() => ({
@@ -661,9 +700,20 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                       </span>
                     ) : null}
                   </div>
-                  <div style={{ fontFamily: F.tc, fontWeight: 500, fontSize: 11, color: "#8A8A93", margin: "4px 0 8px" }}>
+                  <div style={{ fontFamily: F.tc, fontWeight: 500, fontSize: 11, color: "#8A8A93", margin: "4px 0 6px" }}>
                     {orderItemLabel(o, menu)}
-                    {o.customer_wish_date ? ` · 希望 ${mdOf(o.customer_wish_date)}` : " · 無指定"}
+                  </div>
+                  {/* 分類標示：有指定日 / 無指定日（新政策：只標示、不需處理） */}
+                  <div style={{ marginBottom: 8 }}>
+                    {o.customer_wish_date ? (
+                      <span style={{ fontFamily: F.mono, fontSize: 10, color: "#43B23C", background: "#0c140c", padding: "2px 7px", border: "1px solid #43B23C" }}>
+                        📌 指定 {mdOf(o.customer_wish_date)}
+                      </span>
+                    ) : (
+                      <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", background: "#161619", padding: "2px 7px", border: "1px solid #3a3a40" }}>
+                        ○ 無指定 · 等排入
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center" style={{ gap: 8 }}>
                     {o.system_suggested_date && (
@@ -831,6 +881,40 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                 ))}
                 {diag.dirtyBatchDate.length > 10 && (
                   <div style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", marginTop: 6 }}>… 還有 {diag.dirtyBatchDate.length - 10} 單</div>
+                )}
+              </div>
+            )}
+
+            {/* Legacy MISSING_BATCH_DATE 清理（新政策：無指定日直接進待排、不需 resolve） */}
+            {diag.legacyMissingDate.length > 0 && (
+              <div style={{ marginBottom: 20, background: "#0f1a26", padding: "14px 16px", borderLeft: "3px solid #2AC7E8" }}>
+                <div className="flex items-baseline justify-between flex-wrap" style={{ gap: 10, marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: "#2AC7E8" }}>
+                      🔧 Legacy · 舊政策 MISSING_BATCH_DATE 資料（{diag.legacyMissingDate.length} 單）
+                    </div>
+                    <div style={{ fontFamily: F.mono, fontSize: 10, color: "#C9C9CF", marginTop: 4 }}>
+                      新政策：無指定日 = 分類標示、不再需要處理 · 這些單應該直接進待排排隊
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={cleanLegacyMissingDate}
+                    disabled={cleaningLegacy}
+                    style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 12, color: "#111", background: "#2AC7E8", border: "none", padding: "7px 14px", cursor: cleaningLegacy ? "wait" : "pointer" }}
+                  >
+                    {cleaningLegacy ? "清理中…" : `一鍵清理 ${diag.legacyMissingDate.length} 單 → 進待排`}
+                  </button>
+                </div>
+                {diag.legacyMissingDate.slice(0, 5).map((o) => (
+                  <div key={o.id} style={{ padding: "6px 0", display: "grid", gridTemplateColumns: "1.4fr 1fr 1.4fr", gap: 8, fontFamily: F.mono, fontSize: 10, color: "#C9C9CF" }}>
+                    <span>{o.id}</span>
+                    <span style={{ color: "#8A8A93" }}>{o.pendingReasons.map((r) => r.code).join(", ")}</span>
+                    <span>{o.recipient?.name ?? "—"} · {o.channel}</span>
+                  </div>
+                ))}
+                {diag.legacyMissingDate.length > 5 && (
+                  <div style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", marginTop: 6 }}>… 還有 {diag.legacyMissingDate.length - 5} 單</div>
                 )}
               </div>
             )}

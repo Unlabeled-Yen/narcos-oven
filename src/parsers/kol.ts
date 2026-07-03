@@ -189,13 +189,7 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
 
   // ---- Stage 4: 出爐日 ----
   const batchDate = extractKolShippingDate(w.ship_raw, null);
-  if (!batchDate) {
-    pendingReasons.push({
-      code: "MISSING_BATCH_DATE",
-      humanMessage: `KOL「寄貨時間」欄=「${String(w.ship_raw ?? "").slice(0, 20)}」無法解析為日期`,
-      suggestionConfidence: 0,
-    });
-  }
+  // 新政策（2026-07-03）：無指定日不再是 pending reason，直接進待排讓雇主拖入
 
   // ---- Stage 2: 品項 lookup + 擇一 handling ----
   const items: OrderItem[] = [];
