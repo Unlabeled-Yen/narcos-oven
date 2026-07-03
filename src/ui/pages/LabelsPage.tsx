@@ -161,8 +161,8 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
           minHeight: 0,
         }}
       >
-        {/* ── 左控制欄（min-h-0 overflow-y-auto） ─────────── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0, overflowY: "auto" }}>
+        {/* ── 左控制欄（min-h-0 overflow-y-auto） · print 時整欄隱藏（no-print） ─── */}
+        <div className="no-print" style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0, overflowY: "auto" }}>
 
           {/* 批次 + 尺寸 */}
           <div style={{ background: C.panel, border: `1px solid ${C.line}`, padding: 16 }}>
@@ -283,7 +283,7 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
         </div>
 
         {/* ── 右預覽（flex-1 min-h-0 overflow-y-auto） ────── */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 10, minHeight: 0, overflowY: "auto" }}>
+        <div className="labels-preview" style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 10, minHeight: 0, overflowY: "auto" }}>
           {/* 頁碼提示 */}
           <div style={{ fontFamily: F.mono, fontSize: 11, color: C.mut3 }}>
             {isEmpty
