@@ -77,8 +77,16 @@ export type WeeklyBudget = z.infer<typeof WeeklyBudgetSchema>;
 
 export const SchedulingConfigSchema = z.object({
   lead_time_days: z.number().int().default(5),
-  regular_shipping_weekday: z.number().int().default(2), // 0=Sun,2=Tue
+  regular_shipping_weekday: z.number().int().default(2), // 0=Sun,2=Tue（legacy · 單一出貨日）
   max_retry_weeks: z.number().int().default(10),
+
+  // 新規則（2026-07-03）：
+  // - 出貨日可為多個星期幾（例如 [2] 週二、或 [2,5] 週二+週五）
+  // - 工作日可為 1..多個星期幾（例如 [1,2] 週一+週二）
+  // - 工時計算：以「本週的所有工作日合計」為準
+  // - 出貨明細：以「該出貨日 · 前一組工作日」為範圍（Phase 2 邏輯）
+  shipping_weekdays: z.array(z.number().int()).default([2]),
+  working_weekdays: z.array(z.number().int()).default([0, 1, 2, 3, 4, 5, 6]), // default 全週皆工作日
 });
 export type SchedulingConfig = z.infer<typeof SchedulingConfigSchema>;
 

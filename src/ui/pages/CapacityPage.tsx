@@ -43,8 +43,12 @@ function resolveInitialState(menu: PageProps["menu"]) {
   const overhead: Overhead = menu.overhead ?? {
     product_switch_hours: 0.67, wash_mold_after_batches: 3, wash_mold_hours: 1.0,
   };
-  const scheduling: SchedulingConfig = menu.scheduling ?? {
-    lead_time_days: 5, regular_shipping_weekday: 2, max_retry_weeks: 10,
+  const scheduling: SchedulingConfig = {
+    lead_time_days: menu.scheduling?.lead_time_days ?? 5,
+    regular_shipping_weekday: menu.scheduling?.regular_shipping_weekday ?? 2,
+    max_retry_weeks: menu.scheduling?.max_retry_weeks ?? 10,
+    shipping_weekdays: menu.scheduling?.shipping_weekdays ?? [2],
+    working_weekdays: menu.scheduling?.working_weekdays ?? [0,1,2,3,4,5,6],
   };
   const productLead: Record<string, number> = {};
   for (const g of GROUPS) {
@@ -322,6 +326,74 @@ export function CapacityPage(props: PageProps) {
                 );
               })
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* 工作日 / 出貨日 設定 · Yen 2026-07-03 加規則 */}
+      <div style={{ padding: "4px 24px 8px" }}>
+        <div style={{ background: C.panel, border: `1px solid ${C.line}`, padding: 18 }}>
+          <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 15, color: C.ink, marginBottom: 4 }}>
+            出貨日 / 工作日
+          </div>
+          <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut2, marginBottom: 14 }}>
+            出貨日 = 對客戶承諾的寄貨日（黃框標示）· 工作日 = 實際製作日（週工時計算範圍）
+          </div>
+
+          <div style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 12, color: C.mut, marginBottom: 6 }}>出貨日（可複選）</div>
+          <div className="flex" style={{ gap: 4, marginBottom: 14, flexWrap: "wrap" }}>
+            {[1,2,3,4,5,6,0].map((d) => {
+              const on = scheduling.shipping_weekdays?.includes(d);
+              return (
+                <button key={d} type="button"
+                  onClick={() => {
+                    const cur = new Set(scheduling.shipping_weekdays ?? []);
+                    if (cur.has(d)) cur.delete(d); else cur.add(d);
+                    setScheduling((p) => ({ ...p, shipping_weekdays: [...cur].sort((a,b)=>a-b) }));
+                    setSaved(false);
+                  }}
+                  style={{
+                    fontFamily: F.tc, fontWeight: 900, fontSize: 12,
+                    color: on ? "#111" : C.mut2,
+                    background: on ? "var(--acc,#F5D400)" : C.card,
+                    border: on ? "none" : `1px solid ${C.line}`,
+                    padding: "6px 12px", cursor: "pointer", borderRadius: 0,
+                  }}
+                >
+                  {["日","一","二","三","四","五","六"][d]}
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 12, color: C.mut, marginBottom: 6 }}>工作日（可複選）</div>
+          <div className="flex" style={{ gap: 4, flexWrap: "wrap" }}>
+            {[1,2,3,4,5,6,0].map((d) => {
+              const on = scheduling.working_weekdays?.includes(d);
+              return (
+                <button key={d} type="button"
+                  onClick={() => {
+                    const cur = new Set(scheduling.working_weekdays ?? []);
+                    if (cur.has(d)) cur.delete(d); else cur.add(d);
+                    setScheduling((p) => ({ ...p, working_weekdays: [...cur].sort((a,b)=>a-b) }));
+                    setSaved(false);
+                  }}
+                  style={{
+                    fontFamily: F.tc, fontWeight: 900, fontSize: 12,
+                    color: on ? "#0B0B0C" : C.mut2,
+                    background: on ? "#43B23C" : C.card,
+                    border: on ? "none" : `1px solid ${C.line}`,
+                    padding: "6px 12px", cursor: "pointer", borderRadius: 0,
+                  }}
+                >
+                  {["日","一","二","三","四","五","六"][d]}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut2, marginTop: 10 }}>
+            排程頁週檢視：出貨日 = 黃框、工作日 = 深灰、休息日 = 虛線灰底且透明。
+            週工時 gauge = 本週所有「工作日」合計。
           </div>
         </div>
       </div>

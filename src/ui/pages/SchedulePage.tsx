@@ -447,9 +447,15 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   }
 
   // 主出貨日（本週的週二，getDay===2）
-  // 週工時 = 本週 7 天工時合計（非只算週二）
-  // 這樣拖訂單到任意日子、gauge 都會即時反映
-  const shipHours = weekISO.reduce((sum, iso) => sum + dayHours(iso), 0);
+  // 依規則決定「工作日」「出貨日」（可雇主在產能設定調整）
+  const shippingWeekdays = new Set(menu.scheduling?.shipping_weekdays ?? [2]);
+  const workingWeekdays = new Set(menu.scheduling?.working_weekdays ?? [0,1,2,3,4,5,6]);
+  const isWorkingDayISO = (iso: string) => workingWeekdays.has(new Date(iso).getDay());
+
+  // 週工時 = 本週「工作日」工時合計（非工作日不計）
+  // 這樣拖訂單到任意工作日、gauge 都會即時反映；排到非工作日不會誤算
+  const workingDaysISO = weekISO.filter(isWorkingDayISO);
+  const shipHours = workingDaysISO.reduce((sum, iso) => sum + dayHours(iso), 0);
 
   return (
     <div
@@ -515,7 +521,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
           return (
             <div className="ml-auto flex items-center" style={{ gap: 10, minWidth: 320 }}>
               <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".1em", whiteSpace: "nowrap" }}>
-                本週工時 · {mdOf(weekISO[0])}–{mdOf(weekISO[6])}
+                本週工時 · {mdOf(weekISO[0])}–{mdOf(weekISO[6])} · 工作日 {workingDaysISO.length} 天
               </span>
               <span className="flex items-baseline" style={{ gap: 4 }}>
                 <span style={{ fontFamily: F.anton, fontSize: 20, color: barColor, lineHeight: 0.85 }}>{shipHours}</span>
@@ -592,29 +598,35 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6, flex: 1, minHeight: 0 }}>
             {week.map((d) => {
               const iso = toISO(d);
-              const isShip = d.getDay() === 2;
+              const isShip = shippingWeekdays.has(d.getDay());
+              const isWork = workingWeekdays.has(d.getDay()) && !isShip;
+              const isRest = !isShip && !isWork; // 休息日
               const list = assignedByDay.get(iso) ?? [];
               const isOver = overDay === iso;
+              // 顏色：出貨日 = 黃、工作日 = 深灰、休息 = 更暗
+              const bgColor = isShip ? "#1c1600" : isRest ? "#0a0a0c" : "#111114";
+              const borderColor = isShip ? "2px solid var(--acc,#F5D400)" : isRest ? "1px dashed #26262C" : "1px solid #26262C";
               return (
                 <div
                   key={iso}
                   style={{
-                    background: isShip ? "#1c1600" : "#111114",
-                    border: isShip ? "2px solid var(--acc,#F5D400)" : "1px solid #26262C",
+                    background: bgColor,
+                    border: borderColor,
                     minHeight: 0,
                     display: "flex",
                     flexDirection: "column",
                     boxShadow: isShip ? "0 0 0 3px rgba(245,212,0,.12)" : undefined,
+                    opacity: isRest ? 0.6 : 1,
                   }}
                 >
                   <div
                     className="flex items-baseline justify-between"
                     style={{ padding: "8px 9px", background: isShip ? "var(--acc,#F5D400)" : undefined, borderBottom: isShip ? undefined : "1px solid #26262C" }}
                   >
-                    <span style={{ fontFamily: isShip ? F.tc : F.mono, fontWeight: isShip ? 900 : 400, fontSize: isShip ? 11 : 10, color: isShip ? "#111" : "#6C6C74" }}>
-                      {isShip ? `${WD[d.getDay()]} · 出貨` : WD[d.getDay()]}
+                    <span style={{ fontFamily: isShip ? F.tc : F.mono, fontWeight: isShip ? 900 : 400, fontSize: isShip ? 11 : 10, color: isShip ? "#111" : isWork ? "#8A8A93" : "#4a4a52" }}>
+                      {isShip ? `${WD[d.getDay()]} · 出貨` : isRest ? `${WD[d.getDay()]} · 休` : WD[d.getDay()]}
                     </span>
-                    <span style={{ fontFamily: F.anton, fontSize: isShip ? 20 : 18, color: isShip ? "#111" : "#8A8A93" }}>{d.getDate()}</span>
+                    <span style={{ fontFamily: F.anton, fontSize: isShip ? 20 : 18, color: isShip ? "#111" : isRest ? "#4a4a52" : "#8A8A93" }}>{d.getDate()}</span>
                   </div>
 
                   <div
