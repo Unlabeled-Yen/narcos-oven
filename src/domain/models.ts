@@ -8,6 +8,9 @@ import { z } from "zod";
 
 export const AtomSchema = z.object({
   unit: z.enum(["顆", "罐", "包"]),
+  // 全成本（食材＋包裝分攤＋營養貼紙 $1）· 每顆/每瓶
+  // 資料源：全品項成本總覽 PDF · 版本 2026-07-03
+  cost: z.number().nullable().optional(),
 });
 
 export const MatchSignatureSchema = z.object({
