@@ -381,6 +381,30 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
     for (const qty of accumulateAtoms(list).values()) total += qty;
     return total;
   }
+  // 該日 atom breakdown（給日欄底部 mini 統計用、依顆數降序）
+  function dayAtomBreakdown(iso: string): Array<{ atom: string; qty: number }> {
+    const list = assignedByDay.get(iso) ?? [];
+    if (list.length === 0) return [];
+    return [...accumulateAtoms(list).entries()]
+      .filter(([, q]) => q > 0)
+      .map(([atom, qty]) => ({ atom, qty }))
+      .sort((a, b) => b.qty - a.qty);
+  }
+  // 週彙總 atom breakdown（給週檢視下方本週合計條用）
+  function weekAtomBreakdown(): Array<{ atom: string; qty: number }> {
+    const totals = new Map<string, number>();
+    for (const iso of weekISO) {
+      const list = assignedByDay.get(iso) ?? [];
+      if (list.length === 0) continue;
+      for (const [atom, qty] of accumulateAtoms(list)) {
+        totals.set(atom, (totals.get(atom) ?? 0) + qty);
+      }
+    }
+    return [...totals.entries()]
+      .filter(([, q]) => q > 0)
+      .map(([atom, qty]) => ({ atom, qty }))
+      .sort((a, b) => b.qty - a.qty);
+  }
 
   // 拖放持久化（憲章 #11 拍板）
   async function commitAssign(id: string, toISO: string | null) {
@@ -655,6 +679,25 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                         <span style={{ color: "#6C6C74", fontWeight: 400 }}> · {o.channel.replace(/^面交_/, "面交")}</span>
                       </div>
                     ))}
+                    {/* 當日 atom 統計 · 讓雇主拖單即時看堆積 */}
+                    {(() => {
+                      const breakdown = dayAtomBreakdown(iso);
+                      if (breakdown.length === 0) return null;
+                      const dayTotal = breakdown.reduce((s, r) => s + r.qty, 0);
+                      return (
+                        <div style={{ marginTop: 6, padding: "6px 7px", background: isShip ? "#221c00" : "#141417", border: `1px solid ${isShip ? "#4a3f00" : "#26262C"}` }}>
+                          <div style={{ fontFamily: F.mono, fontSize: 9, color: isShip ? "var(--acc,#F5D400)" : "#7A7A82", letterSpacing: ".1em", marginBottom: 3 }}>
+                            當日 · {dayTotal}
+                          </div>
+                          {breakdown.map((r) => (
+                            <div key={r.atom} className="flex justify-between" style={{ fontFamily: F.mono, fontSize: 10, color: "#C9C9CF", marginTop: 2 }}>
+                              <span style={{ fontFamily: F.tc, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{getDisplayName(r.atom, menu)}</span>
+                              <span style={{ fontFamily: F.anton, fontSize: 12, color: "#F5F4EF", marginLeft: 4 }}>{r.qty}</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
                     <div style={{ marginTop: "auto", textAlign: "center", fontFamily: F.mono, fontSize: 9, color: isShip ? "#7a6600" : "#3a3a40" }}>
                       ＋ 拖曳排入{isShip ? "本批" : ""}
                     </div>
@@ -663,6 +706,32 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
               );
             })}
           </div>
+
+          {/* 本週合計 · 各 atom 顆數（讓雇主一眼看全週堆積） */}
+          {(() => {
+            const wk = weekAtomBreakdown();
+            if (wk.length === 0) return null;
+            const wkTotal = wk.reduce((s, r) => s + r.qty, 0);
+            return (
+              <div style={{ marginTop: 14, padding: "10px 14px", background: "#141417", border: "1px solid #26262C", borderLeft: "3px solid var(--acc,#F5D400)" }}>
+                <div className="flex items-baseline flex-wrap" style={{ gap: 10, marginBottom: 8 }}>
+                  <span style={{ fontFamily: F.mono, fontSize: 10, color: "var(--acc,#F5D400)", letterSpacing: ".14em" }}>本週合計</span>
+                  <span className="flex items-baseline" style={{ gap: 3 }}>
+                    <span style={{ fontFamily: F.anton, fontSize: 20, color: "#F5F4EF", lineHeight: 0.85 }}>{wkTotal}</span>
+                    <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 11, color: "#8A8A93" }}>顆</span>
+                  </span>
+                </div>
+                <div className="flex flex-wrap" style={{ gap: 10 }}>
+                  {wk.map((r) => (
+                    <div key={r.atom} className="flex items-baseline" style={{ background: "#0F0F12", padding: "5px 10px", gap: 6, border: "1px solid #26262C" }}>
+                      <span style={{ fontFamily: F.tc, fontWeight: 500, fontSize: 11, color: "#C9C9CF" }}>{getDisplayName(r.atom, menu)}</span>
+                      <span style={{ fontFamily: F.anton, fontSize: 15, color: "var(--acc,#F5D400)" }}>{r.qty}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           <div className="flex flex-wrap" style={{ gap: 14, marginTop: 14, fontFamily: F.mono, fontSize: 10, color: "#7A7A82" }}>
             <Legend c="var(--acc,#F5D400)" t="出貨日" />
