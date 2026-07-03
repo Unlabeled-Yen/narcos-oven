@@ -65,6 +65,7 @@ function isPendingSchedule(o: Order): boolean {
 
 export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   const [viewMode, setViewMode] = useState<"week" | "month">("week");
+  const [diagOpen, setDiagOpen] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
   const [monthOffset, setMonthOffset] = useState(0);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -99,6 +100,27 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   }, [orders, weekISO.join(",")]);
 
   const pending = useMemo(() => orders.filter(isPendingSchedule), [orders]);
+
+  // 診斷：待排（排程頁）vs 待處理桶 差集 · 排查同步問題
+  const diag = useMemo(() => {
+    const bucket = orders.filter((o) =>
+      o.status.startsWith("pending_") ||
+      o.status === "change_pending_resolution" ||
+      o.status === "disappeared_pending_resolution"
+    );
+    const wait = orders.filter((o) =>
+      (o.status === "confirmed" || o.status === "pending_batch_date") &&
+      (o.assignment_source === "pending" || o.batchDate === null)
+    );
+    const bSet = new Set(bucket.map((o) => o.id));
+    const wSet = new Set(wait.map((o) => o.id));
+    return {
+      waitCount: wait.length,
+      bucketCount: bucket.length,
+      inWaitOnly: wait.filter((o) => !bSet.has(o.id)),
+      inBucketOnly: bucket.filter((o) => !wSet.has(o.id)),
+    };
+  }, [orders]);
 
   // 待排訂單分頁 + 搜尋（供雇主插單搜尋）
   const [pendingTab, setPendingTab] = useState<"all" | "賣貨便" | "KOL" | "面交" | "指定日">("all");
@@ -266,6 +288,16 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
             </div>
           </>
         )}
+
+        {/* 診斷按鈕：查待排 vs 待處理桶差集 */}
+        <button
+          type="button"
+          onClick={() => setDiagOpen(true)}
+          title="診斷 待排 vs 待處理桶"
+          style={{ fontFamily: F.mono, fontSize: 10, color: "#8A8A93", background: "transparent", border: "1px solid #3a3a40", padding: "5px 8px", cursor: "pointer", letterSpacing: ".1em" }}
+        >
+          🩺 診斷
+        </button>
 
         {/* 本週工時 gauge — 水平薄款、貼齊工具列右側 */}
         {(() => {
@@ -555,6 +587,82 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
       </div>
       )}
       </div>
+
+      {/* 診斷 modal：待排 vs 待處理桶 差集列表 */}
+      {diagOpen && (
+        <div
+          onClick={() => setDiagOpen(false)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.75)", zIndex: 100, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 20px", overflowY: "auto" }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: "#0F0F12", border: "1px solid #26262C", maxWidth: 900, width: "100%", maxHeight: "90vh", overflowY: "auto", padding: 24 }}
+          >
+            <div className="flex justify-between items-baseline" style={{ marginBottom: 16 }}>
+              <div>
+                <div style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".14em" }}>DIAGNOSTICS</div>
+                <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 20, color: "#F5F4EF", marginTop: 4 }}>待排 vs 待處理桶 · 差集</div>
+              </div>
+              <button type="button" onClick={() => setDiagOpen(false)} style={{ fontFamily: F.mono, fontSize: 13, color: "#8A8A93", background: "transparent", border: "none", cursor: "pointer" }}>✕</button>
+            </div>
+
+            {/* 統計 */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
+              <div style={{ background: "#111114", padding: 12, borderLeft: "3px solid #E5622A" }}>
+                <div style={{ fontFamily: F.mono, fontSize: 9, color: "#7A7A82" }}>排程待排</div>
+                <div style={{ fontFamily: F.anton, fontSize: 28, color: "#F5F4EF" }}>{diag.waitCount}</div>
+              </div>
+              <div style={{ background: "#111114", padding: 12, borderLeft: "3px solid #8557C9" }}>
+                <div style={{ fontFamily: F.mono, fontSize: 9, color: "#7A7A82" }}>待處理桶</div>
+                <div style={{ fontFamily: F.anton, fontSize: 28, color: "#F5F4EF" }}>{diag.bucketCount}</div>
+              </div>
+              <div style={{ background: "#111114", padding: 12, borderLeft: "3px solid #F5D400" }}>
+                <div style={{ fontFamily: F.mono, fontSize: 9, color: "#7A7A82" }}>只在排程</div>
+                <div style={{ fontFamily: F.anton, fontSize: 28, color: diag.inWaitOnly.length > 0 ? "#F5D400" : "#43B23C" }}>{diag.inWaitOnly.length}</div>
+              </div>
+              <div style={{ background: "#111114", padding: 12, borderLeft: "3px solid #F5D400" }}>
+                <div style={{ fontFamily: F.mono, fontSize: 9, color: "#7A7A82" }}>只在待處理</div>
+                <div style={{ fontFamily: F.anton, fontSize: 28, color: diag.inBucketOnly.length > 0 ? "#F5D400" : "#43B23C" }}>{diag.inBucketOnly.length}</div>
+              </div>
+            </div>
+
+            {/* 只在排程待排的 */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: "#E5622A", marginBottom: 8 }}>
+                只在「排程待排」的訂單（{diag.inWaitOnly.length}）
+                <span style={{ fontFamily: F.mono, fontWeight: 400, fontSize: 10, color: "#7A7A82", marginLeft: 8 }}>= confirmed 未拍板 · 你 resolve 過但沒拖到日欄</span>
+              </div>
+              {diag.inWaitOnly.length === 0 && <div style={{ fontFamily: F.mono, fontSize: 11, color: "#6C6C74" }}>—</div>}
+              {diag.inWaitOnly.map((o) => (
+                <div key={o.id} style={{ background: "#111114", padding: "10px 12px", marginBottom: 4, display: "grid", gridTemplateColumns: "1.4fr 0.9fr 0.9fr 0.8fr 1.5fr", gap: 8, fontFamily: F.mono, fontSize: 11, color: "#C9C9CF" }}>
+                  <span>{o.id}</span>
+                  <span style={{ color: "#8A8A93" }}>{o.status}</span>
+                  <span style={{ color: "#8A8A93" }}>{o.assignment_source ?? "—"}</span>
+                  <span style={{ color: o.batchDate ? "#43B23C" : "#E5622A" }}>{o.batchDate ?? "無日期"}</span>
+                  <span style={{ color: "#F5F4EF", fontFamily: F.tc }}>{o.recipient?.name ?? o.recipient?.igOrLine ?? "—"} · {o.channel}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* 只在待處理桶的 */}
+            <div>
+              <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: "#8557C9", marginBottom: 8 }}>
+                只在「待處理桶」的訂單（{diag.inBucketOnly.length}）
+                <span style={{ fontFamily: F.mono, fontWeight: 400, fontSize: 10, color: "#7A7A82", marginLeft: 8 }}>= status 是 pending_channel / pending_product / pending_amount / disappeared 等</span>
+              </div>
+              {diag.inBucketOnly.length === 0 && <div style={{ fontFamily: F.mono, fontSize: 11, color: "#6C6C74" }}>—</div>}
+              {diag.inBucketOnly.map((o) => (
+                <div key={o.id} style={{ background: "#111114", padding: "10px 12px", marginBottom: 4, display: "grid", gridTemplateColumns: "1.4fr 1.4fr 1fr 1.8fr", gap: 8, fontFamily: F.mono, fontSize: 11, color: "#C9C9CF" }}>
+                  <span>{o.id}</span>
+                  <span style={{ color: "#8A8A93" }}>{o.status}</span>
+                  <span style={{ color: "#8A8A93" }}>{o.assignment_source ?? "—"}</span>
+                  <span style={{ color: "#F5F4EF", fontFamily: F.tc }}>{(o.pendingReasons ?? []).map((r) => r.code).join(", ") || "—"}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
