@@ -447,10 +447,44 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   }
 
   // 主出貨日（本週的週二，getDay===2）
-  // 依規則決定「工作日」「出貨日」（可雇主在產能設定調整）
-  const shippingWeekdays = new Set(menu.scheduling?.shipping_weekdays ?? [2]);
-  const workingWeekdays = new Set(menu.scheduling?.working_weekdays ?? [0,1,2,3,4,5,6]);
+  // 排程規則（星期幾層級）· 排程頁 header 點擊三態循環
+  // 存 localStorage · override menu.scheduling · 不需動 menu.yaml
+  const [ruleOverride, setRuleOverride] = useState<{ shipping_weekdays: number[]; working_weekdays: number[] } | null>(() => {
+    try { return JSON.parse(localStorage.getItem("narcos-schedule-rule") ?? "null"); }
+    catch { return null; }
+  });
+  const shippingWeekdays = new Set(ruleOverride?.shipping_weekdays ?? menu.scheduling?.shipping_weekdays ?? [2]);
+  const workingWeekdays = new Set(ruleOverride?.working_weekdays ?? menu.scheduling?.working_weekdays ?? [0,1,2,3,4,5,6]);
   const isWorkingDayISO = (iso: string) => workingWeekdays.has(new Date(iso).getDay());
+
+  // 點 header 三態循環：休息 → 工作 → 出貨 → 休息
+  function cycleWeekdayType(weekday: number) {
+    const isShip = shippingWeekdays.has(weekday);
+    const isWork = workingWeekdays.has(weekday);
+    const newShip = new Set(shippingWeekdays);
+    const newWork = new Set(workingWeekdays);
+    if (isShip) {
+      newShip.delete(weekday);
+      newWork.delete(weekday);
+    } else if (isWork) {
+      newWork.delete(weekday);
+      newShip.add(weekday);
+    } else {
+      newWork.add(weekday);
+    }
+    const next = {
+      shipping_weekdays: [...newShip].sort((a, b) => a - b),
+      working_weekdays: [...newWork].sort((a, b) => a - b),
+    };
+    setRuleOverride(next);
+    try { localStorage.setItem("narcos-schedule-rule", JSON.stringify(next)); }
+    catch { /* quota 或 disabled、無害 */ }
+  }
+  function resetRuleOverride() {
+    setRuleOverride(null);
+    try { localStorage.removeItem("narcos-schedule-rule"); }
+    catch { /* noop */ }
+  }
 
   // 週工時 = 本週「工作日」工時合計（非工作日不計）
   // 這樣拖訂單到任意工作日、gauge 都會即時反映；排到非工作日不會誤算
@@ -592,7 +626,19 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
             <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 15, color: "#F5F4EF" }}>
               本週工作排程 <span style={{ fontFamily: F.mono, fontWeight: 400, fontSize: 11, color: "#6C6C74" }}>出貨日回推備料</span>
             </span>
-            <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 11, color: "var(--acc,#F5D400)" }}>⠿ 拖曳待排訂單 → 出貨日</span>
+            <span className="flex items-center" style={{ gap: 10 }}>
+              {ruleOverride && (
+                <button
+                  type="button"
+                  onClick={resetRuleOverride}
+                  title="回到 menu.yaml 預設規則"
+                  style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", background: "transparent", border: "1px solid #3a3a40", padding: "3px 8px", cursor: "pointer" }}
+                >
+                  ⤺ 重設規則
+                </button>
+              )}
+              <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 11, color: "var(--acc,#F5D400)" }}>⠿ 拖曳待排訂單 → 出貨日 · 點日欄 header 切換工作/出貨/休息</span>
+            </span>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6, flex: 1, minHeight: 0 }}>
@@ -619,15 +665,18 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                     opacity: isRest ? 0.6 : 1,
                   }}
                 >
-                  <div
+                  <button
+                    type="button"
+                    onClick={() => cycleWeekdayType(d.getDay())}
+                    title="點擊切換：休息 → 工作 → 出貨"
                     className="flex items-baseline justify-between"
-                    style={{ padding: "8px 9px", background: isShip ? "var(--acc,#F5D400)" : undefined, borderBottom: isShip ? undefined : "1px solid #26262C" }}
+                    style={{ padding: "8px 9px", background: isShip ? "var(--acc,#F5D400)" : "transparent", borderBottom: isShip ? undefined : "1px solid #26262C", border: "none", cursor: "pointer", width: "100%", textAlign: "left" }}
                   >
                     <span style={{ fontFamily: isShip ? F.tc : F.mono, fontWeight: isShip ? 900 : 400, fontSize: isShip ? 11 : 10, color: isShip ? "#111" : isWork ? "#8A8A93" : "#4a4a52" }}>
                       {isShip ? `${WD[d.getDay()]} · 出貨` : isRest ? `${WD[d.getDay()]} · 休` : WD[d.getDay()]}
                     </span>
                     <span style={{ fontFamily: F.anton, fontSize: isShip ? 20 : 18, color: isShip ? "#111" : isRest ? "#4a4a52" : "#8A8A93" }}>{d.getDate()}</span>
-                  </div>
+                  </button>
 
                   <div
                     data-day={iso}
