@@ -15,7 +15,7 @@ import {
   calculateBatchHours,
   estimateOrderHours,
 } from "../../domain/production-time";
-import { upsertOrder } from "../../db/orders";
+import { upsertOrder, clearAll } from "../../db/orders";
 import type { PageProps } from "./types";
 
 const F = {
@@ -272,6 +272,32 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
       await refreshOrders();
     } finally {
       setCleaningLegacy(false);
+    }
+  }
+
+  // 清空所有訂單資料（重新測試用 · 破壞性、二次確認）
+  const [wiping, setWiping] = useState(false);
+  async function wipeAllData() {
+    if (wiping) return;
+    const total = orders.length;
+    const first = confirm(`⚠ 即將清空所有 ${total} 單訂單資料！\n\n這個動作無法復原。\n主要用於重新測試匯入流程。\n\n確定要繼續嗎？`);
+    if (!first) return;
+    const second = prompt(`最後確認：輸入「清空」二字繼續（total=${total}）`);
+    if (second !== "清空") {
+      alert("已取消（未輸入正確確認字）");
+      return;
+    }
+    setWiping(true);
+    try {
+      await clearAll();
+      await refreshOrders();
+      alert("✓ 已清空 · 現在可重新拖檔上傳測試");
+      setDiagOpen(false);
+    } catch (err) {
+      console.error("[wipeAllData]", err);
+      alert(`✗ 清空失敗：${(err as Error).message}`);
+    } finally {
+      setWiping(false);
     }
   }
 
@@ -1115,6 +1141,29 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                   <span style={{ color: "#F5F4EF", fontFamily: F.tc }}>{(o.pendingReasons ?? []).map((r) => r.code).join(", ") || "—"}</span>
                 </div>
               ))}
+            </div>
+
+            {/* Danger zone · 破壞性操作、二次確認 */}
+            <div style={{ marginTop: 32, padding: "14px 16px", background: "#2a1010", border: "2px dashed #E5352B" }}>
+              <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: "#E5352B", marginBottom: 4 }}>
+                ⚠ DANGER ZONE
+              </div>
+              <div style={{ fontFamily: F.mono, fontSize: 10, color: "#C9C9CF", marginBottom: 10 }}>
+                下方按鈕會清空所有訂單資料、只用於重新測試匯入流程 · 無法復原。
+              </div>
+              <button
+                type="button"
+                onClick={wipeAllData}
+                disabled={wiping}
+                style={{
+                  fontFamily: F.tc, fontWeight: 900, fontSize: 12,
+                  color: "#F5F4EF", background: "#E5352B",
+                  border: "none", padding: "9px 16px",
+                  cursor: wiping ? "wait" : "pointer",
+                }}
+              >
+                {wiping ? "清空中…" : `🗑 清空所有訂單（${orders.length}）· 重新測試用`}
+              </button>
             </div>
           </div>
         </div>
