@@ -8,6 +8,8 @@
  */
 import { useState, useMemo } from "react";
 import { PageHeader, PeriodChips } from "../brand/PageHeader";
+import { ExportBtn } from "../brand/ExportBtn";
+import { writePeriodSummaryExcel } from "../../output/period-summary-excel";
 import { getDisplayName } from "../../domain/menu";
 import {
   computeKpiCounts,
@@ -114,7 +116,16 @@ export function DashboardPage({ orders, menu }: PageProps) {
   return (
     <div className="h-full flex flex-col min-h-0" style={{ fontFamily: F.tc }}>
       <PageHeader caption="DASHBOARD · 跨批統計" title="OVEN CENTRAL"
-        right={<PeriodChips options={PERIODS} active={period} onChange={setPeriod} />} />
+        right={
+          <div className="flex items-center" style={{ gap: 10 }}>
+            <PeriodChips options={PERIODS} active={period} onChange={setPeriod} />
+            <ExportBtn
+              label="匯出彙總"
+              filename="dashboard_period_summary"
+              onExport={() => writePeriodSummaryExcel(orders, menu, { type: "all" })}
+            />
+          </div>
+        } />
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
 
       {/* KPI ROW */}

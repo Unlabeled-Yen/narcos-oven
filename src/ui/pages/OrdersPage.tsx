@@ -6,6 +6,8 @@
  */
 import { useMemo, useState } from "react";
 import { PageHeader } from "../brand/PageHeader";
+import { ExportBtn } from "../brand/ExportBtn";
+import { writeOverviewExcel } from "../../output/overview-excel";
 import { getDisplayName } from "../../domain/menu";
 import type { Order } from "../../domain/models";
 import type { PageProps } from "./types";
@@ -151,17 +153,24 @@ export function OrdersPage({ orders, menu }: PageProps) {
         caption="ORDERS · 全通路訂單台帳"
         title="ORDER LEDGER"
         right={
-          <input
-            type="text"
-            value={filter.query}
-            onChange={(e) => setFilter((prev) => ({ ...prev, query: e.target.value }))}
-            placeholder="搜尋 訂單編號 / 收件人 / 品項…"
-            style={{
-              fontFamily: F.mono, fontSize: 12, color: "#E7E7EA",
-              background: "#111114", border: "1px solid #3a3a40",
-              padding: "9px 14px", width: 240, outline: "none", borderRadius: 0,
-            }}
-          />
+          <div className="flex items-center" style={{ gap: 10 }}>
+            <input
+              type="text"
+              value={filter.query}
+              onChange={(e) => setFilter((prev) => ({ ...prev, query: e.target.value }))}
+              placeholder="搜尋 訂單編號 / 收件人 / 品項…"
+              style={{
+                fontFamily: F.mono, fontSize: 12, color: "#E7E7EA",
+                background: "#111114", border: "1px solid #3a3a40",
+                padding: "9px 14px", width: 220, outline: "none", borderRadius: 0,
+              }}
+            />
+            <ExportBtn
+              label="匯出台帳"
+              filename="orders_overview"
+              onExport={() => writeOverviewExcel(orders, menu)}
+            />
+          </div>
         }
       />
 

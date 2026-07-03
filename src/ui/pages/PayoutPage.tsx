@@ -13,6 +13,8 @@
  */
 import { useState } from "react";
 import { PageHeader, PeriodChips } from "../brand/PageHeader";
+import { ExportBtn } from "../brand/ExportBtn";
+import { writePayoutExcel } from "../../output/payout-excel";
 import { computePayout, fmtNT, fmtPct } from "../../domain/compute-payout";
 import type { PageProps } from "./types";
 
@@ -115,7 +117,16 @@ export function PayoutPage({ orders, menu }: PageProps) {
       <PageHeader
         caption="PAYOUT · 分潤統計 · 總+淨並列"
         title="PROFIT SPLIT"
-        right={<PeriodChips options={PERIODS} active={period} onChange={setPeriod} />}
+        right={
+          <div className="flex items-center" style={{ gap: 10 }}>
+            <PeriodChips options={PERIODS} active={period} onChange={setPeriod} />
+            <ExportBtn
+              label="匯出分潤"
+              filename="payout_split"
+              onExport={() => writePayoutExcel(orders, menu)}
+            />
+          </div>
+        }
       />
 
       {/* ── SCROLL WRAPPER ──────────────────────── */}

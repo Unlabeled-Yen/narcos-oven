@@ -10,6 +10,8 @@
  */
 import { useMemo, useState } from "react";
 import { PageHeader, PeriodChips } from "../brand/PageHeader";
+import { ExportBtn } from "../brand/ExportBtn";
+import { writeStatsExcel } from "../../output/stats-excel";
 import { computeStatsMatrix, CHANNEL_COLOR, type Channel } from "../../domain/compute-stats";
 import type { PageProps } from "./types";
 
@@ -73,7 +75,16 @@ export function StatsMatrixPage({ orders, menu }: PageProps) {
       <PageHeader
         caption="PRODUCTION STATS · 品項 × 批次 × 通路"
         title="OVEN MATRIX"
-        right={<PeriodChips options={PERIOD_OPTS} active={period} onChange={setPeriod} />}
+        right={
+          <div className="flex items-center" style={{ gap: 10 }}>
+            <PeriodChips options={PERIOD_OPTS} active={period} onChange={setPeriod} />
+            <ExportBtn
+              label="匯出樞紐"
+              filename="oven_stats_matrix"
+              onExport={() => writeStatsExcel(orders, menu)}
+            />
+          </div>
+        }
       />
 
       {/* flex-none: View toggle (display only) */}
