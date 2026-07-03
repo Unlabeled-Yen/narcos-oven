@@ -23,6 +23,13 @@ function mdOf(iso: string): string {
   const d = new Date(iso);
   return `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
 }
+function shortDate(raw: string): string {
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${Number(iso[2])}/${Number(iso[3])}`;
+  const slash = raw.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  if (slash) return `${slash[2]}/${slash[3]}`;
+  return raw.slice(0, 10);
+}
 
 // ── 完整 panel：頭 + 警示膠帶 + 兩欄 ──────────────────────────
 export function BatchDetailPanel({
@@ -201,9 +208,14 @@ function OrderCard({ order: o, menu, color }: { order: Order; menu: Menu; color:
   return (
     <div style={{ background: "#0F0F12", border: "1px solid #1F1F24", padding: "10px 12px" }}>
       <div className="flex items-baseline justify-between flex-wrap" style={{ gap: 10, marginBottom: 6 }}>
-        <div className="flex items-baseline" style={{ gap: 10 }}>
+        <div className="flex items-baseline flex-wrap" style={{ gap: 10 }}>
           <span style={{ fontFamily: F.mono, fontSize: 11, color: "#8A8A93", letterSpacing: ".05em" }}>{o.id}</span>
           <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 14, color: "#F5F4EF" }}>{o.recipient.name ?? "—"}</span>
+          {o.order_date && (
+            <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".05em" }}>
+              下單 {shortDate(o.order_date)}
+            </span>
+          )}
         </div>
         <div className="flex items-baseline" style={{ gap: 4 }}>
           <span style={{ fontFamily: F.anton, fontSize: 18, color }}>{o.labelCount}</span>

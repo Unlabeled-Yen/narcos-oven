@@ -28,3 +28,32 @@
 ::-webkit-scrollbar-thumb {
   background: #2a2a30;
 }
+
+/* ── 列印 · 全域反色 + 破 flex/overflow 限制（Yen 2026-07-03：印預覽空白 fix） ─────
+   Root cause：AppShell 用 h-screen + overflow:hidden + flex column、列印時 viewport 只顯示 1 頁
+   Fix：html/body/#root/main 全部 block + height auto + overflow visible + 反色
+   單頁列印 CSS（.batch-detail-panel / .worksheet-print）保留 · 只印該區塊
+*/
+@media print {
+  html, body, #root {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+    color: #000 !important;
+  }
+  body * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  /* 破 flex/grid 限制、確保內容完整流出所有頁 */
+  .h-full, .h-screen, .min-h-0, .overflow-hidden, .overflow-y-auto {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  /* AppShell chrome 全隱藏 */
+  nav, .no-print { display: none !important; }
+}
+

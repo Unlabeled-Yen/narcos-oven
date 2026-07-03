@@ -6,7 +6,7 @@
  *   列印：瀏覽器 Cmd+P · print CSS 排版
  *   資料源：跟 SchedulePage 同套（accumulateAtoms / day-type / week-locks / batch range）
  */
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { Order } from "../../domain/models";
 import { getDisplayName } from "../../domain/menu";
 import { accumulateAtoms } from "../../domain/production-time";
@@ -21,6 +21,9 @@ const F = {
   mono: "'Space Mono',monospace",
 };
 const WD = ["日", "一", "二", "三", "四", "五", "六"];
+
+const navBtn = { fontFamily: "'Space Mono',monospace", fontSize: 11, color: "#C9C9CF", background: "transparent", border: "1px solid #3a3a40", padding: "5px 10px", cursor: "pointer", letterSpacing: ".05em" } as const;
+const navBtnActive = { ...navBtn, color: "#111", background: "var(--acc,#F5D400)", border: "1px solid var(--acc,#F5D400)", fontWeight: 900 } as const;
 
 function toISO(d: Date): string {
   const y = d.getFullYear();
@@ -49,7 +52,8 @@ function addDays(d: Date, n: number): Date {
 
 export function WorksheetPage({ orders, menu }: PageProps) {
   const today = useMemo(() => new Date(), []);
-  const weekStart = useMemo(() => mondayOf(today, 0), [today]);
+  const [weekOffset, setWeekOffset] = useState(0);
+  const weekStart = useMemo(() => mondayOf(today, weekOffset), [today, weekOffset]);
   const week = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const weekISO = week.map(toISO);
   const weekLockKey = weekISO[0]!;
@@ -109,7 +113,7 @@ export function WorksheetPage({ orders, menu }: PageProps) {
       `}</style>
 
       <div className="worksheet-print px-6 py-4" style={{ flex: 1, minHeight: 0 }}>
-        {/* 頂端：批次身份 + 列印 button */}
+        {/* 頂端：批次身份 + 週切換 + 列印 button */}
         <div className="flex items-baseline justify-between flex-wrap no-print" style={{ marginBottom: 16, gap: 12 }}>
           <div>
             <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 22, color: "#F5F4EF" }}>
@@ -124,13 +128,23 @@ export function WorksheetPage({ orders, menu }: PageProps) {
                 : <span style={{ color: "#E5622A", marginLeft: 10 }}>⚠ 本週未鎖定 · 排程可能仍在調整</span>}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: "#111", background: "var(--acc,#F5D400)", border: "none", padding: "10px 20px", cursor: "pointer", letterSpacing: ".08em" }}
-          >
-            🖨 列印工單 (Cmd+P)
-          </button>
+          <div className="flex items-center flex-wrap" style={{ gap: 10 }}>
+            <div className="flex" style={{ gap: 2 }}>
+              <button type="button" onClick={() => setWeekOffset((w) => w - 1)} style={navBtn}>‹ 上週</button>
+              <button type="button" onClick={() => setWeekOffset(0)} style={weekOffset === 0 ? navBtnActive : navBtn}>本週</button>
+              <button type="button" onClick={() => setWeekOffset((w) => w + 1)} style={navBtn}>下週 ›</button>
+            </div>
+            <span style={{ fontFamily: F.mono, fontSize: 11, color: "#8A8A93", padding: "0 6px" }}>
+              {mdOf(weekISO[0]!)} – {mdOf(weekISO[6]!)}
+            </span>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: "#111", background: "var(--acc,#F5D400)", border: "none", padding: "10px 20px", cursor: "pointer", letterSpacing: ".08em" }}
+            >
+              🖨 列印工單 (Cmd+P)
+            </button>
+          </div>
         </div>
 
         {/* 列印用 header */}
