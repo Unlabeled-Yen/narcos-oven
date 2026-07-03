@@ -595,9 +595,9 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
         </div>
       ) : (
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-      <div className="px-6 py-2" style={{ display: "grid", gridTemplateColumns: "2.7fr 1fr", gap: 12, flex: 1, minHeight: 0 }}>
+      <div className="px-6 py-2" style={{ display: "grid", gridTemplateColumns: "2.7fr 1fr", gridTemplateRows: "minmax(0, 1fr)", gap: 12, flex: 1, minHeight: 0 }}>
         {/* WEEK GRID */}
-        <div style={{ background: "#0F0F12", border: "1px solid #26262C", padding: 16, minWidth: 0, display: "flex", flexDirection: "column" }}>
+        <div style={{ background: "#0F0F12", border: "1px solid #26262C", padding: 16, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
           {/* Grid header 條：工具列（月/週 · range · 導覽 · 診斷）+ 清 N 自訂 · 拿掉拖曳提示與 title 讓 grid 拉高 */}
           <div className="flex justify-between items-center flex-wrap" style={{ marginBottom: 10, gap: 8, flexShrink: 0 }}>
             {toolbarNav}
