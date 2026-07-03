@@ -99,18 +99,9 @@ export function BatchDetailPanel({
   );
 }
 
-// ── 訂單詳情 table：出貨人員對帳 · 通路 / 收件 / 物流 / 品項 / 標籤 ──
-function shipmentInfoOf(o: Order): string {
-  if (o.channel === "賣貨便") return o.recipient.convStore ?? "—";
-  if (o.channel === "宅配") return o.recipient.address ?? "—";
-  if (o.channel.startsWith("面交")) {
-    // 面交_中壢 → 中壢面交
-    const loc = o.channel.replace(/^面交_/, "");
-    return `${loc}面交`;
-  }
-  if (o.channel === "KOL") return o.recipient.address ?? o.recipient.igOrLine ?? "—";
-  return "—";
-}
+// ── 訂單詳情 · 通路分組卡片式（Yen 2026-07-03：不能純表格 · 要清晰易懂）──
+//   出貨人員拿著單對物流 / 標籤 · 每張卡獨立顯眼
+
 function itemsSummary(o: Order, menu: Menu): string {
   if (o.items.length === 0) return "—";
   return o.items
@@ -120,58 +111,158 @@ function itemsSummary(o: Order, menu: Menu): string {
     })
     .join(" · ");
 }
+
+type ChannelGroup = "賣貨便" | "面交" | "宅配" | "KOL" | "其他";
+const CHANNEL_COLOR: Record<ChannelGroup, string> = {
+  賣貨便: "var(--acc,#F5D400)",
+  面交: "#43B23C",
+  宅配: "#2AC7E8",
+  KOL: "#8557C9",
+  其他: "#8A8A93",
+};
+function groupOf(channel: string): ChannelGroup {
+  if (channel === "賣貨便") return "賣貨便";
+  if (channel.startsWith("面交")) return "面交";
+  if (channel === "宅配") return "宅配";
+  if (channel === "KOL") return "KOL";
+  return "其他";
+}
+
 function BatchOrdersTable({ shipList, menu }: { shipList: Order[]; menu: Menu }) {
   if (shipList.length === 0) return null;
-  const rows = [...shipList].sort((a, b) => a.channel.localeCompare(b.channel));
-  const totalLabels = rows.reduce((s, o) => s + (o.labelCount ?? 0), 0);
+  const totalLabels = shipList.reduce((s, o) => s + (o.labelCount ?? 0), 0);
+
+  // 依通路分組
+  const groups = new Map<ChannelGroup, Order[]>();
+  for (const o of shipList) {
+    const g = groupOf(o.channel);
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g)!.push(o);
+  }
+  const groupOrder: ChannelGroup[] = ["賣貨便", "面交", "宅配", "KOL", "其他"];
+  const groupList = groupOrder.filter((g) => groups.has(g));
+
   return (
-    <div style={{ borderTop: "1px solid #26262C", padding: "12px 16px 16px" }}>
-      <div className="flex items-baseline justify-between flex-wrap" style={{ gap: 10, marginBottom: 10 }}>
+    <div style={{ borderTop: "1px solid #26262C", padding: "14px 16px 18px" }}>
+      {/* 通路統計摘要條 */}
+      <div className="flex items-baseline justify-between flex-wrap" style={{ gap: 10, marginBottom: 12 }}>
         <div style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".14em" }}>
-          訂單詳情 · 出貨對帳用 · {rows.length} 單 · 共 {totalLabels} 張標籤
+          訂單詳情 · 出貨對帳 · {shipList.length} 單 · 共 {totalLabels} 張標籤
+        </div>
+        <div className="flex flex-wrap" style={{ gap: 8 }}>
+          {groupList.map((g) => {
+            const list = groups.get(g)!;
+            const labels = list.reduce((s, o) => s + (o.labelCount ?? 0), 0);
+            return (
+              <div key={g} style={{ fontFamily: F.mono, fontSize: 10, color: CHANNEL_COLOR[g], border: `1px solid ${CHANNEL_COLOR[g]}`, padding: "3px 8px", letterSpacing: ".05em" }}>
+                {g} · <span style={{ fontFamily: F.anton, fontSize: 13, marginLeft: 2 }}>{list.length}</span>單 · <span style={{ fontFamily: F.anton, fontSize: 13 }}>{labels}</span>張
+              </div>
+            );
+          })}
         </div>
       </div>
-      <div className="batch-orders-table" style={{ background: "#141417", border: "1px solid #26262C", overflow: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: F.mono, fontSize: 11, color: "#E7E7EA" }}>
-          <thead>
-            <tr style={{ background: "#0F0F12", color: "#8A8A93", letterSpacing: ".08em" }}>
-              <th style={thStyle}>訂單編號</th>
-              <th style={thStyle}>通路</th>
-              <th style={thStyle}>收件人</th>
-              <th style={thStyle}>物流/取貨</th>
-              <th style={thStyle}>品項</th>
-              <th style={{ ...thStyle, textAlign: "right", width: 60 }}>標籤</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((o) => (
-              <tr key={o.id} style={{ borderTop: "1px solid #1F1F24" }}>
-                <td style={tdStyle}>{o.id}</td>
-                <td style={tdStyle}>{o.channel.replace(/^面交_/, "面交·")}</td>
-                <td style={tdStyle}>
-                  <div style={{ fontFamily: F.tc, fontWeight: 700, color: "#F5F4EF" }}>{o.recipient.name ?? "—"}</div>
-                  {o.recipient.phone && <div style={{ fontSize: 10, color: "#8A8A93" }}>{o.recipient.phone}</div>}
-                  {o.recipient.igOrLine && <div style={{ fontSize: 10, color: "#8A8A93" }}>{o.recipient.igOrLine}</div>}
-                </td>
-                <td style={{ ...tdStyle, fontSize: 10, color: "#C9C9CF" }}>{shipmentInfoOf(o)}</td>
-                <td style={{ ...tdStyle, fontFamily: F.tc, fontSize: 11, color: "#F5F4EF" }}>{itemsSummary(o, menu)}</td>
-                <td style={{ ...tdStyle, fontFamily: F.anton, fontSize: 14, textAlign: "right", color: "var(--acc,#F5D400)" }}>{o.labelCount}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+
+      {/* 依通路分組 · 每組獨立區塊 · 卡片式訂單列 */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {groupList.map((g) => {
+          const list = groups.get(g)!;
+          const labels = list.reduce((s, o) => s + (o.labelCount ?? 0), 0);
+          const color = CHANNEL_COLOR[g];
+          return (
+            <div key={g} className="channel-group" style={{ background: "#141417", border: `1px solid #26262C`, borderLeft: `4px solid ${color}` }}>
+              <div className="flex items-baseline justify-between flex-wrap" style={{ gap: 10, padding: "10px 14px", background: "#0F0F12" }}>
+                <div className="flex items-baseline" style={{ gap: 10 }}>
+                  <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 15, color }}>{g}</span>
+                  <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".1em" }}>
+                    {list.length} 單 · {labels} 張標籤
+                  </span>
+                </div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", padding: "8px 10px", gap: 8 }}>
+                {list.map((o) => (
+                  <OrderCard key={o.id} order={o} menu={menu} color={color} />
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-const thStyle = {
-  padding: "8px 10px", textAlign: "left" as const, fontWeight: 700, fontSize: 10,
-  borderBottom: "1px solid #26262C",
-};
-const tdStyle = {
-  padding: "8px 10px", verticalAlign: "top" as const,
-};
+function OrderCard({ order: o, menu, color }: { order: Order; menu: Menu; color: string }) {
+  const isMart = o.channel === "賣貨便";
+  const isHome = o.channel === "宅配";
+  const isFace = o.channel.startsWith("面交");
+  const isKol = o.channel === "KOL";
+  const faceLoc = isFace ? o.channel.replace(/^面交_/, "") : null;
+
+  return (
+    <div style={{ background: "#0F0F12", border: "1px solid #1F1F24", padding: "10px 12px" }}>
+      <div className="flex items-baseline justify-between flex-wrap" style={{ gap: 10, marginBottom: 6 }}>
+        <div className="flex items-baseline" style={{ gap: 10 }}>
+          <span style={{ fontFamily: F.mono, fontSize: 11, color: "#8A8A93", letterSpacing: ".05em" }}>{o.id}</span>
+          <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 14, color: "#F5F4EF" }}>{o.recipient.name ?? "—"}</span>
+        </div>
+        <div className="flex items-baseline" style={{ gap: 4 }}>
+          <span style={{ fontFamily: F.anton, fontSize: 18, color }}>{o.labelCount}</span>
+          <span style={{ fontFamily: F.tc, fontSize: 10, color: "#8A8A93" }}>張標籤</span>
+        </div>
+      </div>
+
+      {/* 物流資訊區塊 · channel-aware */}
+      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 10px", marginBottom: 8 }}>
+        {isMart && o.recipient.convStore && (
+          <>
+            <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82" }}>超商</span>
+            <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 12, color: "#F5F4EF" }}>{o.recipient.convStore}</span>
+          </>
+        )}
+        {isHome && o.recipient.address && (
+          <>
+            <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82" }}>地址</span>
+            <span style={{ fontFamily: F.tc, fontWeight: 500, fontSize: 12, color: "#F5F4EF" }}>{o.recipient.address}</span>
+          </>
+        )}
+        {isFace && (
+          <>
+            <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82" }}>地點</span>
+            <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 12, color: "#F5F4EF" }}>{faceLoc}面交</span>
+          </>
+        )}
+        {isKol && (
+          <>
+            {o.recipient.address && (
+              <>
+                <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82" }}>寄送</span>
+                <span style={{ fontFamily: F.tc, fontWeight: 500, fontSize: 12, color: "#F5F4EF" }}>{o.recipient.address}</span>
+              </>
+            )}
+            {o.recipient.igOrLine && (
+              <>
+                <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82" }}>IG</span>
+                <span style={{ fontFamily: F.mono, fontSize: 11, color: "#F5F4EF" }}>{o.recipient.igOrLine}</span>
+              </>
+            )}
+          </>
+        )}
+        {o.recipient.phone && (
+          <>
+            <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82" }}>電話</span>
+            <span style={{ fontFamily: F.mono, fontSize: 11, color: "#C9C9CF" }}>{o.recipient.phone}</span>
+          </>
+        )}
+      </div>
+
+      {/* 品項 */}
+      <div style={{ padding: "6px 10px", background: "#161619", borderLeft: `2px solid ${color}` }}>
+        <div style={{ fontFamily: F.mono, fontSize: 9, color: "#7A7A82", marginBottom: 2 }}>品項</div>
+        <div style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 12, color: "#F5F4EF" }}>{itemsSummary(o, menu)}</div>
+      </div>
+    </div>
+  );
+}
 
 // ── 當日顆數統計（純數字、不做上限比對） ────────────────────
 function BatchAtomsCount({ shipList, menu }: { shipList: Order[]; menu: Menu }) {
