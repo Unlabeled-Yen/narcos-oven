@@ -10,7 +10,9 @@ import type { ChannelId, ImportRun, Order } from "./domain/models";
 import { getActiveByChannels, getAll, upsertMany, markDisappeared } from "./db/orders";
 import { sanitizeDirtyDates } from "./db/sanitize";
 import { saveImportRun, getLatestUnresolved } from "./db/import-runs";
+import { checkImportSanity, type SanityReport } from "./domain/import-sanity";
 import { ImportSummaryModal } from "./ui/ImportSummaryModal";
+import { ImportSanityModal } from "./ui/ImportSanityModal";
 import { AppShell } from "./ui/AppShell";
 
 const menu = loadMenu(menuYamlText);
@@ -37,6 +39,12 @@ export default function App() {
   const [pendingRun, setPendingRun] = useState<ImportRun | null>(null);
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [syncLabel, setSyncLabel] = useState<string>("尚未匯入");
+  // Yen 2026-07-04：sanity check 若偵測「舊備份」訊號 · 匯入前彈確認
+  const [pendingImport, setPendingImport] = useState<null | {
+    report: SanityReport;
+    fileNames: string[];
+    proceed: () => Promise<void>;
+  }>(null);
 
   useEffect(() => {
     void refreshOrders();
@@ -87,37 +95,63 @@ export default function App() {
 
     const newAll = parsed.flatMap((p) => p.orders);
     const dbActive = await getActiveByChannels([...channelsTouched]);
-    const plan = planDiff(newAll, dbActive, runId, nowIso);
 
-    await upsertMany(plan.upserts);
-    if (plan.markDisappeared.length > 0) {
-      await markDisappeared(plan.markDisappeared, nowIso);
-    }
+    // Sanity check：付款回退 / 下單日回退 / 消失比例過高 → 匯入前彈警告
+    const report = checkImportSanity(newAll, dbActive);
 
-    const run: ImportRun = {
-      id: runId,
-      imported_at: nowIso,
-      source_files: parsed.map((p) => p.fileName),
-      channels_touched: [...channelsTouched],
-      diff: plan.diff,
-      resolutions: {},
-      fully_resolved_at:
-        plan.diff.disappeared.length + plan.diff.fields_changed.length === 0
-          ? nowIso
-          : null,
+    const doImport = async () => {
+      const plan = planDiff(newAll, dbActive, runId, nowIso);
+      await upsertMany(plan.upserts);
+      if (plan.markDisappeared.length > 0) {
+        await markDisappeared(plan.markDisappeared, nowIso);
+      }
+      const run: ImportRun = {
+        id: runId,
+        imported_at: nowIso,
+        source_files: parsed.map((p) => p.fileName),
+        channels_touched: [...channelsTouched],
+        diff: plan.diff,
+        resolutions: {},
+        fully_resolved_at:
+          plan.diff.disappeared.length + plan.diff.fields_changed.length === 0
+            ? nowIso
+            : null,
+      };
+      await saveImportRun(run);
+      setSyncLabel(`SYNC ${nowIso.slice(5, 16).replace("T", " ")}`);
+      if (run.fully_resolved_at === null) {
+        setPendingRun(run);
+      }
+      await refreshOrders();
     };
-    await saveImportRun(run);
-    setSyncLabel(`SYNC ${nowIso.slice(5, 16).replace("T", " ")}`);
 
-    if (run.fully_resolved_at === null) {
-      setPendingRun(run);
+    if (report.severity !== "ok") {
+      // 卡在 sanity modal 讓雇主拍板繼續 or 取消
+      setPendingImport({
+        report,
+        fileNames: parsed.map((p) => p.fileName),
+        proceed: doImport,
+      });
+      return;
     }
 
-    await refreshOrders();
+    await doImport();
   }, []);
 
   return (
     <>
+      {pendingImport && (
+        <ImportSanityModal
+          report={pendingImport.report}
+          fileNames={pendingImport.fileNames}
+          onProceed={async () => {
+            const p = pendingImport;
+            setPendingImport(null);
+            await p.proceed();
+          }}
+          onCancel={() => setPendingImport(null)}
+        />
+      )}
       {pendingRun && (
         <ImportSummaryModal
           run={pendingRun}

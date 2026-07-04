@@ -12,6 +12,12 @@ import type { ImportDiff, ImportResolution, ImportRun, Order } from "../domain/m
 import { addResolution } from "../db/import-runs";
 import { resolveDisappearance } from "../db/orders";
 import { db } from "../db/schema";
+import {
+  classifyDisappearance,
+  classifyChange,
+  groupDisappearances,
+  type DisappearBadge,
+} from "../domain/import-classify";
 
 const F = {
   anton: "'Anton',sans-serif",
@@ -311,14 +317,20 @@ function DisappearedSection({
   onDecide: (id: string, r: ImportResolution["resolution"]) => void;
 }) {
   const unresolved = orders.filter((o) => !resolutions[o.id]);
-  const [pendingBulk, setPendingBulk] = useState<null | "shipped" | "canceled" | "kept_active">(null);
+  const groups = groupDisappearances(unresolved);
+  const [pendingBulk, setPendingBulk] = useState<null | "shipped" | "canceled" | "kept_active" | "shipped_frozen">(null);
   const [busyBulk, setBusyBulk] = useState(false);
 
   const confirmBulk = async () => {
     if (!pendingBulk || busyBulk) return;
     setBusyBulk(true);
     try {
-      for (const o of unresolved) await onDecide(o.id, pendingBulk);
+      if (pendingBulk === "shipped_frozen") {
+        // 只把「likely_shipped」badge 的訂單標為已出貨
+        for (const o of groups.likely_shipped) await onDecide(o.id, "shipped");
+      } else {
+        for (const o of unresolved) await onDecide(o.id, pendingBulk);
+      }
     } finally {
       setBusyBulk(false);
       setPendingBulk(null);
@@ -328,7 +340,22 @@ function DisappearedSection({
   const pendingLabel =
     pendingBulk === "shipped" ? "已出貨" :
     pendingBulk === "canceled" ? "已取消" :
-    pendingBulk === "kept_active" ? "暫留" : "";
+    pendingBulk === "kept_active" ? "暫留" :
+    pendingBulk === "shipped_frozen" ? `已印標籤 ${groups.likely_shipped.length} 筆為已出貨` : "";
+
+  const bulkOptions: { key: string; label: string; color: string }[] = [];
+  if (groups.likely_shipped.length > 0) {
+    bulkOptions.push({
+      key: "shipped_frozen",
+      label: `一鍵處理已印標籤 ${groups.likely_shipped.length} 筆`,
+      color: C.green,
+    });
+  }
+  bulkOptions.push(
+    { key: "shipped",     label: "全部已出貨", color: C.green },
+    { key: "canceled",    label: "全部取消",   color: C.red },
+    { key: "kept_active", label: "全部暫留",   color: C.mut2 },
+  );
 
   return (
     <section>
@@ -337,18 +364,29 @@ function DisappearedSection({
         title={`消失待確認（${orders.length} 筆）`}
         hint="憲章 #9 必須逐一拍板"
         unresolvedCount={unresolved.length}
-        bulkOptions={[
-          { key: "shipped",     label: "全部已出貨", color: C.green },
-          { key: "canceled",    label: "全部取消",   color: C.red },
-          { key: "kept_active", label: "全部暫留",   color: C.mut2 },
-        ]}
+        bulkOptions={bulkOptions}
         pendingBulk={pendingBulk}
         pendingLabel={pendingLabel}
-        onBulk={(k) => setPendingBulk(k as "shipped" | "canceled" | "kept_active")}
+        onBulk={(k) => setPendingBulk(k as "shipped" | "canceled" | "kept_active" | "shipped_frozen")}
         onConfirm={() => void confirmBulk()}
         onCancel={() => setPendingBulk(null)}
         busy={busyBulk}
       />
+
+      {/* 分類摘要條 · 讓雇主快速看訊號分佈 */}
+      {unresolved.length > 0 && (
+        <div className="flex flex-wrap" style={{ gap: 8, marginBottom: 10 }}>
+          {groups.likely_shipped.length > 0 && (
+            <BadgeChip label={`🟢 高機率已出貨 ${groups.likely_shipped.length}`} color={C.green} />
+          )}
+          {groups.unclear.length > 0 && (
+            <BadgeChip label={`🟡 待確認 ${groups.unclear.length}`} color={C.acc} />
+          )}
+          {groups.suspicious.length > 0 && (
+            <BadgeChip label={`🔴 疑點 ${groups.suspicious.length}`} color={C.red} />
+          )}
+        </div>
+      )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {orders.map((o) => (
@@ -364,6 +402,25 @@ function DisappearedSection({
   );
 }
 
+function BadgeChip({ label, color }: { label: string; color: string }) {
+  return (
+    <span
+      style={{
+        fontFamily: F.mono, fontSize: 10, color,
+        border: `1px solid ${color}`, padding: "3px 9px", letterSpacing: ".05em",
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+const BADGE_COLOR: Record<DisappearBadge, string> = {
+  likely_shipped: C.green,
+  unclear:        C.acc,
+  suspicious:     C.red,
+};
+
 function DisappearedCard({
   order: o,
   decision,
@@ -375,6 +432,8 @@ function DisappearedCard({
 }) {
   const meta = CHANNEL_META[o.channel] ?? { label: o.channel, color: C.mut2 };
   const frozen = o.frozen_after_label_print;
+  const info = classifyDisappearance(o);
+  const badgeColor = BADGE_COLOR[info.badge];
   return (
     <div
       style={{
@@ -398,6 +457,13 @@ function DisappearedCard({
                 🖨 已印標籤
               </span>
             )}
+            {/* 訊號 badge */}
+            <span
+              title={info.hint}
+              style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 9, color: badgeColor, border: `1px solid ${badgeColor}`, padding: "2px 7px", letterSpacing: ".05em" }}
+            >
+              {info.title}
+            </span>
           </div>
           <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut3, marginTop: 4, letterSpacing: ".05em" }}>
             {o.order_date && <><span style={{ color: C.mut2 }}>下單 {shortDate(o.order_date)}</span> · </>}
@@ -413,17 +479,22 @@ function DisappearedCard({
             kept_active: "⏸ 暫留",
           }}
           actions={[
-            { key: "shipped",     label: "1 已出貨", tone: "primary" },
+            { key: "shipped",     label: "1 已出貨", tone: info.recommend === "shipped" ? "primary" : "neutral" },
             { key: "canceled",    label: "2 已取消", tone: "danger"  },
-            { key: "kept_active", label: "3 暫留",   tone: "neutral" },
+            { key: "kept_active", label: "3 暫留",   tone: info.recommend === "kept_active" ? "primary" : "neutral" },
           ]}
           onPick={(k) => onDecide(o.id, k as ImportResolution["resolution"])}
         />
       </div>
+      {!decision && (
+        <div style={{ marginTop: 6, fontFamily: F.mono, fontSize: 10, color: C.mut3, letterSpacing: ".03em" }}>
+          {info.hint}
+        </div>
+      )}
       {frozen && !decision && (
         <div
           style={{
-            marginTop: 8, padding: "6px 10px",
+            marginTop: 6, padding: "6px 10px",
             background: "#2a1a06", border: `1px solid ${C.orange}`,
             fontFamily: F.mono, fontSize: 10, color: C.orange,
           }}
@@ -509,6 +580,10 @@ function ChangedCard({
   const lastChange = o.changes[o.changes.length - 1];
   if (!lastChange) return null;
   const meta = CHANNEL_META[o.channel] ?? { label: o.channel, color: C.mut2 };
+  const info = classifyChange(lastChange);
+
+  const acceptTone: "primary" | "neutral" = info.recommend === "accept" || info.recommend === "neutral" ? "primary" : "neutral";
+  const rejectTone: "primary" | "neutral" = info.recommend === "reject" ? "primary" : "neutral";
 
   return (
     <div
@@ -528,6 +603,11 @@ function ChangedCard({
             </span>
             <span style={{ fontFamily: F.mono, fontSize: 11, color: C.mut2 }}>{o.id}</span>
             <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 13, color: C.ink }}>{o.recipient.name ?? "—"}</span>
+            {info.recommend === "reject" && (
+              <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 9, color: C.orange, border: `1px solid ${C.orange}`, padding: "2px 7px", letterSpacing: ".05em" }}>
+                ⚠ 建議保留舊
+              </span>
+            )}
           </div>
           <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut3, marginTop: 4, letterSpacing: ".05em" }}>
             {o.order_date && <><span style={{ color: C.mut2 }}>下單 {shortDate(o.order_date)}</span> · </>}
@@ -542,8 +622,8 @@ function ChangedCard({
             reprint:       "🖨 重印",
           }}
           actions={[
-            { key: "accept_change", label: "1 接受變動", tone: "primary" },
-            { key: "reject_change", label: "2 保留舊",   tone: "neutral" },
+            { key: "accept_change", label: "1 接受變動", tone: acceptTone },
+            { key: "reject_change", label: "2 保留舊",   tone: rejectTone },
             ...(o.frozen_after_label_print
               ? [{ key: "reprint", label: "3 接受+重印", tone: "warn" as const }]
               : []),
@@ -551,6 +631,31 @@ function ChangedCard({
           onPick={(k) => onDecide(o.id, k as ImportResolution["resolution"])}
         />
       </div>
+
+      {/* 訊號 tags */}
+      {info.signals.length > 0 && (
+        <div className="flex flex-wrap" style={{ gap: 6, marginBottom: 8 }}>
+          {info.signals.map((s, i) => (
+            <span
+              key={i}
+              style={{
+                fontFamily: F.mono, fontSize: 10,
+                color: s.severity === "warn" ? C.orange : C.acc,
+                background: s.severity === "warn" ? "#2a1a06" : "#241a06",
+                border: `1px solid ${s.severity === "warn" ? C.orange : C.acc}`,
+                padding: "3px 8px",
+              }}
+            >
+              {s.message}
+            </span>
+          ))}
+        </div>
+      )}
+      {info.recommendReason && (
+        <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut2, marginBottom: 8, letterSpacing: ".03em" }}>
+          → {info.recommendReason}
+        </div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         <DiffPane title="舊值" color={C.red} rows={Object.entries(lastChange.fields).map(([k, v]) => [k, String(v.from)])} />
