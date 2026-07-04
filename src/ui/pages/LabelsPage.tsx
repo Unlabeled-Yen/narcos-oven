@@ -110,14 +110,7 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
     );
   }, [batchOrders]);
 
-  // 全域待排單數（跨批次、給閘門狀態用；憲章 #9 待排未清空前不應產出）
-  const pendingCount = useMemo(() => {
-    return orders.filter(
-      (o) =>
-        (o.status === "confirmed" || o.status === "pending_batch_date") &&
-        (o.assignment_source === "pending" || o.batchDate === null)
-    ).length;
-  }, [orders]);
+  // pendingCount 已於 2026-07-04 拿掉（Yen 決策不再顯示右上「N 單待排」badge）
 
   const isEmpty = shippingBatchDates.length === 0 || allLabels.length === 0;
 
@@ -157,8 +150,8 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
           <BatchDetailPanel
             shipISO={selectedBatch}
             shipList={batchShipList}
-            pendingCount={pendingCount}
             menu={menu}
+            refreshOrders={refreshOrders}
           />
         </div>
       )}

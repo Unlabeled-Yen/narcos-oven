@@ -18,7 +18,6 @@ import {
   computeTopProducts,
   computeChannelShare,
   computeRepeatCustomers,
-  computeAtomTotals,
   computeHealthChecks,
 } from "../../domain/compute-dashboard";
 import type { PageProps } from "./types";
@@ -87,13 +86,10 @@ export function DashboardPage({ orders, menu }: PageProps) {
   const topProducts = useMemo(() => computeTopProducts(orders), [orders]);
   const channelShare = useMemo(() => computeChannelShare(orders), [orders]);
   const repeatStats = useMemo(() => computeRepeatCustomers(orders), [orders]);
-  const atomTotals = useMemo(() => computeAtomTotals(orders), [orders]);
   const healthChecks = useMemo(() => computeHealthChecks(orders), [orders]);
 
   const batchDateDisplay = batchKpi.batchDate ? batchKpi.batchDate.slice(5).replace("-", "/") : "—";
   const topMax = topProducts[0]?.qty ?? 1;
-  const maxAtomTotal = atomTotals[0]?.total ?? 1;
-  const totalAtomSum = atomTotals.reduce((s, a) => s + a.total, 0);
   const maxRevenue = Math.max(...monthTrend.map((m) => m.revenue), 1);
   const now = new Date();
   const currentYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -311,44 +307,7 @@ export function DashboardPage({ orders, menu }: PageProps) {
           })}
         </PanelBox>
 
-        {/* 原物料出爐總量 */}
-        <PanelBox>
-          <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 17, color: "#F5F4EF", marginBottom: 18 }}>
-            原物料出爐總量 <span style={{ fontFamily: F.mono, fontWeight: 400, fontSize: 11, color: "#6C6C74" }}>atom · 本月</span>
-          </div>
-          {atomTotals.length === 0 ? <EmptyRow /> : (
-            <>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 20px" }}>
-                {atomTotals.slice(0, 8).map((a, i) => {
-                  const isLead = i === 0;
-                  const barW = Math.round((a.total / maxAtomTotal) * 100);
-                  const unit = menu.atoms[a.atomId]?.unit ?? "顆";
-                  return (
-                    <div key={a.atomId}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-                        <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 12, color: "#C9C9CF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "55%" }}>
-                          {getDisplayName(a.atomId, menu)}
-                        </span>
-                        <span style={{ fontFamily: F.mono, fontSize: 12, color: isLead ? "var(--acc,#F5D400)" : "#8A8A93" }}>
-                          {a.total} {unit}
-                        </span>
-                      </div>
-                      <div style={{ height: 8, background: "#161619" }}>
-                        <div style={{ width: `${barW}%`, height: 8, background: isLead ? "var(--acc,#F5D400)" : "#3E3E46" }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px solid #26262C", display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: "#8A8A93" }}>本月出爐合計</span>
-                <span style={{ fontFamily: F.anton, fontSize: 26, color: "#F5F4EF" }}>
-                  {totalAtomSum} <span style={{ fontFamily: F.mono, fontSize: 12, color: "#6C6C74" }}>顆+罐</span>
-                </span>
-              </div>
-            </>
-          )}
-        </PanelBox>
+        {/* 原物料出爐總量 panel 已於 2026-07-04 拿掉（Yen 決策不再需要 atom 級備料統計） */}
       </div>
       </div>
     </div>

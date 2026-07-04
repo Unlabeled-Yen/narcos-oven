@@ -7,9 +7,9 @@
  * 用途：排程完畢、開始製作前，讓雇主一次核對當週工作內容、對貨用。
  * 掛在「出貨標籤」頁頂端，跟印標籤流程串在一起。
  */
+import { useState } from "react";
 import type { Menu, Order } from "../../domain/models";
-import { getDisplayName } from "../../domain/menu";
-import { accumulateAtoms } from "../../domain/production-time";
+import { db } from "../../db/schema";
 
 const F = {
   anton: "'Anton',sans-serif",
@@ -31,18 +31,43 @@ function shortDate(raw: string): string {
   return raw.slice(0, 10);
 }
 
-// ── 完整 panel：頭 + 警示膠帶 + 兩欄 ──────────────────────────
+// ── 完整 panel：頭 + 警示膠帶 + SKU 統計 · Yen 2026-07-04：
+//   · 拿掉 pendingCount「N 單待排」badge
+//   · 拿掉「備料原子總量」欄
+//   · 加「全部確認出貨」loud button（把批次內訂單 status 改 shipped）
 export function BatchDetailPanel({
   shipISO,
   shipList,
-  pendingCount,
   menu,
+  refreshOrders,
 }: {
   shipISO: string;
   shipList: Order[];
-  pendingCount: number;
   menu: Menu;
+  refreshOrders: () => Promise<void>;
 }) {
+  const [confirming, setConfirming] = useState(false);
+  const [confirmMsg, setConfirmMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // 只考慮尚未 shipped 的訂單（idempotent · 已 shipped 的跳過）
+  const unshippedIds = shipList.filter((o) => o.status !== "shipped").map((o) => o.id);
+  async function confirmShipAll() {
+    if (confirming || unshippedIds.length === 0) return;
+    setConfirming(true);
+    try {
+      await db.transaction("rw", db.orders, async () => {
+        for (const id of unshippedIds) {
+          await db.orders.update(id, { status: "shipped", last_seen_at: new Date().toISOString() });
+        }
+      });
+      await refreshOrders();
+      setConfirmMsg({ ok: true, text: `✓ ${unshippedIds.length} 單已標記為出貨` });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setConfirmMsg({ ok: false, text: `❌ 失敗：${msg}` });
+    } finally {
+      setConfirming(false);
+    }
+  }
   return (
     <div className="batch-detail-panel print-area" style={{ background: "#0F0F12", border: "1px solid #26262C" }}>
       {/* Print CSS · 只印本 panel · 其他 body 內容全 hidden（見 index.css .print-area）*/}
@@ -80,34 +105,58 @@ export function BatchDetailPanel({
             {WD[new Date(shipISO).getDay()]} · {shipList.length} 單 · 排程完 → 對貨 → 印標
           </span>
         </div>
-        <div className="flex items-center flex-wrap" style={{ gap: 10 }}>
-          <span
+        <div className="flex items-center flex-wrap" style={{ gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => void confirmShipAll()}
+            disabled={confirming || unshippedIds.length === 0}
+            className="no-print"
+            title={unshippedIds.length === 0 ? "本批訂單全部已出貨" : `將 ${unshippedIds.length} 單標記為出貨、進出貨類群`}
             style={{
-              fontFamily: F.tc,
-              fontWeight: 900,
-              fontSize: 12,
-              color: "#111",
-              background: pendingCount === 0 ? "#43B23C" : "#E5622A",
-              padding: "6px 12px",
+              fontFamily: F.tc, fontWeight: 900, fontSize: 13,
+              color: unshippedIds.length === 0 ? "#6C6C74" : "#111",
+              background: unshippedIds.length === 0 ? "transparent" : "#43B23C",
+              border: `1px solid ${unshippedIds.length === 0 ? "#26262C" : "#43B23C"}`,
+              padding: "8px 16px",
+              cursor: confirming || unshippedIds.length === 0 ? "not-allowed" : "pointer",
+              letterSpacing: ".06em",
             }}
           >
-            {pendingCount === 0 ? "✓ 待排已清空 · 可產出" : `⚠ ${pendingCount} 單待排`}
-          </span>
+            {confirming
+              ? "更新中…"
+              : unshippedIds.length === 0
+              ? "✓ 已全部出貨"
+              : `✓ 全部確認出貨（${unshippedIds.length}）`}
+          </button>
           <button
             type="button"
             onClick={() => window.print()}
             className="no-print"
             title="列印本批出貨對帳單 · 給出貨人員對貨用"
-            style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 11, color: "#111", background: "var(--acc,#F5D400)", border: "none", padding: "6px 12px", cursor: "pointer", letterSpacing: ".06em" }}
+            style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 11, color: "#111", background: "var(--acc,#F5D400)", border: "none", padding: "8px 14px", cursor: "pointer", letterSpacing: ".06em" }}
           >
             🖨 列印對帳單
           </button>
         </div>
       </div>
+      {confirmMsg && (
+        <div
+          className="no-print"
+          style={{
+            margin: "0 20px",
+            padding: "8px 12px",
+            background: confirmMsg.ok ? "#0f2410" : "#2a1010",
+            border: `1px solid ${confirmMsg.ok ? "#43B23C" : "#E5352B"}`,
+            fontFamily: F.tc, fontWeight: 700, fontSize: 12,
+            color: confirmMsg.ok ? "#43B23C" : "#E5352B",
+          }}
+        >
+          {confirmMsg.text}
+        </div>
+      )}
       <div style={{ height: 7, background: "repeating-linear-gradient(45deg,var(--acc,#F5D400) 0 14px,#111 14px 28px)" }} />
-      <div className="stats-block" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 16, padding: 16 }}>
+      <div className="stats-block" style={{ padding: 16 }}>
         <BatchSkuCount shipList={shipList} menu={menu} />
-        <BatchAtomsPreparation shipList={shipList} menu={menu} />
       </div>
       {/* Yen 2026-07-03：出貨人員對帳用訂單詳情 · 通路分組卡片 */}
       <BatchOrdersTable shipList={shipList} menu={menu} />
@@ -333,26 +382,5 @@ function OrderCard({ order: o, menu, color }: { order: Order; menu: Menu; color:
   );
 }
 
-// ── BatchAtomsCount 已由 BatchSkuCount 取代（Yen 2026-07-04：按 SKU 組合統計、非單品項 atom） ──
-
-// ── 備料原子總量（保留 · atom 級 · 給備料師傅看要多少顆） ──
-function BatchAtomsPreparation({ shipList, menu }: { shipList: Order[]; menu: Menu }) {
-  const totals = accumulateAtoms(shipList);
-  const rows = [...totals.entries()].filter(([, q]) => q > 0).sort((a, b) => b[1] - a[1]);
-  return (
-    <div>
-      <div style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".14em", marginBottom: 10 }}>
-        備料原子總量 <span style={{ color: "#4a4a52" }}>· 配方待雇主補(R3-4)</span>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, fontFamily: F.mono, fontSize: 12 }}>
-        {rows.length === 0 && <span style={{ color: "#6C6C74" }}>—</span>}
-        {rows.map(([atom, qty]) => (
-          <div key={atom} className="flex justify-between" style={{ padding: "7px 11px", background: "#161619" }}>
-            <span style={{ color: "#C9C9CF" }}>{getDisplayName(atom, menu)}</span>
-            <span style={{ color: "#F5F4EF", fontWeight: 700 }}>{qty}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+// BatchAtomsCount / BatchAtomsPreparation 已於 2026-07-04 拿掉
+// · Yen 決策：不需要 atom 級「備料原子總量」· 只留 SKU 級「訂單組合統計」
