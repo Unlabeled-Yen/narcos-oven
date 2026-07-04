@@ -1,13 +1,14 @@
 /**
- * 週級排程鎖 · localStorage
+ * 排程鎖 · localStorage · Yen 2026-07-04 改為「單日鎖」語意
  *
- * Yen 決策（2026-07-03）：整週鎖 · lock 後卡片變唯讀、完全禁拖、日欄 header 也禁切換
- *   key 用 weekStart ISO（週日開始，跟 SchedulePage 的 weekISO[0] 一致）
- *   持久層用 localStorage（跟 dayOverrides 同層）· 未來要跨裝置再遷 IndexedDB
+ * 舊：整週鎖 · key 用 weekStart ISO
+ * 新：單日鎖 · key 用該日 ISO（通常是 shipping day）
+ *   雇主可以只鎖某個出貨日的排程（防手殘動到）· 其他日仍可調整
+ *   持久層用 localStorage · localStorage key 沿用 narcos-week-locks（相容舊 key · 不遷移）
  */
 const KEY = "narcos-week-locks";
 
-export function loadWeekLocks(): Record<string, true> {
+export function loadDayLocks(): Record<string, true> {
   try {
     const raw = localStorage.getItem(KEY);
     return raw ? JSON.parse(raw) : {};
@@ -16,19 +17,25 @@ export function loadWeekLocks(): Record<string, true> {
   }
 }
 
-export function isWeekLocked(weekStartISO: string): boolean {
-  if (!weekStartISO) return false;
-  return !!loadWeekLocks()[weekStartISO];
+/** iso 是某一天（通常是 shipping day）· 該日是否鎖定 */
+export function isDayLocked(iso: string): boolean {
+  if (!iso) return false;
+  return !!loadDayLocks()[iso];
 }
 
-export function setWeekLocked(weekStartISO: string, locked: boolean): void {
-  if (!weekStartISO) return;
-  const map = loadWeekLocks();
-  if (locked) map[weekStartISO] = true;
-  else delete map[weekStartISO];
+export function setDayLocked(iso: string, locked: boolean): void {
+  if (!iso) return;
+  const map = loadDayLocks();
+  if (locked) map[iso] = true;
+  else delete map[iso];
   try {
     localStorage.setItem(KEY, JSON.stringify(map));
   } catch {
-    /* quota 錯不 loud，讓 UI 端自行讀 loadWeekLocks 判斷 */
+    /* quota 錯不 loud、讓 UI 端自行讀 loadDayLocks 判斷 */
   }
 }
+
+// legacy alias · 舊 code 呼叫這些函式名仍可用
+export const loadWeekLocks = loadDayLocks;
+export const isWeekLocked = isDayLocked;
+export const setWeekLocked = setDayLocked;

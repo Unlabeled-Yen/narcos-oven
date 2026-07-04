@@ -9,7 +9,7 @@
 import { useMemo, useState } from "react";
 import { makeDayTypeOf, loadDayOverrides } from "../../domain/day-type";
 import { computeBatchRange, findWeekAnchor } from "../../domain/batch-range";
-import { isWeekLocked } from "../../db/week-locks";
+import { isDayLocked } from "../../db/week-locks";
 import type { PageProps } from "./types";
 
 const F = {
@@ -51,8 +51,9 @@ export function WorksheetPage({ orders, menu }: PageProps) {
   const weekStart = useMemo(() => mondayOf(today, weekOffset), [today, weekOffset]);
   const week = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const weekISO = week.map(toISO);
-  const weekLockKey = weekISO[0]!;
-  const locked = isWeekLocked(weekLockKey);
+  // Yen 2026-07-04：改為單日鎖 · 用 anchor（本週最後 shipping day）的鎖狀態
+  const anchor0 = weekISO.filter((iso) => makeDayTypeOf(menu, loadDayOverrides())(iso) === "ship").pop() ?? null;
+  const locked = anchor0 ? isDayLocked(anchor0) : false;
 
   const dayOverrides = loadDayOverrides();
   const dayTypeOf = makeDayTypeOf(menu, dayOverrides);

@@ -12,7 +12,7 @@ import type { Menu, Order } from "../../domain/models";
 import { getDisplayName } from "../../domain/menu";
 import { accumulateAtoms } from "../../domain/production-time";
 import { upsertOrder, clearAll } from "../../db/orders";
-import { isWeekLocked, setWeekLocked } from "../../db/week-locks";
+import { isDayLocked, setDayLocked } from "../../db/week-locks";
 import type { PageProps } from "./types";
 
 const F = {
@@ -104,12 +104,18 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
     [monday]
   );
   const weekISO = week.map(toISO);
-  const weekLockKey = weekISO[0]!;
-  const weekLocked = useMemo(() => isWeekLocked(weekLockKey), [weekLockKey, lockTick]);
-  function toggleWeekLock() {
-    setWeekLocked(weekLockKey, !weekLocked);
+  // Yen 2026-07-04：改為單日鎖 · dayLocked(iso) 每個 shipping day 各自鎖
+  //   lockTick 強制重讀 localStorage
+  const dayLocked = (iso: string) => {
+    void lockTick;
+    return isDayLocked(iso);
+  };
+  function toggleDayLock(iso: string) {
+    setDayLocked(iso, !isDayLocked(iso));
     cycleLock();
   }
+  // 給拖曳 handler 用：任何 shipping day 有鎖就視為 locked
+  const anyShipDayLocked = () => weekISO.some((iso) => dayLocked(iso));
 
   const orderById = useMemo(() => new Map(orders.map((o) => [o.id, o])), [orders]);
 
@@ -440,12 +446,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
     try { localStorage.setItem("narcos-day-overrides", JSON.stringify(nextOverrides)); }
     catch { /* quota、無害 */ }
   }
-  function resetRuleOverride() {
-    setDayOverrides({});
-    try { localStorage.removeItem("narcos-day-overrides"); }
-    catch { /* noop */ }
-  }
-  const hasOverrides = Object.keys(dayOverrides).length > 0;
+  // resetRuleOverride / hasOverrides 已於 2026-07-04 拿掉（Yen 決策 · 沒有清 N 筆 button）
 
   // 當週批次 range = 本週最後 shipping 為 anchor · 往前掃到上一個 shipping break
   //   工作日納入 · 出貨日納入（本週有多個 shipping 時前面也算）· 休息日跳過但繼續掃
@@ -583,35 +584,10 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
       <div className="px-6 py-2" style={{ display: "grid", gridTemplateColumns: "2.7fr 1fr", gridTemplateRows: "minmax(0, 1fr)", gap: 12, flex: 1, minHeight: 0 }}>
         {/* WEEK GRID */}
         <div style={{ background: "#0F0F12", border: "1px solid #26262C", padding: 16, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
-          {/* Grid header 條：工具列（月/週 · range · 導覽 · 診斷）+ 清 N 自訂 · 拿掉拖曳提示與 title 讓 grid 拉高 */}
+          {/* Grid header 條：只保留 toolbarNav · Yen 2026-07-04 拿掉「清 N 自訂」+「鎖定本週」
+              · 鎖定改為 per shipping day · 加在每個出貨批 cell 頂端 */}
           <div className="flex justify-between items-center flex-wrap" style={{ marginBottom: 10, gap: 8, flexShrink: 0 }}>
             {toolbarNav}
-            <div className="flex items-center" style={{ gap: 8 }}>
-              {hasOverrides && !weekLocked && (
-                <button
-                  type="button"
-                  onClick={resetRuleOverride}
-                  title="清空所有自訂日規則、回到 menu.yaml 預設"
-                  style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", background: "transparent", border: "1px solid #3a3a40", padding: "3px 8px", cursor: "pointer" }}
-                >
-                  ⤺ 清 {Object.keys(dayOverrides).length} 筆自訂
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={toggleWeekLock}
-                title={weekLocked ? "解鎖本週 · 允許拖曳與切換日類型" : "鎖定本週 · 排程確定後鎖住防手殘"}
-                style={{
-                  fontFamily: F.tc, fontWeight: 900, fontSize: 11,
-                  color: weekLocked ? "#111" : "#F5D400",
-                  background: weekLocked ? "var(--acc,#F5D400)" : "transparent",
-                  border: `1px solid ${weekLocked ? "var(--acc,#F5D400)" : "#F5D400"}`,
-                  padding: "5px 10px", cursor: "pointer", letterSpacing: ".08em",
-                }}
-              >
-                {weekLocked ? "🔒 已鎖定 · 解鎖" : "🔓 鎖定本週"}
-              </button>
-            </div>
           </div>
 
           {/* Yen 2026-07-04 決策：拿掉工作日日欄、只留出貨日 cell + 本週匯集桶
@@ -621,24 +597,25 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
               const iso = toISO(d);
               const t = dayTypeOf(iso);
               const isShip = t === "ship";
+              const locked = isShip && dayLocked(iso);
               return (
                 <button
                   key={iso}
                   type="button"
-                  onClick={weekLocked ? undefined : () => cycleDayType(iso)}
-                  disabled={weekLocked}
-                  title={weekLocked ? "🔒 本週已鎖定" : "點擊：休息 → 工作 → 出貨"}
+                  onClick={locked ? undefined : () => cycleDayType(iso)}
+                  disabled={locked}
+                  title={locked ? "🔒 此出貨日已鎖定 · 先解鎖" : "點擊：休息 → 工作 → 出貨"}
                   style={{
                     fontFamily: F.mono, fontSize: 10, letterSpacing: ".05em",
                     padding: "5px 10px",
                     color: isShip ? "#111" : "#8A8A93",
                     background: isShip ? "var(--acc,#F5D400)" : "transparent",
                     border: `1px solid ${isShip ? "var(--acc,#F5D400)" : "#3a3a40"}`,
-                    cursor: weekLocked ? "not-allowed" : "pointer",
+                    cursor: locked ? "not-allowed" : "pointer",
                     fontWeight: isShip ? 900 : 400,
                   }}
                 >
-                  {WD[d.getDay()]} {d.getDate()}{isShip ? " · 出貨" : ""}
+                  {WD[d.getDay()]} {d.getDate()}{isShip ? " · 出貨" : ""}{locked ? " · 🔒" : ""}
                 </button>
               );
             })}
@@ -653,6 +630,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
               const d = new Date(iso);
               const list = assignedByDay.get(iso) ?? [];
               const isOver = overDay === iso;
+              const locked = dayLocked(iso);
               return (
                 <div
                   key={iso}
@@ -665,21 +643,37 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                     boxShadow: "0 0 0 3px rgba(245,212,0,.12)",
                   }}
                 >
-                  <div style={{ padding: "8px 12px", background: "var(--acc,#F5D400)", display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+                  <div style={{ padding: "8px 12px", background: "var(--acc,#F5D400)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 12, color: "#111" }}>
                       {mdOf(iso)} · {WD[d.getDay()]} · 出貨批
                     </span>
-                    <span className="flex items-baseline" style={{ gap: 4 }}>
-                      <span style={{ fontFamily: F.anton, fontSize: 18, color: "#111" }}>{list.length}</span>
-                      <span style={{ fontFamily: F.mono, fontSize: 10, color: "#111" }}>單</span>
-                    </span>
+                    <div className="flex items-center" style={{ gap: 8 }}>
+                      <span className="flex items-baseline" style={{ gap: 4 }}>
+                        <span style={{ fontFamily: F.anton, fontSize: 18, color: "#111" }}>{list.length}</span>
+                        <span style={{ fontFamily: F.mono, fontSize: 10, color: "#111" }}>單</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => toggleDayLock(iso)}
+                        title={locked ? `解鎖 ${mdOf(iso)}` : `鎖定 ${mdOf(iso)} · 排定後防手殘`}
+                        style={{
+                          fontFamily: F.mono, fontSize: 11,
+                          color: locked ? "#F5D400" : "#111",
+                          background: locked ? "#111" : "transparent",
+                          border: `1.5px solid #111`,
+                          padding: "2px 8px", cursor: "pointer", lineHeight: 1,
+                        }}
+                      >
+                        {locked ? "🔒" : "🔓"}
+                      </button>
+                    </div>
                   </div>
 
                   <div
-                    data-day={weekLocked ? undefined : iso}
-                    onDragOver={weekLocked ? undefined : (e) => { e.preventDefault(); setOverDay(iso); }}
-                    onDragLeave={weekLocked ? undefined : () => setOverDay((x) => (x === iso ? null : x))}
-                    onDrop={weekLocked ? undefined : (e) => { e.preventDefault(); if (dragId) attemptDrop(dragId, iso); }}
+                    data-day={locked ? undefined : iso}
+                    onDragOver={locked ? undefined : (e) => { e.preventDefault(); setOverDay(iso); }}
+                    onDragLeave={locked ? undefined : () => setOverDay((x) => (x === iso ? null : x))}
+                    onDrop={locked ? undefined : (e) => { e.preventDefault(); if (dragId) attemptDrop(dragId, iso); }}
                     style={{
                       flex: 1,
                       minHeight: 0,
@@ -704,18 +698,18 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                       return (
                         <div
                           key={o.id}
-                          draggable={!weekLocked}
-                          onDragStart={weekLocked ? undefined : () => setDragId(o.id)}
-                          onDragEnd={weekLocked ? undefined : (e) => {
+                          draggable={!locked}
+                          onDragStart={locked ? undefined : () => setDragId(o.id)}
+                          onDragEnd={locked ? undefined : (e) => {
                             const target = document.elementFromPoint(e.clientX, e.clientY);
                             const inZone = target?.closest?.("[data-day]");
                             if (!inZone) void commitAssign(o.id, null);
                             setDragId(null);
                             setOverDay(null);
                           }}
-                          title={weekLocked ? `🔒 本週已鎖定 · ${o.id}` : o.id}
+                          title={locked ? `🔒 ${mdOf(iso)} 已鎖 · ${o.id}` : o.id}
                           style={{
-                            cursor: weekLocked ? "not-allowed" : "grab",
+                            cursor: locked ? "not-allowed" : "grab",
                             background: "#241c00",
                             border: "1px solid #4a3f00",
                             borderLeft: "3px solid var(--acc,#F5D400)",
@@ -758,8 +752,8 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                       );
                     })}
                     {list.length === 0 && (
-                      <div style={{ margin: "auto", textAlign: "center", fontFamily: F.mono, fontSize: 10, color: weekLocked ? "#3a3a40" : "#7a6600" }}>
-                        {weekLocked ? "🔒 已鎖" : "＋ 拖曳排入本批"}
+                      <div style={{ margin: "auto", textAlign: "center", fontFamily: F.mono, fontSize: 10, color: locked ? "#3a3a40" : "#7a6600" }}>
+                        {locked ? "🔒 已鎖" : "＋ 拖曳排入本批"}
                       </div>
                     )}
                   </div>
@@ -880,11 +874,11 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
               {pendingFiltered.map((o) => (
                 <div
                   key={o.id}
-                  draggable={!weekLocked}
-                  onDragStart={weekLocked ? undefined : () => setDragId(o.id)}
-                  onDragEnd={weekLocked ? undefined : () => { setDragId(null); setOverDay(null); }}
-                  title={weekLocked ? "🔒 本週已鎖定 · 先解鎖再排入" : undefined}
-                  style={{ cursor: weekLocked ? "not-allowed" : "grab", background: "#111114", border: "1px solid #26262C", padding: "10px 11px", opacity: dragId === o.id ? 0.35 : 1 }}
+                  draggable={!anyShipDayLocked()}
+                  onDragStart={anyShipDayLocked() ? undefined : () => setDragId(o.id)}
+                  onDragEnd={anyShipDayLocked() ? undefined : () => { setDragId(null); setOverDay(null); }}
+                  title={anyShipDayLocked() ? "🔒 有出貨日已鎖 · 先解鎖再排入" : undefined}
+                  style={{ cursor: anyShipDayLocked() ? "not-allowed" : "grab", background: "#111114", border: "1px solid #26262C", padding: "10px 11px", opacity: dragId === o.id ? 0.35 : 1 }}
                 >
                   <div className="flex justify-between items-center" style={{ gap: 6 }}>
                     <span style={{ fontFamily: F.mono, fontSize: 11, color: "#C9C9CF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.id}</span>
