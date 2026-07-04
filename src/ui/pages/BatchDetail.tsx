@@ -52,16 +52,20 @@ export function BatchDetailPanel({
             color: #000 !important; border-color: #000 !important;
           }
           .batch-detail-panel { border: 1px solid #000 !important; }
-          /* Yen 2026-07-04：跨頁保護 · 每張訂單卡完整呈現、每通路組儘量在同頁 */
-          .batch-detail-panel .order-card { break-inside: avoid; page-break-inside: avoid; }
-          .batch-detail-panel .channel-group { break-inside: avoid-page; page-break-inside: avoid; }
-          .batch-detail-panel .channel-group > div:first-child {
-            break-after: avoid; page-break-after: avoid;
+          /* Yen 2026-07-04 空間利用率 fix：只保留單張訂單卡不斷半
+             · channel-group 不再 avoid（允許自然跨頁填滿）
+             · header 也不再強制跟下一卡黏（避免推到下頁留空白）
+             · stats-block 也放寬（若太長讓它自然分頁）*/
+          .batch-detail-panel .order-card {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
           }
-          .batch-detail-panel .stats-block { break-inside: avoid; page-break-inside: avoid; }
           /* 「複製」互動按鈕 print 時隱藏、改印純文字 */
           .batch-detail-panel .only-print { display: inline !important; }
           .batch-detail-panel .no-print { display: none !important; }
+          /* 拿掉最後空白頁：確保 panel 底部沒 margin 尾巴 */
+          .batch-detail-panel { margin-bottom: 0 !important; padding-bottom: 8px !important; }
+          .batch-detail-panel > *:last-child { margin-bottom: 0 !important; padding-bottom: 0 !important; }
         }
       `}</style>
       <div className="flex items-center justify-between flex-wrap" style={{ gap: 12, padding: "16px 20px 12px" }}>
