@@ -67,7 +67,15 @@
     overflow: visible !important;
   }
   body:not(.printing-labels) .print-area .no-print { display: none !important; }
+  /* 核心 fix（Yen 2026-07-04）：所有子元素背景刷白、顏色刷黑、邊框刷黑
+     · 讓深色 web UI 印出來變乾淨的紙本文件、不是黑白反轉暗片 */
   body:not(.printing-labels) .print-area * {
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    color: #000 !important;
+    border-color: #000 !important;
+    box-shadow: none !important;
     max-height: none !important;
     overflow: visible !important;
   }
