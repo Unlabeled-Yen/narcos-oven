@@ -144,55 +144,59 @@ export function WorksheetPage({ orders, menu }: PageProps) {
           </div>
         </div>
 
-        {/* 簡潔列印 header（Yen 2026-07-03：不要品牌 nav 設計元素） */}
-        <div style={{ marginBottom: 16, borderBottom: "2px solid #26262C", paddingBottom: 10 }}>
-          <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 18, color: "#F5F4EF" }}>
-            當週工單 {anchor ? `· ${mdOf(anchor)}批次` : ""}
-          </div>
-          <div style={{ fontFamily: F.mono, fontSize: 10, color: "#8A8A93", marginTop: 3 }}>
-            {anchor
-              ? <>製作 range {rangeISO[0] ? mdOf(rangeISO[0]) : "—"} – {mdOf(anchor)}（{rangeISO.length} 天）</>
-              : <>本週無出貨日</>}
+        {/* 簡潔列印 header（Yen 2026-07-04：緊湊排版節省空間） */}
+        <div style={{ marginBottom: 10, borderBottom: "2px solid #26262C", paddingBottom: 8 }}>
+          <div className="flex items-baseline justify-between flex-wrap" style={{ gap: 10 }}>
+            <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 18, color: "#F5F4EF" }}>
+              當週工單 {anchor ? `· ${mdOf(anchor)}批次` : ""}
+            </div>
+            <div style={{ fontFamily: F.mono, fontSize: 10, color: "#8A8A93" }}>
+              {anchor
+                ? <>製作 range {rangeISO[0] ? mdOf(rangeISO[0]) : "—"} – {mdOf(anchor)}（{rangeISO.length} 天）</>
+                : <>本週無出貨日</>}
+            </div>
           </div>
         </div>
 
-        {/* Section 1：本工單總出貨統計（range 內所有訂單 · 含上週工作日排入的） */}
-        <div className="week-summary" style={{ marginBottom: 24, background: "#0F0F12", border: "1px solid #26262C", padding: "16px 18px" }}>
-          <div className="flex items-baseline justify-between" style={{ marginBottom: 12, gap: 10 }}>
-            <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 16, color: "var(--acc,#F5D400)" }}>
+        {/* Section 1：本工單總出貨統計 · 3 欄 grid 更緊湊 */}
+        <div className="week-summary" style={{ marginBottom: 14, background: "#0F0F12", border: "1px solid #26262C", padding: "10px 14px" }}>
+          <div className="flex items-baseline justify-between flex-wrap" style={{ marginBottom: 8, gap: 10 }}>
+            <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 14, color: "var(--acc,#F5D400)" }}>
               📊 本批出貨總量 {anchor && <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", marginLeft: 6 }}>· {mdOf(anchor)} 出貨</span>}
             </div>
-            <div className="flex items-baseline" style={{ gap: 14 }}>
-              <span style={{ fontFamily: F.anton, fontSize: 26, color: "#F5F4EF" }}>{batchOrders.length}</span>
-              <span style={{ fontFamily: F.tc, fontSize: 11, color: "#8A8A93" }}>單</span>
-              <span style={{ fontFamily: F.anton, fontSize: 28, color: "var(--acc,#F5D400)" }}>{weekTotal}</span>
-              <span style={{ fontFamily: F.tc, fontSize: 11, color: "#8A8A93" }}>顆</span>
+            <div className="flex items-baseline" style={{ gap: 10 }}>
+              <span style={{ fontFamily: F.anton, fontSize: 22, color: "#F5F4EF" }}>{batchOrders.length}</span>
+              <span style={{ fontFamily: F.tc, fontSize: 10, color: "#8A8A93" }}>單</span>
+              <span style={{ fontFamily: F.anton, fontSize: 24, color: "var(--acc,#F5D400)" }}>{weekTotal}</span>
+              <span style={{ fontFamily: F.tc, fontSize: 10, color: "#8A8A93" }}>顆</span>
             </div>
           </div>
           {weekAtomBreakdown.length === 0 ? (
             <div style={{ fontFamily: F.mono, fontSize: 11, color: "#6C6C74" }}>本批 range 無排單</div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "6px 20px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "4px 12px" }}>
               {weekAtomBreakdown.map((r) => (
-                <div key={r.atom} className="flex items-baseline justify-between" style={{ padding: "6px 10px", background: "#141417", borderLeft: "3px solid var(--acc,#F5D400)" }}>
-                  <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 13, color: "#F5F4EF" }}>☐ {getDisplayName(r.atom, menu)}</span>
-                  <span style={{ fontFamily: F.anton, fontSize: 18, color: "#F5F4EF" }}>{r.qty}</span>
+                <div key={r.atom} className="flex items-baseline justify-between" style={{ padding: "4px 8px", background: "#141417", borderLeft: "3px solid var(--acc,#F5D400)" }}>
+                  <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 12, color: "#F5F4EF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>☐ {getDisplayName(r.atom, menu)}</span>
+                  <span style={{ fontFamily: F.anton, fontSize: 16, color: "#F5F4EF", marginLeft: 6 }}>{r.qty}</span>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        {/* Section 2：每日排程 TODO · 只列有排單的日子 */}
-        <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 15, color: "#F5F4EF", marginBottom: 10 }}>
-          🗓 每日排程 · TODO <span style={{ fontFamily: F.mono, fontWeight: 400, fontSize: 11, color: "#7A7A82", marginLeft: 6 }}>· 有排單的日子 {displayDays.length} 天</span>
+        {/* Section 2：每日排程 TODO · 有排單日子並列 · 空間更省 */}
+        <div className="flex items-baseline justify-between flex-wrap" style={{ marginBottom: 8, gap: 8 }}>
+          <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: "#F5F4EF" }}>
+            🗓 每日排程 · TODO <span style={{ fontFamily: F.mono, fontWeight: 400, fontSize: 10, color: "#7A7A82", marginLeft: 4 }}>· {displayDays.length} 天有排單</span>
+          </div>
         </div>
         {displayDays.length === 0 ? (
           <div style={{ background: "#0F0F12", border: "1px dashed #26262C", padding: "24px", textAlign: "center", fontFamily: F.mono, fontSize: 12, color: "#6C6C74" }}>
             本批尚無任何排定訂單
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 8 }}>
             {displayDays.map((iso) => {
               const d = new Date(iso);
               const t = dayTypeOf(iso);
@@ -206,27 +210,27 @@ export function WorksheetPage({ orders, menu }: PageProps) {
               const bg = t === "ship" ? "#1c1600" : "#0a1620";
               const border = t === "ship" ? "2px solid var(--acc,#F5D400)" : "1px solid #2AC7E8";
               return (
-                <div key={iso} className="day-block" style={{ background: bg, border, padding: "12px 14px" }}>
-                  <div className="flex items-baseline justify-between flex-wrap" style={{ gap: 10, marginBottom: 8 }}>
-                    <div className="flex items-baseline" style={{ gap: 8 }}>
-                      <span style={{ fontFamily: F.anton, fontSize: 22, color: t === "ship" ? "var(--acc,#F5D400)" : "#F5F4EF" }}>{d.getDate()}</span>
-                      <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 14, color: t === "ship" ? "var(--acc,#F5D400)" : "#2AC7E8" }}>
+                <div key={iso} className="day-block" style={{ background: bg, border, padding: "8px 10px", minWidth: 0 }}>
+                  <div className="flex items-baseline justify-between flex-wrap" style={{ gap: 8, marginBottom: 6 }}>
+                    <div className="flex items-baseline" style={{ gap: 6, minWidth: 0 }}>
+                      <span style={{ fontFamily: F.anton, fontSize: 20, color: t === "ship" ? "var(--acc,#F5D400)" : "#F5F4EF" }}>{d.getDate()}</span>
+                      <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 12, color: t === "ship" ? "var(--acc,#F5D400)" : "#2AC7E8" }}>
                         {WD[d.getDay()]} · {label}
                       </span>
-                      <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82" }}>{mdOf(iso)}</span>
+                      <span style={{ fontFamily: F.mono, fontSize: 9, color: "#7A7A82" }}>{mdOf(iso)}</span>
                     </div>
-                    <div className="flex items-baseline" style={{ gap: 6 }}>
-                      <span style={{ fontFamily: F.anton, fontSize: 18, color: "#F5F4EF" }}>{list.length}</span>
-                      <span style={{ fontFamily: F.tc, fontSize: 10, color: "#8A8A93" }}>單</span>
-                      <span style={{ fontFamily: F.anton, fontSize: 20, color: "var(--acc,#F5D400)" }}>{dayTotal}</span>
-                      <span style={{ fontFamily: F.tc, fontSize: 10, color: "#8A8A93" }}>顆</span>
+                    <div className="flex items-baseline" style={{ gap: 4 }}>
+                      <span style={{ fontFamily: F.anton, fontSize: 15, color: "#F5F4EF" }}>{list.length}</span>
+                      <span style={{ fontFamily: F.tc, fontSize: 9, color: "#8A8A93" }}>單</span>
+                      <span style={{ fontFamily: F.anton, fontSize: 17, color: "var(--acc,#F5D400)" }}>{dayTotal}</span>
+                      <span style={{ fontFamily: F.tc, fontSize: 9, color: "#8A8A93" }}>顆</span>
                     </div>
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                     {dayBreakdown.map((r) => (
-                      <div key={r.atom} className="flex items-baseline justify-between" style={{ padding: "5px 10px", background: "#141417" }}>
-                        <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 12, color: "#F5F4EF" }}>☐ {getDisplayName(r.atom, menu)}</span>
-                        <span style={{ fontFamily: F.anton, fontSize: 15, color: "#F5F4EF" }}>{r.qty}</span>
+                      <div key={r.atom} className="flex items-baseline justify-between" style={{ padding: "3px 8px", background: "#141417" }}>
+                        <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 11, color: "#F5F4EF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>☐ {getDisplayName(r.atom, menu)}</span>
+                        <span style={{ fontFamily: F.anton, fontSize: 13, color: "#F5F4EF", marginLeft: 6 }}>{r.qty}</span>
                       </div>
                     ))}
                   </div>
