@@ -701,7 +701,8 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                           fontWeight: 700,
                           fontSize: 10,
                           color: "#F5F4EF",
-                          opacity: dragId === o.id ? 0.35 : 1,
+                          // Yen 2026-07-04：拖動的卡立即 display:none · 拿掉瀏覽器 native「殘影飛回原位」感
+                          display: dragId === o.id ? "none" : undefined,
                         }}
                       >
                         {orderItemLabel(o, menu)}
@@ -835,7 +836,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                   onDragStart={weekLocked ? undefined : () => setDragId(o.id)}
                   onDragEnd={weekLocked ? undefined : () => { setDragId(null); setOverDay(null); }}
                   title={weekLocked ? "🔒 本週已鎖定 · 先解鎖再排入" : undefined}
-                  style={{ cursor: weekLocked ? "not-allowed" : "grab", background: "#111114", border: "1px solid #26262C", padding: "10px 11px", opacity: dragId === o.id ? 0.35 : 1 }}
+                  style={{ cursor: weekLocked ? "not-allowed" : "grab", background: "#111114", border: "1px solid #26262C", padding: "10px 11px", display: dragId === o.id ? "none" : undefined }}
                 >
                   <div className="flex justify-between items-center" style={{ gap: 6 }}>
                     <span style={{ fontFamily: F.mono, fontSize: 11, color: "#C9C9CF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.id}</span>
