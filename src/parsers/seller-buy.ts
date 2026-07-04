@@ -219,6 +219,7 @@ function finalizeOrder(w: WipOrder, menu: Menu): Order {
   const status: Order["status"] = deriveStatus(pendingReasons);
 
   const now = new Date().toISOString();
+  // c12_product 只留品項名（保持乾淨、指定出貨日走專用欄位 customer_wish_date 監控）
   const productKey = w.items
     .filter((it) => !it.name.includes("指定出貨日"))
     .map((it) => it.name)
@@ -263,6 +264,7 @@ function finalizeOrder(w: WipOrder, menu: Menu): Order {
       c20_discount_platform: w.discount, // 統一放這（M3 保守做法）
       c21_total: w.total,
       c22_label_count: w.c22,
+      customer_wish_date: batchDate, // Yen 2026-07-04：進 snapshot 讓 diff 偵測客人改期
     },
     order_date: dateToIso(w.order_date),
     customer_wish_date: batchDate,

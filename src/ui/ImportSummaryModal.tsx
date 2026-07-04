@@ -608,6 +608,11 @@ function ChangedCard({
                 ⚠ 建議保留舊
               </span>
             )}
+            {info.recommend === "accept" && info.signals.some((s) => s.code === "WISH_DATE_CHANGED") && (
+              <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 9, color: C.cyan, border: `1px solid ${C.cyan}`, padding: "2px 7px", letterSpacing: ".05em" }}>
+                📅 客人改期
+              </span>
+            )}
           </div>
           <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut3, marginTop: 4, letterSpacing: ".05em" }}>
             {o.order_date && <><span style={{ color: C.mut2 }}>下單 {shortDate(o.order_date)}</span> · </>}

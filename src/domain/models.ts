@@ -160,6 +160,7 @@ export const KEY_FIELDS_FOR_CHANGE = [
   "c20_discount_platform",
   "c21_total",
   "c11_conv_store",
+  "customer_wish_date", // Yen 2026-07-04：客人改指定出貨日
 ] as const;
 export type KeyFieldName = (typeof KEY_FIELDS_FOR_CHANGE)[number];
 
@@ -224,6 +225,8 @@ export const OrderSnapshotSchema = z.object({
   c20_discount_platform: z.number(),
   c21_total: z.number().nullable(),
   c22_label_count: z.number().nullable(),
+  // Yen 2026-07-04：客人指定出貨日進 snapshot · 用於偵測「客人改期」異動
+  customer_wish_date: z.string().nullable().default(null),
 });
 export type OrderSnapshot = z.infer<typeof OrderSnapshotSchema>;
 

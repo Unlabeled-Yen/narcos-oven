@@ -53,7 +53,10 @@ export function classifyDisappearance(o: Order): DisappearInfo {
 export type ChangeSignal =
   | "PAYMENT_REVERSED"
   | "AMOUNT_DECREASED"
-  | "LABEL_COUNT_CHANGED";
+  | "LABEL_COUNT_CHANGED"
+  | "WISH_DATE_CHANGED"
+  | "PRODUCT_CHANGED"
+  | "CONV_STORE_CHANGED";
 
 export type ChangeSignalInfo = {
   code: ChangeSignal;
@@ -116,6 +119,40 @@ export function classifyChange(change: OrderChange): ChangeInfo {
       code: "LABEL_COUNT_CHANGED",
       severity: "notice",
       message: `箱數變動（${c22.from} → ${c22.to}）· 已印標籤時要注意重印`,
+    });
+  }
+
+  // 客人改指定出貨日 · 主動異動 · 建議接受（客人剛決定的日期）
+  const wish = change.fields["customer_wish_date"];
+  if (wish && wish.from !== wish.to) {
+    signals.push({
+      code: "WISH_DATE_CHANGED",
+      severity: "notice",
+      message: `客人改指定出貨日（${wish.from ?? "—"} → ${wish.to ?? "—"}）· 排程可能要跟著調`,
+    });
+    if (recommend === "neutral") {
+      recommend = "accept";
+      recommendReason = "客人主動改期是新意圖、通常應接受並重排批次";
+    }
+  }
+
+  // 品項字串變 · 中性提示（可能改品項或改數量）
+  const c12 = change.fields["c12_product"];
+  if (c12 && c12.from !== c12.to) {
+    signals.push({
+      code: "PRODUCT_CHANGED",
+      severity: "notice",
+      message: "品項/數量有變動 · 對照舊值與新值確認差異",
+    });
+  }
+
+  // 超商店號變 · 影響出貨 · 提示
+  const c11 = change.fields["c11_conv_store"];
+  if (c11 && c11.from !== c11.to) {
+    signals.push({
+      code: "CONV_STORE_CHANGED",
+      severity: "notice",
+      message: `取貨門市變（${c11.from ?? "—"} → ${c11.to ?? "—"}）· 已印標籤需重印`,
     });
   }
 

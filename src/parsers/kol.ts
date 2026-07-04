@@ -129,6 +129,7 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
   const pendingReasons: PendingReason[] = [];
 
   const now = new Date().toISOString();
+  const _ship = extractKolShippingDate(w.ship_raw, null);
   const snapshot = {
     c1_order_date: null as string | null, // KOL Excel 無明確下單日欄位
     c5_status: w.shipped ? "kol-shipped" : "kol-pending",
@@ -140,8 +141,8 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
     c20_discount_platform: 0,
     c21_total: null,
     c22_label_count: null,
+    customer_wish_date: _ship, // Yen 2026-07-04：進 snapshot 讓 diff 偵測客人改期
   };
-  const _ship = extractKolShippingDate(w.ship_raw, null);
   const lifecycle = {
     first_seen_at: now,
     last_seen_at: now,

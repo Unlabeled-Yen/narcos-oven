@@ -222,6 +222,7 @@ export function parseInPerson(
         c20_discount_platform: 0,
         c21_total: toNum(c23),
         c22_label_count: null,
+        customer_wish_date: batchDate, // Yen 2026-07-04：進 snapshot 讓 diff 偵測客人改期
       },
       order_date: dateToIso(submitDate),
       customer_wish_date: batchDate,
