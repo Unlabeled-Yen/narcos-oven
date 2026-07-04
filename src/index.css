@@ -77,6 +77,13 @@
     overflow: visible !important;
   }
   body:not(.printing-labels) .print-area .no-print { display: none !important; }
+  /* Yen 2026-07-04：非 print-area 區塊必須 display:none 才不佔 layout
+     · 只 visibility:hidden 會撐出額外空白頁（最後 4/4 全空白 root cause）
+     · print-area 外的 .no-print / .labels-preview 也要硬隱藏 */
+  body:not(.printing-labels) .no-print,
+  body:not(.printing-labels) .labels-preview {
+    display: none !important;
+  }
   /* 核心 fix（Yen 2026-07-04）：所有子元素背景刷白、顏色刷黑、邊框刷黑
      · 讓深色 web UI 印出來變乾淨的紙本文件、不是黑白反轉暗片 */
   body:not(.printing-labels) .print-area * {
