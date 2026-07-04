@@ -140,7 +140,7 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
   }, [allLabels, orders, selectedBatch, refreshOrders]);
 
   return (
-    <div className="h-full flex flex-col min-h-0">
+    <div className="h-full flex flex-col min-h-0" style={{ overflowY: "auto" }}>
       {/* Print CSS：label 專用（.label-print-area）· 對帳單用 .print-area 在 index.css 統一管 */}
       <style>{`
         @media print {
@@ -151,9 +151,9 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
         }
       `}</style>
 
-      {/* 出爐批次明細（排程完 → 對貨 → 印標；憲章 #9 產出閘門） */}
+      {/* 出爐批次明細（排程完 → 對貨 → 印標；憲章 #9 產出閘門） · Yen 2026-07-04：拿掉 flexShrink 讓整頁自然流動 */}
       {selectedBatch && !isEmpty && (
-        <div style={{ padding: "12px 24px", flexShrink: 0 }}>
+        <div style={{ padding: "12px 24px" }}>
           <BatchDetailPanel
             shipISO={selectedBatch}
             shipList={batchShipList}
