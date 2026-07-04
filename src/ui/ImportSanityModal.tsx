@@ -5,7 +5,8 @@
  * critical → 警示紅底 · warn → 橙 · notice → 黃
  * NARCOS 品牌深色設計 · 跟 ImportSummaryModal 同一套視覺基準
  */
-import type { SanityReport, Severity } from "../domain/import-sanity";
+import type { SanityReport, Severity, SourceStats } from "../domain/import-sanity";
+import { SOURCE_NAME } from "../domain/import-sanity";
 
 const F = {
   anton: "'Anton',sans-serif",
@@ -90,18 +91,16 @@ export function ImportSanityModal({
             檔案：{fileNames.join(" · ")}
           </div>
 
-          {/* Stats */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8, marginBottom: 16 }}>
-            <StatCell label="這輪筆數"    value={report.stats.newCount} />
-            <StatCell label="DB 現存"     value={report.stats.dbActiveCount} />
-            <StatCell label="消失比例"    value={`${(report.stats.disappearRatio * 100).toFixed(0)}%`}
-                     highlight={report.stats.disappearRatio > 0.5 ? meta.color : undefined} />
-            <StatCell label="這輪最新下單" value={report.stats.maxOrderDateNew ?? "—"} mono />
-            <StatCell label="DB 最新下單"  value={report.stats.maxOrderDateDb ?? "—"} mono
-                     highlight={
-                       report.stats.maxOrderDateNew && report.stats.maxOrderDateDb &&
-                       report.stats.maxOrderDateNew < report.stats.maxOrderDateDb ? meta.color : undefined
-                     } />
+          {/* Per source stats · 三通路各自一 row · 低摩擦顯示 */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut3, letterSpacing: ".14em", marginBottom: 8 }}>
+              通路檢查明細
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {report.perSource.map((s) => (
+                <SourceRow key={s.source} stats={s} highlight={meta.color} />
+              ))}
+            </div>
           </div>
 
           {/* Warnings */}
@@ -179,17 +178,63 @@ export function ImportSanityModal({
   );
 }
 
-function StatCell({ label, value, mono, highlight }: { label: string; value: string | number; mono?: boolean; highlight?: string }) {
+function SourceRow({ stats, highlight }: { stats: SourceStats; highlight: string }) {
+  const skipped = stats.newCount === 0 || stats.dbCount === 0;
+  const disappearHigh = stats.disappearRatio > 0.5;
+  const dateBack =
+    stats.maxOrderDateNew && stats.maxOrderDateDb && stats.maxOrderDateNew < stats.maxOrderDateDb;
+  const hasIssue = !skipped && (stats.paymentReversedCount > 0 || disappearHigh || dateBack);
+  const rowColor = skipped ? C.mut3 : hasIssue ? highlight : C.mut;
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.line2}`, padding: "8px 12px" }}>
-      <div style={{ fontFamily: F.mono, fontSize: 9, color: C.mut3, letterSpacing: ".14em", marginBottom: 3 }}>{label}</div>
-      <div style={{
-        fontFamily: mono ? F.mono : F.anton,
-        fontSize: mono ? 12 : 20,
-        color: highlight ?? C.ink,
-        letterSpacing: mono ? ".05em" : undefined,
-      }}>
-        {value}
+    <div
+      style={{
+        background: C.card,
+        border: `1px solid ${C.line2}`,
+        borderLeft: `3px solid ${rowColor}`,
+        padding: "8px 12px",
+        display: "grid",
+        gridTemplateColumns: "1.1fr 1fr 1fr 1.4fr",
+        alignItems: "center",
+        gap: 10,
+      }}
+    >
+      <div className="flex items-baseline" style={{ gap: 8 }}>
+        <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 12, color: rowColor }}>
+          {SOURCE_NAME[stats.source]}
+        </span>
+        {skipped && (
+          <span style={{ fontFamily: F.mono, fontSize: 9, color: C.mut3, letterSpacing: ".05em" }}>
+            {stats.newCount === 0 ? "· 本輪未匯入" : "· DB 尚無資料"}
+          </span>
+        )}
+      </div>
+      <div className="flex items-baseline" style={{ gap: 4 }}>
+        <span style={{ fontFamily: F.anton, fontSize: 16, color: C.ink }}>{stats.newCount}</span>
+        <span style={{ fontFamily: F.mono, fontSize: 9, color: C.mut3 }}>本輪</span>
+        <span style={{ fontFamily: F.mono, fontSize: 9, color: C.mut3 }}>/</span>
+        <span style={{ fontFamily: F.anton, fontSize: 16, color: C.mut }}>{stats.dbCount}</span>
+        <span style={{ fontFamily: F.mono, fontSize: 9, color: C.mut3 }}>DB</span>
+      </div>
+      <div className="flex items-baseline" style={{ gap: 4 }}>
+        <span
+          style={{
+            fontFamily: F.anton,
+            fontSize: 16,
+            color: disappearHigh ? highlight : C.mut,
+          }}
+        >
+          {skipped ? "—" : `${(stats.disappearRatio * 100).toFixed(0)}%`}
+        </span>
+        <span style={{ fontFamily: F.mono, fontSize: 9, color: C.mut3 }}>
+          消失 {skipped ? "" : `(${stats.disappearCount})`}
+        </span>
+      </div>
+      <div style={{ fontFamily: F.mono, fontSize: 10, color: dateBack ? highlight : C.mut2, letterSpacing: ".03em" }}>
+        {skipped
+          ? "—"
+          : stats.maxOrderDateNew && stats.maxOrderDateDb
+          ? `${stats.maxOrderDateNew.slice(5)} vs DB ${stats.maxOrderDateDb.slice(5)}`
+          : "無下單日資料"}
       </div>
     </div>
   );
