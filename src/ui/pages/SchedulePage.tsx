@@ -693,39 +693,70 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                       background: isOver ? "rgba(245,212,0,0.08)" : undefined,
                     }}
                   >
-                    {list.map((o) => (
-                      <div
-                        key={o.id}
-                        draggable={!weekLocked}
-                        onDragStart={weekLocked ? undefined : () => setDragId(o.id)}
-                        onDragEnd={weekLocked ? undefined : (e) => {
-                          // Yen 2026-07-04：改用 elementFromPoint 判斷是否掉在有效 zone
-                          //   舊法 dropEffect==="none" 被 window-level preventDefault 攔掉（為了拿掉飛回動畫）
-                          //   拿滑鼠終點座標查 DOM · 不在任何 [data-day] 就退回 pending
-                          const target = document.elementFromPoint(e.clientX, e.clientY);
-                          const inZone = target?.closest?.("[data-day]");
-                          if (!inZone) void commitAssign(o.id, null);
-                          setDragId(null);
-                          setOverDay(null);
-                        }}
-                        title={weekLocked ? `🔒 本週已鎖定 · ${o.id}` : o.id}
-                        style={{
-                          cursor: weekLocked ? "not-allowed" : "grab",
-                          background: "#3a2f00",
-                          borderLeft: "3px solid var(--acc,#F5D400)",
-                          padding: "5px 7px",
-                          fontFamily: F.tc,
-                          fontWeight: 700,
-                          fontSize: 10,
-                          color: "#F5F4EF",
-                          // 半透明留原位 · Yen 要「有東西被拖曳」的視覺回饋
-                          opacity: dragId === o.id ? 0.35 : 1,
-                        }}
-                      >
-                        {orderItemLabel(o, menu)}
-                        <span style={{ color: "#6C6C74", fontWeight: 400 }}> · {o.channel.replace(/^面交_/, "面交")}</span>
-                      </div>
-                    ))}
+                    {list.map((o) => {
+                      const items = o.items.map((it) => {
+                        const name = it.productSkuId
+                          ? (menu.products[it.productSkuId]?.display_name ?? it.rawName)
+                          : it.rawName;
+                        return it.quantity > 1 ? `${name}×${it.quantity}` : name;
+                      });
+                      const chLabel = o.channel.replace(/^面交_/, "面交·");
+                      return (
+                        <div
+                          key={o.id}
+                          draggable={!weekLocked}
+                          onDragStart={weekLocked ? undefined : () => setDragId(o.id)}
+                          onDragEnd={weekLocked ? undefined : (e) => {
+                            const target = document.elementFromPoint(e.clientX, e.clientY);
+                            const inZone = target?.closest?.("[data-day]");
+                            if (!inZone) void commitAssign(o.id, null);
+                            setDragId(null);
+                            setOverDay(null);
+                          }}
+                          title={weekLocked ? `🔒 本週已鎖定 · ${o.id}` : o.id}
+                          style={{
+                            cursor: weekLocked ? "not-allowed" : "grab",
+                            background: "#241c00",
+                            border: "1px solid #4a3f00",
+                            borderLeft: "3px solid var(--acc,#F5D400)",
+                            padding: "6px 8px",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 3,
+                            opacity: dragId === o.id ? 0.35 : 1,
+                          }}
+                        >
+                          {/* 頂行：訂單編號（截短）· 收件人 · 標籤數 */}
+                          <div className="flex items-baseline justify-between" style={{ gap: 6 }}>
+                            <div className="flex items-baseline" style={{ gap: 6, minWidth: 0 }}>
+                              <span style={{ fontFamily: F.mono, fontSize: 9, color: "#7a6600", letterSpacing: ".02em" }}>
+                                {o.id.length > 10 ? o.id.slice(-8) : o.id}
+                              </span>
+                              {o.recipient.name && (
+                                <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 11, color: "#F5F4EF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {o.recipient.name}
+                                </span>
+                              )}
+                            </div>
+                            <span className="flex items-baseline" style={{ gap: 2, flexShrink: 0 }}>
+                              <span style={{ fontFamily: F.anton, fontSize: 13, color: "var(--acc,#F5D400)", lineHeight: 1 }}>{o.labelCount}</span>
+                              <span style={{ fontFamily: F.mono, fontSize: 8, color: "#7a6600" }}>張</span>
+                            </span>
+                          </div>
+                          {/* 品項（全列 · 用 · 分隔） */}
+                          <div style={{ fontFamily: F.tc, fontWeight: 500, fontSize: 10, color: "#E7E7EA", lineHeight: 1.3 }}>
+                            {items.join(" · ")}
+                          </div>
+                          {/* 底行：通路 · 金額 */}
+                          <div className="flex items-baseline justify-between" style={{ gap: 6 }}>
+                            <span style={{ fontFamily: F.mono, fontSize: 9, color: "#8a7500" }}>{chLabel}</span>
+                            {o.revenue.grossTotal > 0 && (
+                              <span style={{ fontFamily: F.mono, fontSize: 9, color: "#8a7500" }}>${o.revenue.grossTotal}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                     {list.length === 0 && (
                       <div style={{ margin: "auto", textAlign: "center", fontFamily: F.mono, fontSize: 10, color: weekLocked ? "#3a3a40" : "#7a6600" }}>
                         {weekLocked ? "🔒 已鎖" : "＋ 拖曳排入本批"}
