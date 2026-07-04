@@ -1,12 +1,52 @@
 /**
- * 匯入異動摘要頁——強制彈出、雇主必須拍板完消失/變動桶才能繼續。
+ * 匯入異動摘要 · NARCOS 品牌深色版（Yen 2026-07-04 UI overhaul）
+ *
  * 對應 docs/spec.md §7 UI + 憲章防護 #6 + #9 + #10
+ * UI 用 SchedulePage / BatchDetail 同一套視覺基準：
+ *   #0F0F12 底 · #141417 卡 · #26262C line · acc(#F5D400) · Anton/Noto TC/Space Mono
+ *   通道色：賣貨便 acc黃 · 面交 綠 · 宅配 青 · KOL 紫 · 待分類 紅
+ *   邏輯不動（resolutions state / onDecide / onClose 保 API）
  */
 import { useEffect, useState } from "react";
 import type { ImportDiff, ImportResolution, ImportRun, Order } from "../domain/models";
 import { addResolution } from "../db/import-runs";
 import { resolveDisappearance } from "../db/orders";
 import { db } from "../db/schema";
+
+const F = {
+  anton: "'Anton',sans-serif",
+  tc: "'Noto Sans TC',sans-serif",
+  mono: "'Space Mono',monospace",
+} as const;
+
+const C = {
+  bg: "#0F0F12",
+  card: "#141417",
+  cardAlt: "#161619",
+  line: "#26262C",
+  line2: "#1F1F24",
+  ink: "#F5F4EF",
+  mut: "#C9C9CF",
+  mut2: "#8A8A93",
+  mut3: "#6C6C74",
+  acc: "var(--acc,#F5D400)",
+  green: "#43B23C",
+  cyan: "#2AC7E8",
+  red: "#E5352B",
+  redTint: "#2a1010",
+  orange: "#E5622A",
+  purple: "#8557C9",
+} as const;
+
+const CHANNEL_META: Record<string, { label: string; color: string }> = {
+  賣貨便:    { label: "賣貨便", color: C.acc },
+  面交_中壢: { label: "面交·中壢", color: C.green },
+  面交_台中: { label: "面交·台中", color: C.green },
+  面交_其他: { label: "面交·其他", color: C.green },
+  宅配:      { label: "宅配", color: C.cyan },
+  KOL:       { label: "KOL", color: C.purple },
+  待分類:    { label: "待分類", color: C.red },
+};
 
 export function ImportSummaryModal({
   run,
@@ -28,50 +68,67 @@ export function ImportSummaryModal({
     })();
   }, [run.id]);
 
-  const needsResolution =
-    run.diff.disappeared.length + run.diff.fields_changed.length;
+  const needsResolution = run.diff.disappeared.length + run.diff.fields_changed.length;
   const resolvedCount = Object.keys(resolutions).length;
   const canClose = resolvedCount >= needsResolution;
 
-  async function decide(
-    orderId: string,
-    resolution: ImportResolution["resolution"]
-  ) {
+  async function decide(orderId: string, resolution: ImportResolution["resolution"]) {
     setResolutions((r) => ({ ...r, [orderId]: resolution }));
     const now = new Date().toISOString();
-    await addResolution(run.id, {
-      order_id: orderId,
-      resolution,
-      resolved_at: now,
-    });
+    await addResolution(run.id, { order_id: orderId, resolution, resolved_at: now });
     if (resolution === "shipped" || resolution === "canceled" || resolution === "kept_active") {
       await resolveDisappearance(orderId, resolution, now);
     }
-    // change_pending 的 accept_change / reject_change / reprint 之後由專屬 UI 處理
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b p-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold">📥 匯入異動摘要</h2>
-          <button
-            disabled={!canClose}
-            onClick={onClose}
-            className={`px-4 py-2 rounded text-sm font-semibold ${
-              canClose
-                ? "bg-green-600 hover:bg-green-700 text-white"
-                : "bg-gray-200 text-gray-400 cursor-not-allowed"
-            }`}
-            title={canClose ? "全部處理完、送出" : `還有 ${needsResolution - resolvedCount} 筆待拍板`}
-          >
-            {canClose
-              ? "✅ 送出、更新系統"
-              : `⏳ 剩 ${needsResolution - resolvedCount} 筆需處理`}
-          </button>
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.75)", overflowY: "auto" }}
+    >
+      <div
+        style={{
+          background: C.bg,
+          border: `1px solid ${C.line}`,
+          width: "100%",
+          maxWidth: 1080,
+          maxHeight: "94vh",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {/* Header · 品牌膠帶 + Anton title */}
+        <div style={{ position: "sticky", top: 0, background: C.bg, zIndex: 2 }}>
+          <div className="flex items-center justify-between flex-wrap" style={{ padding: "14px 20px 12px", gap: 12 }}>
+            <div className="flex items-baseline flex-wrap" style={{ gap: 12 }}>
+              <span style={{ fontFamily: F.mono, fontSize: 10, color: C.mut2, letterSpacing: ".18em" }}>IMPORT · DIFF</span>
+              <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 16, color: C.ink }}>匯入異動摘要</span>
+              <span style={{ fontFamily: F.mono, fontSize: 10, color: C.mut3 }}>· 憲章 #9/#10 逐筆拍板</span>
+            </div>
+            <button
+              type="button"
+              disabled={!canClose}
+              onClick={onClose}
+              title={canClose ? "全部處理完、送出" : `還有 ${needsResolution - resolvedCount} 筆待拍板`}
+              style={{
+                fontFamily: F.tc, fontWeight: 900, fontSize: 12,
+                color: canClose ? "#111" : C.mut3,
+                background: canClose ? C.green : "transparent",
+                border: `1px solid ${canClose ? C.green : C.line}`,
+                padding: "7px 14px",
+                cursor: canClose ? "pointer" : "not-allowed",
+                letterSpacing: ".05em",
+              }}
+            >
+              {canClose ? "✓ 送出、更新系統" : `⏳ 剩 ${needsResolution - resolvedCount} 筆需處理`}
+            </button>
+          </div>
+          {/* 警示膠帶 */}
+          <div style={{ height: 7, background: "repeating-linear-gradient(45deg,var(--acc,#F5D400) 0 14px,#111 14px 28px)" }} />
         </div>
 
-        <div className="p-4 space-y-6">
+        {/* Body */}
+        <div style={{ padding: "16px 20px 20px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 20 }}>
           <StatSection diff={run.diff} />
 
           {disappearedOrders.length > 0 && (
@@ -95,36 +152,147 @@ export function ImportSummaryModal({
   );
 }
 
+// ── Stat cells · 深底 border-left 通道色 · Anton 大數字 ──
 function StatSection({ diff }: { diff: ImportDiff }) {
   const cells = [
-    { label: "➕ 新單", n: diff.added.length, color: "bg-blue-100 text-blue-900" },
-    { label: "💰 剛付款", n: diff.payment_confirmed.length, color: "bg-green-100 text-green-900" },
-    { label: "📝 資訊變動", n: diff.fields_changed.length, color: "bg-yellow-100 text-yellow-900" },
-    { label: "❓ 消失", n: diff.disappeared.length, color: "bg-red-100 text-red-900" },
-    { label: "⚡ 未動", n: diff.unchanged.length, color: "bg-gray-100 text-gray-900" },
+    { label: "新單",     n: diff.added.length,             color: C.cyan,   note: "＋" },
+    { label: "剛付款",   n: diff.payment_confirmed.length, color: C.green,  note: "$" },
+    { label: "資訊變動", n: diff.fields_changed.length,    color: C.acc,    note: "✎" },
+    { label: "消失",     n: diff.disappeared.length,       color: C.red,    note: "?" },
+    { label: "未動",     n: diff.unchanged.length,         color: C.mut3,   note: "·" },
   ];
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
       {cells.map((c) => (
-        <div key={c.label} className={`rounded p-3 ${c.color}`}>
-          <div className="text-xs opacity-75">{c.label}</div>
-          <div className="text-2xl font-bold">{c.n}</div>
+        <div
+          key={c.label}
+          style={{
+            background: C.card,
+            border: `1px solid ${C.line}`,
+            borderLeft: `3px solid ${c.color}`,
+            padding: "10px 14px",
+          }}
+        >
+          <div className="flex items-baseline justify-between" style={{ marginBottom: 2 }}>
+            <span style={{ fontFamily: F.mono, fontSize: 10, color: C.mut2, letterSpacing: ".14em" }}>
+              <span style={{ color: c.color, marginRight: 5 }}>{c.note}</span>
+              {c.label}
+            </span>
+          </div>
+          <div style={{ fontFamily: F.anton, fontSize: 30, color: c.n > 0 ? C.ink : C.mut3, lineHeight: 1 }}>
+            {c.n}
+          </div>
         </div>
       ))}
     </div>
   );
 }
 
-const CHANNEL_BADGE: Record<string, { label: string; color: string }> = {
-  賣貨便: { label: "🛒 賣貨便", color: "bg-blue-100 text-blue-900" },
-  面交_中壢: { label: "🤝 面交 中壢", color: "bg-emerald-100 text-emerald-900" },
-  面交_台中: { label: "🤝 面交 台中", color: "bg-emerald-100 text-emerald-900" },
-  面交_其他: { label: "🤝 面交 其他", color: "bg-emerald-100 text-emerald-900" },
-  宅配: { label: "📦 宅配", color: "bg-purple-100 text-purple-900" },
-  KOL: { label: "⭐ KOL", color: "bg-amber-100 text-amber-900" },
-  待分類: { label: "❓ 待分類", color: "bg-gray-200 text-gray-900" },
-};
+// ── Section header + bulk pending confirm 條 · 共用 ──
+function SectionHeader({
+  color,
+  title,
+  hint,
+  unresolvedCount,
+  bulkOptions,
+  pendingBulk,
+  pendingLabel,
+  onBulk,
+  onConfirm,
+  onCancel,
+  busy,
+}: {
+  color: string;
+  title: string;
+  hint: string;
+  unresolvedCount: number;
+  bulkOptions: { key: string; label: string; color: string; textColor?: string }[];
+  pendingBulk: string | null;
+  pendingLabel: string;
+  onBulk: (key: string) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+  busy: boolean;
+}) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div className="flex items-baseline justify-between flex-wrap" style={{ gap: 10, marginBottom: 8 }}>
+        <div className="flex items-baseline" style={{ gap: 8 }}>
+          <span style={{ fontFamily: F.mono, fontSize: 10, color, letterSpacing: ".14em" }}>▎</span>
+          <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 14, color }}>{title}</span>
+          <span style={{ fontFamily: F.mono, fontSize: 10, color: C.mut3 }}>· {hint}</span>
+        </div>
+        {unresolvedCount > 1 && !pendingBulk && (
+          <div className="flex items-center flex-wrap" style={{ gap: 6 }}>
+            <span style={{ fontFamily: F.mono, fontSize: 10, color: C.mut3 }}>批次剩 {unresolvedCount}：</span>
+            {bulkOptions.map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => onBulk(opt.key)}
+                style={{
+                  fontFamily: F.tc, fontWeight: 900, fontSize: 10,
+                  color: opt.textColor ?? opt.color,
+                  background: "transparent",
+                  border: `1px solid ${opt.color}`,
+                  padding: "3px 10px",
+                  cursor: "pointer",
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {pendingBulk && (
+        <div
+          className="flex items-center flex-wrap"
+          style={{
+            gap: 10, padding: "8px 12px",
+            background: "#241a06", border: `1px solid ${C.acc}`,
+            marginBottom: 8,
+          }}
+        >
+          <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 12, color: C.ink }}>
+            ⚠ 將剩下 {unresolvedCount} 筆全部標為「<span style={{ color: C.acc }}>{pendingLabel}</span>」？
+          </span>
+          <div className="flex" style={{ gap: 6, marginLeft: "auto" }}>
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={busy}
+              style={{
+                fontFamily: F.tc, fontWeight: 900, fontSize: 11,
+                color: "#111", background: C.acc, border: "none",
+                padding: "5px 12px",
+                cursor: busy ? "wait" : "pointer",
+                opacity: busy ? 0.6 : 1,
+              }}
+            >
+              {busy ? "處理中…" : "確認"}
+            </button>
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={busy}
+              style={{
+                fontFamily: F.mono, fontSize: 10, color: C.mut2,
+                background: "transparent", border: `1px solid ${C.line}`,
+                padding: "5px 12px",
+                cursor: busy ? "wait" : "pointer",
+              }}
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
+// ── Section 1 · 消失待確認 ──
 function DisappearedSection({
   orders,
   resolutions,
@@ -135,150 +303,130 @@ function DisappearedSection({
   onDecide: (id: string, r: ImportResolution["resolution"]) => void;
 }) {
   const unresolved = orders.filter((o) => !resolutions[o.id]);
-  // 用 useState 記待確認的批次動作、不再依賴 window.confirm（會被 Chrome 阻擋）
   const [pendingBulk, setPendingBulk] = useState<null | "shipped" | "canceled" | "kept_active">(null);
   const [busyBulk, setBusyBulk] = useState(false);
-  const bulkResolve = (r: "shipped" | "canceled" | "kept_active") => setPendingBulk(r);
+
   const confirmBulk = async () => {
     if (!pendingBulk || busyBulk) return;
     setBusyBulk(true);
     try {
-      for (const o of unresolved) {
-        await onDecide(o.id, pendingBulk);
-      }
+      for (const o of unresolved) await onDecide(o.id, pendingBulk);
     } finally {
       setBusyBulk(false);
       setPendingBulk(null);
     }
   };
-  const pendingLabel = pendingBulk === "shipped" ? "已出貨" : pendingBulk === "canceled" ? "已取消" : pendingBulk === "kept_active" ? "暫留" : "";
+
+  const pendingLabel =
+    pendingBulk === "shipped" ? "已出貨" :
+    pendingBulk === "canceled" ? "已取消" :
+    pendingBulk === "kept_active" ? "暫留" : "";
+
   return (
     <section>
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="font-bold text-red-700">
-          ❓ 消失待確認（{orders.length} 筆）—— 憲章 #9 必須逐一拍板
-        </h3>
-        {unresolved.length > 1 && !pendingBulk && (
-          <div className="flex gap-1 text-xs">
-            <span className="text-gray-500 mr-1 self-center">批次處理剩餘 {unresolved.length}：</span>
-            <button
-              onClick={() => bulkResolve("shipped")}
-              className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
-            >
-              全部已出貨
-            </button>
-            <button
-              onClick={() => bulkResolve("canceled")}
-              className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700"
-            >
-              全部取消
-            </button>
-            <button
-              onClick={() => bulkResolve("kept_active")}
-              className="px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
-            >
-              全部暫留
-            </button>
-          </div>
-        )}
-        {pendingBulk && (
-          <div className="flex gap-2 items-center text-xs bg-yellow-100 border border-yellow-400 px-3 py-2 rounded">
-            <span className="text-gray-800">
-              ⚠ 將剩下 {unresolved.length} 筆全部標為「<strong>{pendingLabel}</strong>」？
-            </span>
-            <button
-              onClick={() => void confirmBulk()}
-              disabled={busyBulk}
-              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-60"
-            >
-              {busyBulk ? "處理中…" : "確認"}
-            </button>
-            <button
-              onClick={() => setPendingBulk(null)}
-              disabled={busyBulk}
-              className="px-3 py-1 bg-gray-300 text-gray-800 rounded hover:bg-gray-400"
-            >
-              取消
-            </button>
-          </div>
-        )}
-      </div>
-      <div className="space-y-2">
-        {orders.map((o) => {
-          const decision = resolutions[o.id];
-          const frozen = o.frozen_after_label_print;
-          const chanBadge = CHANNEL_BADGE[o.channel] ?? {
-            label: o.channel,
-            color: "bg-gray-100 text-gray-900",
-          };
-          return (
-            <div
-              key={o.id}
-              className={`border rounded p-3 ${decision ? "bg-gray-50 opacity-60" : "bg-white"}`}
-            >
-              <div className="flex items-start justify-between text-sm">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className={`text-xs px-2 py-0.5 rounded font-semibold ${chanBadge.color}`}>
-                      {chanBadge.label}
-                    </span>
-                    <span className="font-mono text-xs">{o.id}</span>
-                    <span>{o.recipient.name ?? "—"}</span>
-                    {frozen && (
-                      <span className="text-xs bg-orange-100 text-orange-900 rounded px-1">
-                        🖨️ 已印標籤
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-gray-500 ml-1">
-                    {o.batchDate ?? "?"} / ${o.revenue.grossTotal}
-                    {o.rawSource.file && (
-                      <span className="ml-2">
-                        來源: <span className="font-mono">{o.rawSource.file}</span>
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {decision ? (
-                  <span className="text-xs bg-green-100 text-green-900 px-2 py-1 rounded">
-                    {decision === "shipped" ? "✅ 已出貨" : decision === "canceled" ? "❌ 已取消" : "⏸ 暫留"}
-                  </span>
-                ) : (
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => onDecide(o.id, "shipped")}
-                      className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
-                    >
-                      1 已出貨
-                    </button>
-                    <button
-                      onClick={() => onDecide(o.id, "canceled")}
-                      className="px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
-                    >
-                      2 已取消
-                    </button>
-                    <button
-                      onClick={() => onDecide(o.id, "kept_active")}
-                      className="px-3 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600"
-                    >
-                      3 暫留
-                    </button>
-                  </div>
-                )}
-              </div>
-              {frozen && !decision && (
-                <div className="mt-2 text-xs text-orange-800 bg-orange-50 rounded p-2">
-                  ⚠️ 這筆標籤已印。取消時需重印同批其他單、或整批重印。
-                </div>
-              )}
-            </div>
-          );
-        })}
+      <SectionHeader
+        color={C.red}
+        title={`消失待確認（${orders.length} 筆）`}
+        hint="憲章 #9 必須逐一拍板"
+        unresolvedCount={unresolved.length}
+        bulkOptions={[
+          { key: "shipped",     label: "全部已出貨", color: C.green },
+          { key: "canceled",    label: "全部取消",   color: C.red },
+          { key: "kept_active", label: "全部暫留",   color: C.mut2 },
+        ]}
+        pendingBulk={pendingBulk}
+        pendingLabel={pendingLabel}
+        onBulk={(k) => setPendingBulk(k as "shipped" | "canceled" | "kept_active")}
+        onConfirm={() => void confirmBulk()}
+        onCancel={() => setPendingBulk(null)}
+        busy={busyBulk}
+      />
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {orders.map((o) => (
+          <DisappearedCard
+            key={o.id}
+            order={o}
+            decision={resolutions[o.id]}
+            onDecide={onDecide}
+          />
+        ))}
       </div>
     </section>
   );
 }
 
+function DisappearedCard({
+  order: o,
+  decision,
+  onDecide,
+}: {
+  order: Order;
+  decision: ImportResolution["resolution"] | undefined;
+  onDecide: (id: string, r: ImportResolution["resolution"]) => void;
+}) {
+  const meta = CHANNEL_META[o.channel] ?? { label: o.channel, color: C.mut2 };
+  const frozen = o.frozen_after_label_print;
+  return (
+    <div
+      style={{
+        background: decision ? C.cardAlt : C.card,
+        border: `1px solid ${C.line2}`,
+        borderLeft: `3px solid ${meta.color}`,
+        padding: "10px 12px",
+        opacity: decision ? 0.55 : 1,
+      }}
+    >
+      <div className="flex items-start justify-between flex-wrap" style={{ gap: 10 }}>
+        <div className="flex-1" style={{ minWidth: 0 }}>
+          <div className="flex items-baseline flex-wrap" style={{ gap: 10 }}>
+            <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 11, color: meta.color, letterSpacing: ".05em" }}>
+              {meta.label}
+            </span>
+            <span style={{ fontFamily: F.mono, fontSize: 11, color: C.mut2 }}>{o.id}</span>
+            <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 13, color: C.ink }}>{o.recipient.name ?? "—"}</span>
+            {frozen && (
+              <span style={{ fontFamily: F.mono, fontSize: 9, color: C.orange, border: `1px solid ${C.orange}`, padding: "1px 5px", letterSpacing: ".05em" }}>
+                🖨 已印標籤
+              </span>
+            )}
+          </div>
+          <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut3, marginTop: 4, letterSpacing: ".05em" }}>
+            {o.batchDate ?? "—"} · ${o.revenue.grossTotal}
+            {o.rawSource.file && <> · 來源 {o.rawSource.file}</>}
+          </div>
+        </div>
+        <ActionCluster
+          decision={decision}
+          decisionLabels={{
+            shipped:     "✓ 已出貨",
+            canceled:    "✗ 已取消",
+            kept_active: "⏸ 暫留",
+          }}
+          actions={[
+            { key: "shipped",     label: "1 已出貨", tone: "primary" },
+            { key: "canceled",    label: "2 已取消", tone: "danger"  },
+            { key: "kept_active", label: "3 暫留",   tone: "neutral" },
+          ]}
+          onPick={(k) => onDecide(o.id, k as ImportResolution["resolution"])}
+        />
+      </div>
+      {frozen && !decision && (
+        <div
+          style={{
+            marginTop: 8, padding: "6px 10px",
+            background: "#2a1a06", border: `1px solid ${C.orange}`,
+            fontFamily: F.mono, fontSize: 10, color: C.orange,
+          }}
+        >
+          ⚠ 這筆標籤已印。取消時需重印同批其他單、或整批重印。
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Section 2 · 資訊變動待確認 ──
 function ChangedSection({
   orders,
   resolutions,
@@ -291,140 +439,178 @@ function ChangedSection({
   const unresolved = orders.filter((o) => !resolutions[o.id]);
   const [pendingBulk, setPendingBulk] = useState<null | "accept_change" | "reject_change">(null);
   const [busyBulk, setBusyBulk] = useState(false);
-  const bulkResolve = (r: "accept_change" | "reject_change") => setPendingBulk(r);
+
   const confirmBulk = async () => {
     if (!pendingBulk || busyBulk) return;
     setBusyBulk(true);
     try {
-      for (const o of unresolved) {
-        await onDecide(o.id, pendingBulk);
-      }
+      for (const o of unresolved) await onDecide(o.id, pendingBulk);
     } finally {
       setBusyBulk(false);
       setPendingBulk(null);
     }
   };
-  const pendingLabel = pendingBulk === "accept_change" ? "接受變動" : pendingBulk === "reject_change" ? "保留舊資料" : "";
+
+  const pendingLabel =
+    pendingBulk === "accept_change" ? "接受變動" :
+    pendingBulk === "reject_change" ? "保留舊資料" : "";
+
   return (
     <section>
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="font-bold text-yellow-800">
-          📝 資訊變動待確認（{orders.length} 筆）—— 憲章 #10 不 auto-overwrite
-        </h3>
-        {unresolved.length > 1 && !pendingBulk && (
-          <div className="flex gap-1 text-xs">
-            <span className="text-gray-500 mr-1 self-center">批次處理剩餘 {unresolved.length}：</span>
-            <button
-              onClick={() => bulkResolve("accept_change")}
-              className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
-            >
-              全部接受
-            </button>
-            <button
-              onClick={() => bulkResolve("reject_change")}
-              className="px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
-            >
-              全部保留舊
-            </button>
-          </div>
-        )}
-        {pendingBulk && (
-          <div className="flex gap-2 items-center text-xs bg-yellow-100 border border-yellow-400 px-3 py-2 rounded">
-            <span className="text-gray-800">
-              ⚠ 將剩下 {unresolved.length} 筆全部標為「<strong>{pendingLabel}</strong>」？
-            </span>
-            <button
-              onClick={() => void confirmBulk()}
-              disabled={busyBulk}
-              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-60"
-            >
-              {busyBulk ? "處理中…" : "確認"}
-            </button>
-            <button
-              onClick={() => setPendingBulk(null)}
-              disabled={busyBulk}
-              className="px-3 py-1 bg-gray-300 text-gray-800 rounded hover:bg-gray-400"
-            >
-              取消
-            </button>
-          </div>
-        )}
-      </div>
-      <div className="space-y-2">
-        {orders.map((o) => {
-          const decision = resolutions[o.id];
-          const lastChange = o.changes[o.changes.length - 1];
-          if (!lastChange) return null;
-          const chanBadge = CHANNEL_BADGE[o.channel] ?? {
-            label: o.channel,
-            color: "bg-gray-100 text-gray-900",
-          };
-          return (
-            <div
-              key={o.id}
-              className={`border rounded p-3 ${decision ? "bg-gray-50 opacity-60" : "bg-white"}`}
-            >
-              <div className="flex items-start justify-between text-sm mb-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`text-xs px-2 py-0.5 rounded font-semibold ${chanBadge.color}`}>
-                    {chanBadge.label}
-                  </span>
-                  <span className="font-mono text-xs">{o.id}</span>
-                  <span>{o.recipient.name ?? "—"}</span>
-                </div>
-                {decision ? (
-                  <span className="text-xs bg-green-100 text-green-900 px-2 py-1 rounded">
-                    {decision === "accept_change" ? "✅ 接受" : decision === "reject_change" ? "❌ 保留舊" : "🖨️ 重印"}
-                  </span>
-                ) : (
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => onDecide(o.id, "accept_change")}
-                      className="px-3 py-1 bg-blue-600 text-white text-xs rounded"
-                    >
-                      1 接受變動
-                    </button>
-                    <button
-                      onClick={() => onDecide(o.id, "reject_change")}
-                      className="px-3 py-1 bg-gray-500 text-white text-xs rounded"
-                    >
-                      2 保留舊
-                    </button>
-                    {o.frozen_after_label_print && (
-                      <button
-                        onClick={() => onDecide(o.id, "reprint")}
-                        className="px-3 py-1 bg-orange-600 text-white text-xs rounded"
-                      >
-                        3 接受+重印
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="bg-red-50 rounded p-2">
-                  <div className="font-semibold text-red-800">舊值</div>
-                  {Object.entries(lastChange.fields).map(([k, v]) => (
-                    <div key={k}>
-                      <span className="text-gray-500">{k}:</span>{" "}
-                      <span className="font-mono">{String(v.from)}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="bg-green-50 rounded p-2">
-                  <div className="font-semibold text-green-800">新值</div>
-                  {Object.entries(lastChange.fields).map(([k, v]) => (
-                    <div key={k}>
-                      <span className="text-gray-500">{k}:</span>{" "}
-                      <span className="font-mono">{String(v.to)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          );
-        })}
+      <SectionHeader
+        color={C.acc}
+        title={`資訊變動待確認（${orders.length} 筆）`}
+        hint="憲章 #10 不 auto-overwrite"
+        unresolvedCount={unresolved.length}
+        bulkOptions={[
+          { key: "accept_change", label: "全部接受",   color: C.green },
+          { key: "reject_change", label: "全部保留舊", color: C.mut2 },
+        ]}
+        pendingBulk={pendingBulk}
+        pendingLabel={pendingLabel}
+        onBulk={(k) => setPendingBulk(k as "accept_change" | "reject_change")}
+        onConfirm={() => void confirmBulk()}
+        onCancel={() => setPendingBulk(null)}
+        busy={busyBulk}
+      />
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {orders.map((o) => (
+          <ChangedCard
+            key={o.id}
+            order={o}
+            decision={resolutions[o.id]}
+            onDecide={onDecide}
+          />
+        ))}
       </div>
     </section>
+  );
+}
+
+function ChangedCard({
+  order: o,
+  decision,
+  onDecide,
+}: {
+  order: Order;
+  decision: ImportResolution["resolution"] | undefined;
+  onDecide: (id: string, r: ImportResolution["resolution"]) => void;
+}) {
+  const lastChange = o.changes[o.changes.length - 1];
+  if (!lastChange) return null;
+  const meta = CHANNEL_META[o.channel] ?? { label: o.channel, color: C.mut2 };
+
+  return (
+    <div
+      style={{
+        background: decision ? C.cardAlt : C.card,
+        border: `1px solid ${C.line2}`,
+        borderLeft: `3px solid ${meta.color}`,
+        padding: "10px 12px",
+        opacity: decision ? 0.55 : 1,
+      }}
+    >
+      <div className="flex items-start justify-between flex-wrap" style={{ gap: 10, marginBottom: 8 }}>
+        <div className="flex items-baseline flex-wrap" style={{ gap: 10 }}>
+          <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 11, color: meta.color, letterSpacing: ".05em" }}>
+            {meta.label}
+          </span>
+          <span style={{ fontFamily: F.mono, fontSize: 11, color: C.mut2 }}>{o.id}</span>
+          <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 13, color: C.ink }}>{o.recipient.name ?? "—"}</span>
+        </div>
+        <ActionCluster
+          decision={decision}
+          decisionLabels={{
+            accept_change: "✓ 接受",
+            reject_change: "✗ 保留舊",
+            reprint:       "🖨 重印",
+          }}
+          actions={[
+            { key: "accept_change", label: "1 接受變動", tone: "primary" },
+            { key: "reject_change", label: "2 保留舊",   tone: "neutral" },
+            ...(o.frozen_after_label_print
+              ? [{ key: "reprint", label: "3 接受+重印", tone: "warn" as const }]
+              : []),
+          ]}
+          onPick={(k) => onDecide(o.id, k as ImportResolution["resolution"])}
+        />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <DiffPane title="舊值" color={C.red} rows={Object.entries(lastChange.fields).map(([k, v]) => [k, String(v.from)])} />
+        <DiffPane title="新值" color={C.green} rows={Object.entries(lastChange.fields).map(([k, v]) => [k, String(v.to)])} />
+      </div>
+    </div>
+  );
+}
+
+function DiffPane({ title, color, rows }: { title: string; color: string; rows: [string, string][] }) {
+  return (
+    <div style={{ background: C.cardAlt, border: `1px solid ${C.line2}`, borderLeft: `3px solid ${color}`, padding: "6px 10px" }}>
+      <div style={{ fontFamily: F.mono, fontSize: 9, color, letterSpacing: ".14em", marginBottom: 4 }}>{title}</div>
+      {rows.map(([k, v]) => (
+        <div key={k} style={{ fontFamily: F.mono, fontSize: 10, color: C.mut, lineHeight: 1.5 }}>
+          <span style={{ color: C.mut3 }}>{k}:</span> <span style={{ color: C.ink }}>{v}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── 按鈕 cluster ──
+type ActionTone = "primary" | "danger" | "neutral" | "warn";
+function ActionCluster({
+  decision,
+  decisionLabels,
+  actions,
+  onPick,
+}: {
+  decision: string | undefined;
+  decisionLabels: Record<string, string>;
+  actions: { key: string; label: string; tone: ActionTone }[];
+  onPick: (key: string) => void;
+}) {
+  if (decision) {
+    return (
+      <span
+        style={{
+          fontFamily: F.tc, fontWeight: 900, fontSize: 10, color: C.green,
+          border: `1px solid ${C.green}`, padding: "4px 10px", letterSpacing: ".05em",
+        }}
+      >
+        {decisionLabels[decision] ?? decision}
+      </span>
+    );
+  }
+  return (
+    <div className="flex flex-wrap" style={{ gap: 5 }}>
+      {actions.map((a) => (
+        <ActionButton key={a.key} label={a.label} tone={a.tone} onClick={() => onPick(a.key)} />
+      ))}
+    </div>
+  );
+}
+
+function ActionButton({ label, tone, onClick }: { label: string; tone: ActionTone; onClick: () => void }) {
+  const styles: Record<ActionTone, { color: string; background: string; border: string }> = {
+    primary: { color: "#111",   background: C.acc,        border: `1px solid ${C.acc}` },
+    danger:  { color: C.red,    background: "transparent", border: `1px solid ${C.red}` },
+    neutral: { color: C.mut2,   background: "transparent", border: `1px solid ${C.line}` },
+    warn:    { color: C.orange, background: "transparent", border: `1px solid ${C.orange}` },
+  };
+  const s = styles[tone];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        fontFamily: F.tc, fontWeight: 900, fontSize: 10,
+        color: s.color, background: s.background, border: s.border,
+        padding: "5px 11px", cursor: "pointer", letterSpacing: ".05em",
+      }}
+    >
+      {label}
+    </button>
   );
 }
