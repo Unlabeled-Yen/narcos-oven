@@ -18,6 +18,15 @@ function isDirtyDate(v: string | null | undefined): boolean {
   return !ISO_DATE_RE.test(v);
 }
 
+// Yen 2026-07-04：SKU key rename 對照
+//   舊 key「XX5入含醬」→ 官方語意「XX6入」（5 顆主品 + 1 醬 = 6 入）
+//   idempotent：跑第二次不會再改（已改的訂單找不到舊 key）
+const SKU_RENAME_MAP: Record<string, string> = {
+  "經典肉桂捲5入含醬": "經典肉桂捲6入",
+  "蘋果肉桂捲5入含醬": "蘋果肉桂捲6入",
+  "混合5入含醬": "長型6入_混合",
+};
+
 export type SanitizeResult = {
   scanned: number;
   fixed: number;
@@ -27,7 +36,8 @@ export type SanitizeResult = {
       | "dirty-batchDate"
       | "dirty-wishDate"
       | "legacy-missing-batch-date-reason"
-      | "backfill-order-date-from-snapshot";
+      | "backfill-order-date-from-snapshot"
+      | "sku-rename";
     detail?: string;
   }>;
 };
@@ -85,6 +95,25 @@ export async function sanitizeDirtyDates(orders: Order[]): Promise<SanitizeResul
         reason: "legacy-missing-batch-date-reason",
         detail: `一致性修復 ${willBeStatus} → confirmed（reason 已清空）`,
       });
+    }
+
+    // 6. SKU key rename migration（Yen 2026-07-04）
+    //    掃 items[].productSkuId、若命中舊 key、產出新 items array
+    let renamedAny = false;
+    const newItems = o.items.map((it) => {
+      if (it.productSkuId && SKU_RENAME_MAP[it.productSkuId]) {
+        renamedAny = true;
+        return { ...it, productSkuId: SKU_RENAME_MAP[it.productSkuId]! };
+      }
+      return it;
+    });
+    if (renamedAny) {
+      changes.items = newItems;
+      const renamed = o.items
+        .filter((it) => it.productSkuId && SKU_RENAME_MAP[it.productSkuId])
+        .map((it) => `${it.productSkuId} → ${SKU_RENAME_MAP[it.productSkuId!]!}`)
+        .join(", ");
+      fixes.push({ id: o.id, reason: "sku-rename", detail: renamed });
     }
 
     if (Object.keys(changes).length > 0) {
