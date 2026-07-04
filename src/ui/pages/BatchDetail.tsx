@@ -52,7 +52,16 @@ export function BatchDetailPanel({
             color: #000 !important; border-color: #000 !important;
           }
           .batch-detail-panel { border: 1px solid #000 !important; }
-          .batch-detail-panel .channel-group { break-inside: avoid; page-break-inside: avoid; }
+          /* Yen 2026-07-04：跨頁保護 · 每張訂單卡完整呈現、每通路組儘量在同頁 */
+          .batch-detail-panel .order-card { break-inside: avoid; page-break-inside: avoid; }
+          .batch-detail-panel .channel-group { break-inside: avoid-page; page-break-inside: avoid; }
+          .batch-detail-panel .channel-group > div:first-child {
+            break-after: avoid; page-break-after: avoid;
+          }
+          .batch-detail-panel .stats-block { break-inside: avoid; page-break-inside: avoid; }
+          /* 「複製」互動按鈕 print 時隱藏、改印純文字 */
+          .batch-detail-panel .only-print { display: inline !important; }
+          .batch-detail-panel .no-print { display: none !important; }
         }
       `}</style>
       <div className="flex items-center justify-between flex-wrap" style={{ gap: 12, padding: "16px 20px 12px" }}>
@@ -92,12 +101,50 @@ export function BatchDetailPanel({
         </div>
       </div>
       <div style={{ height: 7, background: "repeating-linear-gradient(45deg,var(--acc,#F5D400) 0 14px,#111 14px 28px)" }} />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 16, padding: 16 }}>
-        <BatchAtomsCount shipList={shipList} menu={menu} />
+      <div className="stats-block" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 16, padding: 16 }}>
+        <BatchSkuCount shipList={shipList} menu={menu} />
         <BatchAtomsPreparation shipList={shipList} menu={menu} />
       </div>
-      {/* Yen 2026-07-03：出貨人員對帳用訂單詳情 table · 每批貨來自哪張訂單 · 物流/通路/標籤 */}
+      {/* Yen 2026-07-03：出貨人員對帳用訂單詳情 · 通路分組卡片 */}
       <BatchOrdersTable shipList={shipList} menu={menu} />
+    </div>
+  );
+}
+
+// ── SKU（訂單組合）級統計 · Yen 2026-07-04 要求：不用單品項 atom、按 SKU 組合統計 ──
+function accumulateBySku(orders: Order[]): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const o of orders) {
+    for (const it of o.items) {
+      if (!it.productSkuId) continue;
+      m.set(it.productSkuId, (m.get(it.productSkuId) ?? 0) + it.quantity);
+    }
+  }
+  return m;
+}
+
+function BatchSkuCount({ shipList, menu }: { shipList: Order[]; menu: Menu }) {
+  const totals = accumulateBySku(shipList);
+  const rows = [...totals.entries()].filter(([, q]) => q > 0).sort((a, b) => b[1] - a[1]);
+  const grandTotal = rows.reduce((s, [, q]) => s + q, 0);
+  return (
+    <div>
+      <div style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".14em", marginBottom: 10 }}>
+        訂單組合統計 · {grandTotal} 份
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, fontFamily: F.mono, fontSize: 11 }}>
+        {rows.length === 0 && <span style={{ color: "#6C6C74" }}>本批尚無訂單</span>}
+        {rows.map(([sku, qty]) => {
+          const p = menu.products[sku];
+          const name = p?.display_name ?? sku;
+          return (
+            <div key={sku} className="flex items-center justify-between" style={{ padding: "7px 12px", background: "#161619" }}>
+              <span style={{ fontFamily: F.tc, fontWeight: 700, color: "#C9C9CF" }}>{name}</span>
+              <span style={{ fontFamily: F.anton, fontSize: 15, color: "#F5F4EF" }}>{qty}</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -202,10 +249,20 @@ function OrderCard({ order: o, menu, color }: { order: Order; menu: Menu; color:
   const faceLoc = isFace ? o.channel.replace(/^面交_/, "") : null;
 
   return (
-    <div style={{ background: "#0F0F12", border: "1px solid #1F1F24", padding: "10px 12px" }}>
+    <div className="order-card" style={{ background: "#0F0F12", border: "1px solid #1F1F24", padding: "10px 12px" }}>
       <div className="flex items-baseline justify-between flex-wrap" style={{ gap: 10, marginBottom: 6 }}>
         <div className="flex items-baseline flex-wrap" style={{ gap: 10 }}>
-          <span style={{ fontFamily: F.mono, fontSize: 11, color: "#8A8A93", letterSpacing: ".05em" }}>{o.id}</span>
+          {/* Yen 2026-07-04：訂單編號 loud 顯示 · 出貨人員一眼對照賣貨便網頁 · click 複製 */}
+          <button
+            type="button"
+            className="no-print"
+            title="複製訂單編號 · 貼到賣貨便網頁搜尋"
+            onClick={() => { void navigator.clipboard?.writeText(o.id); }}
+            style={{ fontFamily: F.mono, fontWeight: 700, fontSize: 13, color: isMart ? "var(--acc,#F5D400)" : "#F5F4EF", background: "transparent", border: `1px solid ${isMart ? "var(--acc,#F5D400)" : "#3a3a40"}`, padding: "2px 8px", cursor: "pointer", letterSpacing: ".05em" }}
+          >
+            {o.id}
+          </button>
+          <span className="only-print" style={{ display: "none", fontFamily: F.mono, fontWeight: 700, fontSize: 13, color: "#000" }}>{o.id}</span>
           <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 14, color: "#F5F4EF" }}>{o.recipient.name ?? "—"}</span>
           {o.order_date && (
             <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".05em" }}>
@@ -272,30 +329,9 @@ function OrderCard({ order: o, menu, color }: { order: Order; menu: Menu; color:
   );
 }
 
-// ── 當日顆數統計（純數字、不做上限比對） ────────────────────
-function BatchAtomsCount({ shipList, menu }: { shipList: Order[]; menu: Menu }) {
-  const totals = accumulateAtoms(shipList);
-  const rows = [...totals.entries()].filter(([, q]) => q > 0).sort((a, b) => b[1] - a[1]);
-  const grandTotal = rows.reduce((s, [, q]) => s + q, 0);
-  return (
-    <div>
-      <div style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".14em", marginBottom: 10 }}>
-        當日顆數統計 · {grandTotal} 顆
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, fontFamily: F.mono, fontSize: 11 }}>
-        {rows.length === 0 && <span style={{ color: "#6C6C74" }}>本批尚無訂單</span>}
-        {rows.map(([atom, qty]) => (
-          <div key={atom} className="flex items-center justify-between" style={{ padding: "7px 12px", background: "#161619" }}>
-            <span style={{ fontFamily: F.tc, fontWeight: 700, color: "#C9C9CF" }}>{getDisplayName(atom, menu)}</span>
-            <span style={{ fontFamily: F.anton, fontSize: 15, color: "#F5F4EF" }}>{qty}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+// ── BatchAtomsCount 已由 BatchSkuCount 取代（Yen 2026-07-04：按 SKU 組合統計、非單品項 atom） ──
 
-// ── 備料原子總量（跟 BatchAtomsCount 幾乎一樣、留兩欄視覺分區） ──
+// ── 備料原子總量（保留 · atom 級 · 給備料師傅看要多少顆） ──
 function BatchAtomsPreparation({ shipList, menu }: { shipList: Order[]; menu: Menu }) {
   const totals = accumulateAtoms(shipList);
   const rows = [...totals.entries()].filter(([, q]) => q > 0).sort((a, b) => b[1] - a[1]);

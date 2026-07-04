@@ -728,9 +728,8 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
           {/* 本週合計條已挪到右軌「當週統計」面板 · 底部只留 legend */}
           <div className="flex flex-wrap" style={{ gap: 14, marginTop: 14, fontFamily: F.mono, fontSize: 10, color: "#7A7A82" }}>
             <Legend c="var(--acc,#F5D400)" t="出貨日" />
-            <Legend c="#8557C9" t="開麵糰" />
-            <Legend c="#2AC7E8" t="冷藏·烤磅" />
-            <Legend c="#43B23C" t="面交" />
+            <Legend c="#2AC7E8" t="工作日" />
+            <Legend c="#4a4a52" t="休息日" dashed />
           </div>
         </div>
 
@@ -1376,10 +1375,10 @@ function MonthCalendar({
   );
 }
 
-function Legend({ c, t }: { c: string; t: string }) {
+function Legend({ c, t, dashed }: { c: string; t: string; dashed?: boolean }) {
   return (
     <span className="flex items-center" style={{ gap: 6 }}>
-      <span style={{ width: 9, height: 9, background: c }} />
+      <span style={{ width: 9, height: 9, background: dashed ? "transparent" : c, border: dashed ? `1px dashed ${c}` : undefined }} />
       {t}
     </span>
   );
