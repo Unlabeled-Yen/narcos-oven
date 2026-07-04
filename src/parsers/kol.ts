@@ -21,7 +21,8 @@ import type {
   ParseResult,
   PendingReason,
 } from "../domain/models";
-import { explodeToAtoms, lookupSku } from "../domain/menu";
+import { explodeToAtoms } from "../domain/menu";
+import { lookupSkuStrict, type LookupResult } from "../domain/menu-lookup";
 import { readSheetTolerant } from "../domain/xlsx-tolerant";
 import { extractKolShippingDate } from "../domain/batch-date";
 // 工時 / wish_priority 依 Yen 2026-07-03 決策拿掉、parser 不填
@@ -30,18 +31,22 @@ import { kolOrderId } from "../domain/id-hash";
 const SHEET_NAME = "未完成";
 const CHOICE_KEYWORD_RE = /擇一|口味擇一|請選/;
 
-/** KOL 品項字串對到 SKU 的 hint。 */
-function mapKolProductToSku(raw: string, menu: Menu): string | null {
+/** KOL 品項字串對到 SKU · 回 LookupResult · 讓上層 loud pending on ambiguous */
+function mapKolProductToSku(raw: string, menu: Menu): LookupResult {
   const trimmed = raw.replace(/^◆\s*/, "").trim();
-  // 先試 menu 的 alias/signature
-  const direct = lookupSku(trimmed, menu);
-  if (direct) return direct;
-  // 常見 KOL 口語 fallback
-  if (/四入肉桂捲|肉桂捲\s*4\s*入/.test(trimmed) && !trimmed.includes("蘋果")) return "經典肉桂捲4入";
-  if (/四入蘋果|蘋果肉桂捲\s*4\s*入|四入.*蘋果捲/.test(trimmed)) return "蘋果肉桂捲4入";
-  if (/香料堅果醬.*90|90.*香料堅果醬/.test(trimmed)) return "香料堅果醬90ml";
-  if (/原味巴斯克/.test(trimmed) && !/白玉/.test(trimmed)) return "原味巴斯克";
-  return null;
+  // Menu 的 alias/signature 為主軌
+  const direct = lookupSkuStrict(trimmed, menu);
+  if (direct.kind !== "none") return direct;
+  // Fallback · KOL 口語 · 只 return found（單一命中）· 不再靜默選
+  if (/四入肉桂捲|肉桂捲\s*4\s*入/.test(trimmed) && !trimmed.includes("蘋果"))
+    return { kind: "found", skuId: "經典肉桂捲4入", via: "alias" };
+  if (/四入蘋果|蘋果肉桂捲\s*4\s*入|四入.*蘋果捲/.test(trimmed))
+    return { kind: "found", skuId: "蘋果肉桂捲4入", via: "alias" };
+  if (/香料堅果醬.*90|90.*香料堅果醬/.test(trimmed))
+    return { kind: "found", skuId: "香料堅果醬90ml", via: "alias" };
+  if (/原味巴斯克/.test(trimmed) && !/白玉/.test(trimmed))
+    return { kind: "found", skuId: "原味巴斯克", via: "alias" };
+  return { kind: "none" };
 }
 
 export function parseKol(
@@ -201,15 +206,19 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
       });
       continue;
     }
-    const sku = mapKolProductToSku(p, menu);
-    if (!sku) {
+    const result = mapKolProductToSku(p, menu);
+    if (result.kind !== "found") {
+      const humanMessage = result.kind === "none"
+        ? `KOL「提供項目」欄=「${p.slice(0, 30)}」找不到對應的 menu SKU`
+        : `KOL「提供項目」欄=「${p.slice(0, 30)}」match 多個 SKU 候選（${result.candidates.join(" / ")}）· ${result.reason}`;
       pendingReasons.push({
         code: "UNKNOWN_PRODUCT",
-        humanMessage: `KOL「提供項目」欄=「${p.slice(0, 30)}」找不到對應的 menu SKU`,
+        humanMessage,
         suggestionConfidence: 0,
       });
       continue;
     }
+    const sku = result.skuId;
     const perUnitAtoms = explodeToAtoms(sku, menu);
     items.push({
       productSkuId: sku,

@@ -52,21 +52,26 @@ const IN_PERSON_HEADER_TO_SKU: Array<[keyword: string, skuId: string]> = [
   ["240ml 香料堅果醬", "香料堅果醬240ml"],
 ];
 
-// 長 keyword 優先（防子字串誤命中）
-// Yen 2026-07-04 bug fix：
-//   舊：substring `includes` + for 找到就 return
-//   「蘋果肉桂捲四入」.includes("肉桂捲四入") = true
-//   → 先命中「經典肉桂捲4入」 → 蘋果版永遠 match 不到
-//   造成 IP-8a1t0h、IP-h88noq 等訂單被錯歸為經典肉桂捲
+// 長 keyword 優先（防子字串誤命中） · Yen 2026-07-04 · 兩層防禦：
+//   1) sort by keyword 長度 DESC · 長 keyword 排前
+//   2) 掃全表列出所有命中、若 > 1 個 loud fail（絕不靜默選）
 const IN_PERSON_HEADER_TO_SKU_SORTED = [...IN_PERSON_HEADER_TO_SKU].sort(
   (a, b) => b[0].length - a[0].length
 );
 
-function mapHeaderToSku(header: string): string | null {
-  for (const [kw, skuId] of IN_PERSON_HEADER_TO_SKU_SORTED) {
-    if (header.includes(kw)) return skuId;
-  }
-  return null;
+type HeaderLookupResult =
+  | { kind: "found"; skuId: string }
+  | { kind: "none" }
+  | { kind: "ambiguous"; candidates: string[] };
+
+function mapHeaderToSku(header: string): HeaderLookupResult {
+  const matches = IN_PERSON_HEADER_TO_SKU_SORTED.filter(([kw]) => header.includes(kw));
+  if (matches.length === 0) return { kind: "none" };
+  // 全部同分（長 keyword 排前、但可能有等長）· 挑第一個候選
+  //   若多個不同 SKU 都命中 · 視為 ambiguous · 上層走 pending_product loud
+  const uniqueSkus = [...new Set(matches.map(([, sku]) => sku))];
+  if (uniqueSkus.length === 1) return { kind: "found", skuId: uniqueSkus[0]! };
+  return { kind: "ambiguous", candidates: uniqueSkus };
 }
 
 export function parseInPerson(
@@ -144,15 +149,19 @@ export function parseInPerson(
       const qty = toNum(r[col]);
       if (qty === null || qty <= 0) continue;
       const headerName = String(header[col] ?? "");
-      const skuId = mapHeaderToSku(headerName);
-      if (!skuId) {
+      const result = mapHeaderToSku(headerName);
+      if (result.kind !== "found") {
+        const humanMessage = result.kind === "none"
+          ? `面交欄「${headerName}」找不到對應的 menu SKU`
+          : `面交欄「${headerName}」match 多個 SKU 候選（${result.candidates.join(" / ")}）· 需 in-person parser 調整 keyword 或遷移到 menu.aliases`;
         pendingReasons.push({
           code: "UNKNOWN_PRODUCT",
-          humanMessage: `面交欄「${headerName}」找不到對應的 menu SKU`,
+          humanMessage,
           suggestionConfidence: 0,
         });
         continue;
       }
+      const skuId = result.skuId;
       const perUnitAtoms = explodeToAtoms(skuId, menu);
       items.push({
         productSkuId: skuId,

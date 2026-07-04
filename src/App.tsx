@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import menuYamlText from "../data/menu.yaml?raw";
 import { loadMenu } from "./domain/menu";
+import { lintMenu, logLintWarnings } from "./domain/menu-lint";
 import { parseSellerBuy } from "./parsers/seller-buy";
 import { parseInPerson } from "./parsers/in-person";
 import { parseKol } from "./parsers/kol";
@@ -16,6 +17,9 @@ import { ImportSanityModal } from "./ui/ImportSanityModal";
 import { AppShell } from "./ui/AppShell";
 
 const menu = loadMenu(menuYamlText);
+// Yen 2026-07-04 · 啟動時 lint menu.yaml · 提前抓 alias / signature 衝突
+// 靜默 SKU 誤匹配根治 Layer B（Layer A 是 lookupSkuStrict）
+logLintWarnings(lintMenu(menu));
 
 const CHANNEL_MAP: Record<FileKind, ChannelId[]> = {
   "seller-buy": ["賣貨便"],

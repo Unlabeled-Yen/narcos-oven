@@ -19,7 +19,8 @@ import type {
   ParseResult,
 } from "../domain/models";
 import { toNum } from "../domain/utils";
-import { explodeToAtoms, lookupSku } from "../domain/menu";
+import { explodeToAtoms } from "../domain/menu";
+import { lookupSkuStrict } from "../domain/menu-lookup";
 import { readSheetTolerant } from "../domain/xlsx-tolerant";
 import {
   extractSellerBuyShippingDate,
@@ -171,11 +172,14 @@ function finalizeOrder(w: WipOrder, menu: Menu): Order {
     // 跳過「指定出貨日 marker」
     if (raw.name.includes("指定出貨日")) continue;
 
-    const skuId = lookupSku(raw.name, menu);
-    if (!skuId) {
+    const result = lookupSkuStrict(raw.name, menu);
+    if (result.kind !== "found") {
+      const humanMessage = result.kind === "none"
+        ? `賣貨便「商品名稱」欄=「${raw.name.slice(0, 50)}」無法對到 menu.yaml SKU`
+        : `賣貨便「商品名稱」欄=「${raw.name.slice(0, 50)}」match 多個 SKU 候選（${result.candidates.join(" / ")}）· ${result.reason}`;
       pendingReasons.push({
         code: "UNKNOWN_PRODUCT",
-        humanMessage: `賣貨便「商品名稱」欄=「${raw.name.slice(0, 50)}」無法對到 menu.yaml SKU`,
+        humanMessage,
         suggestionConfidence: 0,
       });
       items.push({
@@ -187,6 +191,7 @@ function finalizeOrder(w: WipOrder, menu: Menu): Order {
       });
       continue;
     }
+    const skuId = result.skuId;
     const qty = raw.qty ?? 1;
     const perUnitAtoms = explodeToAtoms(skuId, menu);
     items.push({
