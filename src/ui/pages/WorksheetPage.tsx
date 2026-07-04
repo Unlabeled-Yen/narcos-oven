@@ -7,9 +7,6 @@
  *   資料源：跟 SchedulePage 同套（accumulateAtoms / day-type / week-locks / batch range）
  */
 import { useMemo, useState } from "react";
-import type { Order } from "../../domain/models";
-import { getDisplayName } from "../../domain/menu";
-import { accumulateAtoms } from "../../domain/production-time";
 import { makeDayTypeOf, loadDayOverrides } from "../../domain/day-type";
 import { computeBatchRange, findWeekAnchor } from "../../domain/batch-range";
 import { isWeekLocked } from "../../db/week-locks";
@@ -20,8 +17,6 @@ const F = {
   tc: "'Noto Sans TC',sans-serif",
   mono: "'Space Mono',monospace",
 };
-const WD = ["日", "一", "二", "三", "四", "五", "六"];
-
 const navBtn = { fontFamily: "'Space Mono',monospace", fontSize: 11, color: "#C9C9CF", background: "transparent", border: "1px solid #3a3a40", padding: "5px 10px", cursor: "pointer", letterSpacing: ".05em" } as const;
 const navBtnActive = { ...navBtn, color: "#111", background: "var(--acc,#F5D400)", border: "1px solid var(--acc,#F5D400)", fontWeight: 900 } as const;
 
@@ -77,27 +72,22 @@ export function WorksheetPage({ orders, menu }: PageProps) {
     );
   }, [orders, rangeISO.join(",")]);
 
-  // 依日欄分組
-  const byDay = useMemo(() => {
-    const m = new Map<string, Order[]>();
-    for (const iso of rangeISO) m.set(iso, []);
+  // Yen 2026-07-04 決策：雇主只要「本週要做多少單」· 不要按日 breakdown
+  //   拿掉 byDay / displayDays / atom 級統計 · 只留 SKU 級（訂單組合）統計
+  const skuBreakdown = useMemo(() => {
+    const m = new Map<string, number>();
     for (const o of batchOrders) {
-      if (!o.batchDate) continue;
-      m.get(o.batchDate)?.push(o);
+      for (const it of o.items) {
+        if (!it.productSkuId) continue;
+        m.set(it.productSkuId, (m.get(it.productSkuId) ?? 0) + it.quantity);
+      }
     }
-    return m;
-  }, [batchOrders, rangeISO.join(",")]);
-
-  // Yen「只需要顯示已經排定訂單的日期」→ 過濾出有排單的日子
-  const displayDays = useMemo(() => rangeISO.filter((iso) => (byDay.get(iso) ?? []).length > 0), [rangeISO, byDay]);
-
-  const weekAtomBreakdown = useMemo(() => {
-    return [...accumulateAtoms(batchOrders).entries()]
+    return [...m.entries()]
       .filter(([, q]) => q > 0)
-      .map(([atom, qty]) => ({ atom, qty }))
+      .map(([sku, qty]) => ({ sku, qty }))
       .sort((a, b) => b.qty - a.qty);
   }, [batchOrders]);
-  const weekTotal = weekAtomBreakdown.reduce((s, r) => s + r.qty, 0);
+  const weekTotal = skuBreakdown.reduce((s, r) => s + r.qty, 0);
 
   return (
     <div className="h-full flex flex-col min-h-0" style={{ overflowY: "auto" }}>
@@ -158,87 +148,37 @@ export function WorksheetPage({ orders, menu }: PageProps) {
           </div>
         </div>
 
-        {/* Section 1：本工單總出貨統計 · 3 欄 grid 更緊湊 */}
-        <div className="week-summary" style={{ marginBottom: 14, background: "#0F0F12", border: "1px solid #26262C", padding: "10px 14px" }}>
-          <div className="flex items-baseline justify-between flex-wrap" style={{ marginBottom: 8, gap: 10 }}>
-            <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 14, color: "var(--acc,#F5D400)" }}>
-              📊 本批出貨總量 {anchor && <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", marginLeft: 6 }}>· {mdOf(anchor)} 出貨</span>}
+        {/* Section 唯一：本批出貨總量 · 訂單組合（SKU）統計
+            Yen 2026-07-04：拿掉「每日排程 TODO」 · 雇主流程不需要按日排 · 只要一週要做多少 */}
+        <div className="week-summary" style={{ background: "#0F0F12", border: "1px solid #26262C", padding: "14px 16px" }}>
+          <div className="flex items-baseline justify-between flex-wrap" style={{ marginBottom: 12, gap: 10 }}>
+            <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 16, color: "var(--acc,#F5D400)" }}>
+              📊 本週要製作 {anchor && <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", marginLeft: 6 }}>· {mdOf(anchor)} 出貨</span>}
             </div>
-            <div className="flex items-baseline" style={{ gap: 10 }}>
-              <span style={{ fontFamily: F.anton, fontSize: 22, color: "#F5F4EF" }}>{batchOrders.length}</span>
-              <span style={{ fontFamily: F.tc, fontSize: 10, color: "#8A8A93" }}>單</span>
-              <span style={{ fontFamily: F.anton, fontSize: 24, color: "var(--acc,#F5D400)" }}>{weekTotal}</span>
-              <span style={{ fontFamily: F.tc, fontSize: 10, color: "#8A8A93" }}>顆</span>
+            <div className="flex items-baseline" style={{ gap: 12 }}>
+              <span style={{ fontFamily: F.anton, fontSize: 26, color: "#F5F4EF" }}>{batchOrders.length}</span>
+              <span style={{ fontFamily: F.tc, fontSize: 11, color: "#8A8A93" }}>單</span>
+              <span style={{ fontFamily: F.anton, fontSize: 28, color: "var(--acc,#F5D400)" }}>{weekTotal}</span>
+              <span style={{ fontFamily: F.tc, fontSize: 11, color: "#8A8A93" }}>份</span>
             </div>
           </div>
-          {weekAtomBreakdown.length === 0 ? (
-            <div style={{ fontFamily: F.mono, fontSize: 11, color: "#6C6C74" }}>本批 range 無排單</div>
+          {skuBreakdown.length === 0 ? (
+            <div style={{ fontFamily: F.mono, fontSize: 12, color: "#6C6C74", padding: "12px 0" }}>本批尚無任何排入訂單</div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "4px 12px" }}>
-              {weekAtomBreakdown.map((r) => (
-                <div key={r.atom} className="flex items-baseline justify-between" style={{ padding: "4px 8px", background: "#141417", borderLeft: "3px solid var(--acc,#F5D400)" }}>
-                  <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 12, color: "#F5F4EF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>☐ {getDisplayName(r.atom, menu)}</span>
-                  <span style={{ fontFamily: F.anton, fontSize: 16, color: "#F5F4EF", marginLeft: 6 }}>{r.qty}</span>
-                </div>
-              ))}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "6px 14px" }}>
+              {skuBreakdown.map((r) => {
+                const p = menu.products[r.sku];
+                const name = p?.display_name ?? r.sku;
+                return (
+                  <div key={r.sku} className="flex items-baseline justify-between" style={{ padding: "8px 12px", background: "#141417", borderLeft: "3px solid var(--acc,#F5D400)" }}>
+                    <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 13, color: "#F5F4EF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>☐ {name}</span>
+                    <span style={{ fontFamily: F.anton, fontSize: 18, color: "#F5F4EF", marginLeft: 8 }}>{r.qty}</span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
-
-        {/* Section 2：每日排程 TODO · 有排單日子並列 · 空間更省 */}
-        <div className="flex items-baseline justify-between flex-wrap" style={{ marginBottom: 8, gap: 8 }}>
-          <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: "#F5F4EF" }}>
-            🗓 每日排程 · TODO <span style={{ fontFamily: F.mono, fontWeight: 400, fontSize: 10, color: "#7A7A82", marginLeft: 4 }}>· {displayDays.length} 天有排單</span>
-          </div>
-        </div>
-        {displayDays.length === 0 ? (
-          <div style={{ background: "#0F0F12", border: "1px dashed #26262C", padding: "24px", textAlign: "center", fontFamily: F.mono, fontSize: 12, color: "#6C6C74" }}>
-            本批尚無任何排定訂單
-          </div>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 8 }}>
-            {displayDays.map((iso) => {
-              const d = new Date(iso);
-              const t = dayTypeOf(iso);
-              const label = t === "ship" ? "出貨" : "工作";
-              const list = byDay.get(iso) ?? [];
-              const dayBreakdown = [...accumulateAtoms(list).entries()]
-                .filter(([, q]) => q > 0)
-                .map(([atom, qty]) => ({ atom, qty }))
-                .sort((a, b) => b.qty - a.qty);
-              const dayTotal = dayBreakdown.reduce((s, r) => s + r.qty, 0);
-              const bg = t === "ship" ? "#1c1600" : "#0a1620";
-              const border = t === "ship" ? "2px solid var(--acc,#F5D400)" : "1px solid #2AC7E8";
-              return (
-                <div key={iso} className="day-block" style={{ background: bg, border, padding: "8px 10px", minWidth: 0 }}>
-                  <div className="flex items-baseline justify-between flex-wrap" style={{ gap: 8, marginBottom: 6 }}>
-                    <div className="flex items-baseline" style={{ gap: 6, minWidth: 0 }}>
-                      <span style={{ fontFamily: F.anton, fontSize: 20, color: t === "ship" ? "var(--acc,#F5D400)" : "#F5F4EF" }}>{d.getDate()}</span>
-                      <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 12, color: t === "ship" ? "var(--acc,#F5D400)" : "#2AC7E8" }}>
-                        {WD[d.getDay()]} · {label}
-                      </span>
-                      <span style={{ fontFamily: F.mono, fontSize: 9, color: "#7A7A82" }}>{mdOf(iso)}</span>
-                    </div>
-                    <div className="flex items-baseline" style={{ gap: 4 }}>
-                      <span style={{ fontFamily: F.anton, fontSize: 15, color: "#F5F4EF" }}>{list.length}</span>
-                      <span style={{ fontFamily: F.tc, fontSize: 9, color: "#8A8A93" }}>單</span>
-                      <span style={{ fontFamily: F.anton, fontSize: 17, color: "var(--acc,#F5D400)" }}>{dayTotal}</span>
-                      <span style={{ fontFamily: F.tc, fontSize: 9, color: "#8A8A93" }}>顆</span>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                    {dayBreakdown.map((r) => (
-                      <div key={r.atom} className="flex items-baseline justify-between" style={{ padding: "3px 8px", background: "#141417" }}>
-                        <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 11, color: "#F5F4EF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>☐ {getDisplayName(r.atom, menu)}</span>
-                        <span style={{ fontFamily: F.anton, fontSize: 13, color: "#F5F4EF", marginLeft: 6 }}>{r.qty}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
 
         {/* footer 列印時省略 · 資料源說明不必要 */}
       </div>

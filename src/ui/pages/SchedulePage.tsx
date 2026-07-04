@@ -359,16 +359,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
     return { year: y, month: mo, weeks };
   }, [today, monthOffset]);
 
-  // 該日 atom breakdown（給日欄底部 mini 統計用、依顆數降序）
-  function dayAtomBreakdown(iso: string): Array<{ atom: string; qty: number }> {
-    const list = assignedByDay.get(iso) ?? [];
-    if (list.length === 0) return [];
-    return [...accumulateAtoms(list).entries()]
-      .filter(([, q]) => q > 0)
-      .map(([atom, qty]) => ({ atom, qty }))
-      .sort((a, b) => b.qty - a.qty);
-  }
-  // 週彙總 atom breakdown 移到下方 useMemo（用批次歸屬語意、非日欄語意）
+  // dayAtomBreakdown 已於 2026-07-04 拿掉（雇主流程不需要按日 breakdown）
 
   // 拖放持久化（憲章 #11 拍板）
   async function commitAssign(id: string, toISO: string | null) {
@@ -450,8 +441,14 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   //   例：本週 shipping=[06/30] · anchor=06/30
   //       06/29(rest·跳) 06/28(work·加) 06/27(work·加) 06/26(rest·跳) 06/25(work·加) 06/24(work·加) 06/23(ship·break)
   //       Range = [06/24, 06/25, 06/27, 06/28, 06/30]
+  // 本週所有 shipping days · UI grid 主要 render 這些 cell
+  const shippingDaysThisWeek = useMemo(
+    () => weekISO.filter((iso) => dayTypeOf(iso) === "ship"),
+    [weekISO.join(","), dayOverrides, menu.scheduling?.shipping_weekdays]
+  );
+
   const currentBatchRangeISO = useMemo(() => {
-    const shipsInWeek = weekISO.filter((iso) => dayTypeOf(iso) === "ship");
+    const shipsInWeek = shippingDaysThisWeek;
     if (shipsInWeek.length === 0) return [];
     const anchor = shipsInWeek[shipsInWeek.length - 1]!;
     const range: string[] = [anchor];
@@ -605,59 +602,78 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6, flex: 1, minHeight: 0 }}>
+          {/* Yen 2026-07-04 決策：拿掉工作日日欄、只留出貨日 cell + 本週匯集桶
+              上方 7 天 chip row 讓雇主快速設出貨日 · 主 grid 只 render shipping days */}
+          <div className="flex flex-wrap" style={{ gap: 4, marginBottom: 8, flexShrink: 0 }}>
             {week.map((d) => {
               const iso = toISO(d);
               const t = dayTypeOf(iso);
               const isShip = t === "ship";
-              const isWork = t === "work";
-              const isRest = t === "rest";
+              return (
+                <button
+                  key={iso}
+                  type="button"
+                  onClick={weekLocked ? undefined : () => cycleDayType(iso)}
+                  disabled={weekLocked}
+                  title={weekLocked ? "🔒 本週已鎖定" : "點擊：休息 → 工作 → 出貨"}
+                  style={{
+                    fontFamily: F.mono, fontSize: 10, letterSpacing: ".05em",
+                    padding: "5px 10px",
+                    color: isShip ? "#111" : "#8A8A93",
+                    background: isShip ? "var(--acc,#F5D400)" : "transparent",
+                    border: `1px solid ${isShip ? "var(--acc,#F5D400)" : "#3a3a40"}`,
+                    cursor: weekLocked ? "not-allowed" : "pointer",
+                    fontWeight: isShip ? 900 : 400,
+                  }}
+                >
+                  {WD[d.getDay()]} {d.getDate()}{isShip ? " · 出貨" : ""}
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.max(shippingDaysThisWeek.length, 1)},1fr)`, gap: 8, flex: 1, minHeight: 0 }}>
+            {shippingDaysThisWeek.length === 0 ? (
+              <div style={{ background: "#0F0F12", border: "1px dashed #26262C", padding: 24, textAlign: "center", fontFamily: F.mono, fontSize: 12, color: "#6C6C74", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                本週無出貨日 · 點上方 7 天 chip 標一天為「出貨」開始匯集訂單
+              </div>
+            ) : shippingDaysThisWeek.map((iso) => {
+              const d = new Date(iso);
               const list = assignedByDay.get(iso) ?? [];
               const isOver = overDay === iso;
-              // 顏色：出貨日 = 黃、工作日 = 青藍 (cyan)、休息 = 深灰虛線
-              const bgColor = isShip ? "#1c1600" : isWork ? "#0a1620" : "#0a0a0c";
-              const borderColor = isShip
-                ? "2px solid var(--acc,#F5D400)"
-                : isWork ? "1px solid #2AC7E8"
-                : "1px dashed #26262C";
               return (
                 <div
                   key={iso}
                   style={{
-                    background: bgColor,
-                    border: borderColor,
+                    background: "#1c1600",
+                    border: "2px solid var(--acc,#F5D400)",
                     minHeight: 0,
                     display: "flex",
                     flexDirection: "column",
-                    boxShadow: isShip ? "0 0 0 3px rgba(245,212,0,.12)" : undefined,
-                    opacity: isRest ? 0.6 : 1,
+                    boxShadow: "0 0 0 3px rgba(245,212,0,.12)",
                   }}
                 >
-                  <button
-                    type="button"
-                    onClick={weekLocked ? undefined : () => cycleDayType(iso)}
-                    disabled={weekLocked}
-                    title={weekLocked ? "🔒 本週已鎖定 · 先解鎖才能切換此日類型" : "點擊切換此日：休息 → 工作 → 出貨（只影響此日）"}
-                    className="flex items-baseline justify-between"
-                    style={{ padding: "8px 9px", background: isShip ? "var(--acc,#F5D400)" : "transparent", borderBottom: isShip ? undefined : "1px solid #26262C", border: "none", cursor: weekLocked ? "not-allowed" : "pointer", width: "100%", textAlign: "left" }}
-                  >
-                    <span style={{ fontFamily: isShip ? F.tc : F.mono, fontWeight: isShip ? 900 : 400, fontSize: isShip ? 11 : 10, color: isShip ? "#111" : isWork ? "#2AC7E8" : "#4a4a52" }}>
-                      {isShip ? `${WD[d.getDay()]} · 出貨` : isWork ? `${WD[d.getDay()]} · 工` : `${WD[d.getDay()]} · 休`}
+                  <div style={{ padding: "8px 12px", background: "var(--acc,#F5D400)", display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+                    <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 12, color: "#111" }}>
+                      {mdOf(iso)} · {WD[d.getDay()]} · 出貨批
                     </span>
-                    <span style={{ fontFamily: F.anton, fontSize: isShip ? 20 : 18, color: isShip ? "#111" : isWork ? "#F5F4EF" : "#4a4a52" }}>{d.getDate()}</span>
-                  </button>
+                    <span className="flex items-baseline" style={{ gap: 4 }}>
+                      <span style={{ fontFamily: F.anton, fontSize: 18, color: "#111" }}>{list.length}</span>
+                      <span style={{ fontFamily: F.mono, fontSize: 10, color: "#111" }}>單</span>
+                    </span>
+                  </div>
 
                   <div
-                    data-day={isRest || weekLocked ? undefined : iso}
-                    onDragOver={isRest || weekLocked ? undefined : (e) => { e.preventDefault(); setOverDay(iso); }}
-                    onDragLeave={isRest || weekLocked ? undefined : () => setOverDay((x) => (x === iso ? null : x))}
-                    onDrop={isRest || weekLocked ? undefined : (e) => { e.preventDefault(); if (dragId) attemptDrop(dragId, iso); }}
+                    data-day={weekLocked ? undefined : iso}
+                    onDragOver={weekLocked ? undefined : (e) => { e.preventDefault(); setOverDay(iso); }}
+                    onDragLeave={weekLocked ? undefined : () => setOverDay((x) => (x === iso ? null : x))}
+                    onDrop={weekLocked ? undefined : (e) => { e.preventDefault(); if (dragId) attemptDrop(dragId, iso); }}
                     style={{
                       flex: 1,
                       minHeight: 0,
                       overflowY: "auto",
                       margin: 8,
-                      border: `1.5px dashed ${isShip ? "#4a3f00" : "#2a2a30"}`,
+                      border: `1.5px dashed #4a3f00`,
                       padding: 6,
                       display: "flex",
                       flexDirection: "column",
@@ -671,7 +687,6 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                         draggable={!weekLocked}
                         onDragStart={weekLocked ? undefined : () => setDragId(o.id)}
                         onDragEnd={weekLocked ? undefined : (e) => {
-                          // Yen 2026-07-03：取消範圍擴大 · dropEffect="none" = 掉在無效區（含 nav / 外框）→ 退回待排
                           if (e.dataTransfer.dropEffect === "none") void commitAssign(o.id, null);
                           setDragId(null);
                           setOverDay(null);
@@ -679,7 +694,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                         title={weekLocked ? `🔒 本週已鎖定 · ${o.id}` : o.id}
                         style={{
                           cursor: weekLocked ? "not-allowed" : "grab",
-                          background: isShip ? "#3a2f00" : "#1c1600",
+                          background: "#3a2f00",
                           borderLeft: "3px solid var(--acc,#F5D400)",
                           padding: "5px 7px",
                           fontFamily: F.tc,
@@ -693,30 +708,9 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                         <span style={{ color: "#6C6C74", fontWeight: 400 }}> · {o.channel.replace(/^面交_/, "面交")}</span>
                       </div>
                     ))}
-                    {/* 當日 atom 統計 · 讓雇主拖單即時看堆積 */}
-                    {(() => {
-                      const breakdown = dayAtomBreakdown(iso);
-                      if (breakdown.length === 0) return null;
-                      const dayTotal = breakdown.reduce((s, r) => s + r.qty, 0);
-                      return (
-                        <div style={{ marginTop: 6, padding: "6px 7px", background: isShip ? "#221c00" : "#141417", border: `1px solid ${isShip ? "#4a3f00" : "#26262C"}` }}>
-                          <div style={{ fontFamily: F.mono, fontSize: 9, color: isShip ? "var(--acc,#F5D400)" : "#7A7A82", letterSpacing: ".1em", marginBottom: 3 }}>
-                            當日 · {dayTotal}
-                          </div>
-                          {breakdown.map((r) => (
-                            <div key={r.atom} className="flex justify-between" style={{ fontFamily: F.mono, fontSize: 10, color: "#C9C9CF", marginTop: 2 }}>
-                              <span style={{ fontFamily: F.tc, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{getDisplayName(r.atom, menu)}</span>
-                              <span style={{ fontFamily: F.anton, fontSize: 12, color: "#F5F4EF", marginLeft: 4 }}>{r.qty}</span>
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })()}
-                    {weekLocked ? (
-                      <div style={{ marginTop: "auto", textAlign: "center", fontFamily: F.mono, fontSize: 9, color: "#3a3a40" }}>🔒 已鎖</div>
-                    ) : (
-                      <div style={{ marginTop: "auto", textAlign: "center", fontFamily: F.mono, fontSize: 9, color: isShip ? "#7a6600" : "#3a3a40" }}>
-                        ＋ 拖曳排入{isShip ? "本批" : ""}
+                    {list.length === 0 && (
+                      <div style={{ margin: "auto", textAlign: "center", fontFamily: F.mono, fontSize: 10, color: weekLocked ? "#3a3a40" : "#7a6600" }}>
+                        {weekLocked ? "🔒 已鎖" : "＋ 拖曳排入本批"}
                       </div>
                     )}
                   </div>
@@ -725,11 +719,9 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
             })}
           </div>
 
-          {/* 本週合計條已挪到右軌「當週統計」面板 · 底部只留 legend */}
-          <div className="flex flex-wrap" style={{ gap: 14, marginTop: 14, fontFamily: F.mono, fontSize: 10, color: "#7A7A82" }}>
-            <Legend c="var(--acc,#F5D400)" t="出貨日" />
-            <Legend c="#2AC7E8" t="工作日" />
-            <Legend c="#4a4a52" t="休息日" dashed />
+          {/* Legend 簡化 · 拿掉工作日/休息日（Yen 2026-07-04：不再顯示） */}
+          <div className="flex flex-wrap" style={{ gap: 14, marginTop: 10, fontFamily: F.mono, fontSize: 10, color: "#7A7A82", flexShrink: 0 }}>
+            <Legend c="var(--acc,#F5D400)" t="出貨日 · 拖入即歸此批" />
           </div>
         </div>
 
