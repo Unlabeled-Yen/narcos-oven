@@ -78,6 +78,18 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   const [weekOffset, setWeekOffset] = useState(0);
   const [monthOffset, setMonthOffset] = useState(0);
   const [dragId, setDragId] = useState<string | null>(null);
+
+  // Yen 2026-07-04：dragId 有值時 · window 全域 dragover preventDefault
+  //   讓瀏覽器認為所有位置都 accept drop · 拿掉「殘影飛回原位」動畫
+  //   訂單拖曳（非檔案）才啟用 · 不影響拖檔上傳
+  useEffect(() => {
+    if (!dragId) return;
+    const onWinDragOver = (e: DragEvent) => {
+      if (!e.dataTransfer?.types.includes("Files")) e.preventDefault();
+    };
+    window.addEventListener("dragover", onWinDragOver);
+    return () => window.removeEventListener("dragover", onWinDragOver);
+  }, [dragId]);
   const [overDay, setOverDay] = useState<string | null>(null);
   const [warn, setWarn] = useState<string | null>(null);
   // Yen 2026-07-03：整週鎖 · locked → 卡片唯讀、禁拖、日欄 header 禁切換
@@ -687,7 +699,12 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                         draggable={!weekLocked}
                         onDragStart={weekLocked ? undefined : () => setDragId(o.id)}
                         onDragEnd={weekLocked ? undefined : (e) => {
-                          if (e.dataTransfer.dropEffect === "none") void commitAssign(o.id, null);
+                          // Yen 2026-07-04：改用 elementFromPoint 判斷是否掉在有效 zone
+                          //   舊法 dropEffect==="none" 被 window-level preventDefault 攔掉（為了拿掉飛回動畫）
+                          //   拿滑鼠終點座標查 DOM · 不在任何 [data-day] 就退回 pending
+                          const target = document.elementFromPoint(e.clientX, e.clientY);
+                          const inZone = target?.closest?.("[data-day]");
+                          if (!inZone) void commitAssign(o.id, null);
                           setDragId(null);
                           setOverDay(null);
                         }}
@@ -701,8 +718,8 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                           fontWeight: 700,
                           fontSize: 10,
                           color: "#F5F4EF",
-                          // Yen 2026-07-04：拖動的卡立即 display:none · 拿掉瀏覽器 native「殘影飛回原位」感
-                          display: dragId === o.id ? "none" : undefined,
+                          // 半透明留原位 · Yen 要「有東西被拖曳」的視覺回饋
+                          opacity: dragId === o.id ? 0.35 : 1,
                         }}
                       >
                         {orderItemLabel(o, menu)}
@@ -836,7 +853,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                   onDragStart={weekLocked ? undefined : () => setDragId(o.id)}
                   onDragEnd={weekLocked ? undefined : () => { setDragId(null); setOverDay(null); }}
                   title={weekLocked ? "🔒 本週已鎖定 · 先解鎖再排入" : undefined}
-                  style={{ cursor: weekLocked ? "not-allowed" : "grab", background: "#111114", border: "1px solid #26262C", padding: "10px 11px", display: dragId === o.id ? "none" : undefined }}
+                  style={{ cursor: weekLocked ? "not-allowed" : "grab", background: "#111114", border: "1px solid #26262C", padding: "10px 11px", opacity: dragId === o.id ? 0.35 : 1 }}
                 >
                   <div className="flex justify-between items-center" style={{ gap: 6 }}>
                     <span style={{ fontFamily: F.mono, fontSize: 11, color: "#C9C9CF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.id}</span>
