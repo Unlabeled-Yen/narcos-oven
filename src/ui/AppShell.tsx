@@ -120,7 +120,16 @@ export function AppShell({
     onUploadClick,
   };
 
+  // Yen 2026-07-04：只在「檔案拖曳」時 preventDefault
+  //   舊法無條件 preventDefault → 訂單卡拖曳到 AppShell 也被 accept
+  //   → dropEffect="move" 而非 "none" → SchedulePage 的 onDragEnd 判斷失敗
+  //   → 「拖到 nav / 外框退回 pending」功能失效
+  const isFileDrag = (e: React.DragEvent) => e.dataTransfer.types.includes("Files");
+  const onDragOverRoot = (e: React.DragEvent) => {
+    if (isFileDrag(e)) e.preventDefault();
+  };
   const onDrop = (e: React.DragEvent) => {
+    if (!isFileDrag(e)) return;
     e.preventDefault();
     if (e.dataTransfer.files.length > 0) onFiles(e.dataTransfer.files);
   };
@@ -128,7 +137,7 @@ export function AppShell({
   return (
     <div
       className="relative h-screen flex flex-col bg-narcos-bg font-notoTc overflow-hidden"
-      onDragOver={(e) => e.preventDefault()}
+      onDragOver={onDragOverRoot}
       onDrop={onDrop}
     >
       <GrainOverlay />
