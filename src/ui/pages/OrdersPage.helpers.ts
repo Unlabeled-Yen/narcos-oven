@@ -1,7 +1,7 @@
 /**
  * OrdersPage 純邏輯 helpers — 無 React 依賴
  */
-import type { ChannelId, OrderStatus } from "../../domain/models";
+import type { ChannelId, Order, OrderStatus } from "../../domain/models";
 
 // ── 字型常數 ──────────────────────────────────────────────
 export const F = {
@@ -10,14 +10,28 @@ export const F = {
   mono: "'Space Mono',monospace",
 } as const;
 
-// ── 通路群組：面交三種合併 ──────────────────────────────
-export type ChanGroup = "全部" | "賣貨便" | "面交" | "KOL" | "宅配" | "待分類";
+// ── 通路群組：面交三種合併 · Yen 2026-07-04 加「手打單」母分類 ──────
+export type ChanGroup = "全部" | "賣貨便" | "面交" | "KOL" | "宅配" | "手打單" | "待分類";
 
 export const FACE_TO_FACE: ChannelId[] = ["面交_中壢", "面交_台中", "面交_其他"];
 
+/** 手打單判斷：id 前綴 MAN- 或 channel 是駐店/彈性（一定是手打） */
+export function isManualOrder(o: Order): boolean {
+  if (o.id.startsWith("MAN-")) return true;
+  if (o.channel === "駐店" || o.channel === "彈性") return true;
+  return false;
+}
+
 export function channelGroup(ch: ChannelId): ChanGroup {
   if (FACE_TO_FACE.includes(ch)) return "面交";
+  if (ch === "駐店" || ch === "彈性") return "手打單";
   return ch as ChanGroup;
+}
+
+/** 訂單級 · 手打單優先歸母分類（即使 channel 是 KOL/宅配 · 只要 MAN- prefix 就歸手打單） */
+export function orderChanGroup(o: Order): ChanGroup {
+  if (isManualOrder(o)) return "手打單";
+  return channelGroup(o.channel);
 }
 
 export function channelLabel(ch: ChannelId): string {
@@ -31,6 +45,7 @@ export const CHAN_COLOR: Record<ChanGroup, string> = {
   面交: "#43B23C",
   KOL: "#8557C9",
   宅配: "#2AC7E8",
+  手打單: "#E5622A",
   待分類: "#E5352B",
 };
 

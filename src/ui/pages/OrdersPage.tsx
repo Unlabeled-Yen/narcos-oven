@@ -15,7 +15,7 @@ import {
   F,
   CHAN_COLOR,
   STATUS_STYLE,
-  channelGroup,
+  orderChanGroup,
   channelLabel,
   statusGroup,
   statusLabel,
@@ -72,9 +72,9 @@ export function OrdersPage({ orders, menu }: PageProps) {
   const { channelCounts, statusCounts, batchCards, filteredOrders, totalRevenue, grandRevenue } =
     useMemo(() => {
       const channelCounts: Record<ChanGroup, number> = {
-        全部: orders.length, 賣貨便: 0, 面交: 0, KOL: 0, 宅配: 0, 待分類: 0,
+        全部: orders.length, 賣貨便: 0, 面交: 0, KOL: 0, 宅配: 0, 手打單: 0, 待分類: 0,
       };
-      for (const o of orders) channelCounts[channelGroup(o.channel)] += 1;
+      for (const o of orders) channelCounts[orderChanGroup(o)] += 1;
 
       const statusCounts: Record<StatusGroup, number> = {
         全部: orders.length, confirmed: 0, 待處理: 0, 已出貨: 0, 消失: 0,
@@ -104,7 +104,7 @@ export function OrdersPage({ orders, menu }: PageProps) {
 
       const q = filter.query.trim().toLowerCase();
       const filteredOrders = orders.filter((o) => {
-        if (filter.channel !== "全部" && channelGroup(o.channel) !== filter.channel) return false;
+        if (filter.channel !== "全部" && orderChanGroup(o) !== filter.channel) return false;
         if (filter.status !== "全部" && statusGroup(o.status) !== filter.status) return false;
         if (filter.batch !== "全部" && (o.batchDate ?? "待排") !== filter.batch) return false;
         if (q) {
@@ -185,7 +185,7 @@ export function OrdersPage({ orders, menu }: PageProps) {
       <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "0 24px 10px" }}>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
           <span style={{ fontFamily: F.mono, fontSize: 10, color: "#6C6C74", letterSpacing: ".14em", width: 44 }}>通路</span>
-          {(["全部", "賣貨便", "面交", "KOL", "宅配", "待分類"] as ChanGroup[]).map((g) => (
+          {(["全部", "賣貨便", "面交", "KOL", "宅配", "手打單", "待分類"] as ChanGroup[]).map((g) => (
             <FilterChip
               key={g} label={g} count={channelCounts[g]}
               active={filter.channel === g} activeColor={CHAN_COLOR[g]}
@@ -272,7 +272,7 @@ export function OrdersPage({ orders, menu }: PageProps) {
             {filteredOrders.map((o, i) => {
               const sg = statusGroup(o.status);
               const ss = STATUS_STYLE[sg];
-              const chanColor = CHAN_COLOR[channelGroup(o.channel)];
+              const chanColor = CHAN_COLOR[orderChanGroup(o)];
               const amountStr = o.revenue.grossTotal > 0 ? `$${o.revenue.grossTotal.toLocaleString()}` : "—";
               return (
                 <div

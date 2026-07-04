@@ -14,6 +14,7 @@ import type { PageProps } from "./types";
 import type { ChannelId } from "../../domain/models";
 import { buildManualOrder } from "../../domain/manual-order";
 import { upsertOrder } from "../../db/orders";
+import { exportManualOrders, filterManualOrders, type ManualExportFilter } from "../../output/manual-orders-excel";
 
 const F = {
   anton: "'Anton',sans-serif",
@@ -65,7 +66,9 @@ type ItemInput = {
 let itemKeyCounter = 0;
 const nextKey = () => ++itemKeyCounter;
 
-export function ManualOrderPage({ menu, refreshOrders }: PageProps) {
+const EXPORT_FILTERS: ManualExportFilter[] = ["全部手打", "KOL", "駐店", "彈性", "宅配", "面交_中壢", "面交_台中", "面交_其他"];
+
+export function ManualOrderPage({ menu, orders, refreshOrders }: PageProps) {
   const [channel, setChannel] = useState<ChannelId>("KOL");
   const [name, setName] = useState("");
   const [igOrLine, setIgOrLine] = useState("");
@@ -81,6 +84,39 @@ export function ManualOrderPage({ menu, refreshOrders }: PageProps) {
   const [items, setItems] = useState<ItemInput[]>([{ key: nextKey(), skuId: "", quantity: 1, subtotalOverride: "" }]);
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // ── 匯出 section state ──
+  const [exportFilter, setExportFilter] = useState<ManualExportFilter>("全部手打");
+  const [exportFrom, setExportFrom] = useState("");
+  const [exportTo, setExportTo] = useState("");
+  const [exportMsg, setExportMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const exportPreviewCount = useMemo(
+    () => filterManualOrders(orders, exportFilter, exportFrom || null, exportTo || null).length,
+    [orders, exportFilter, exportFrom, exportTo]
+  );
+
+  function handleExport() {
+    try {
+      const result = exportManualOrders(
+        orders,
+        menu,
+        exportFilter,
+        exportFrom || null,
+        exportTo || null
+      );
+      if (result.count === 0) {
+        setExportMsg({ ok: false, text: "❌ 此範圍內無手打單、沒東西可匯" });
+      } else {
+        setExportMsg({
+          ok: true,
+          text: `✓ 匯出 ${result.count} 單 · 標籤 ${result.totalLabels} 張 · 金額 $${result.totalGross}`,
+        });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setExportMsg({ ok: false, text: `❌ 匯出失敗：${msg}` });
+    }
+  }
 
   const sortedSkus = useMemo(
     () => Object.entries(menu.products).sort(([, a], [, b]) => a.display_name.localeCompare(b.display_name)),
@@ -383,8 +419,82 @@ export function ManualOrderPage({ menu, refreshOrders }: PageProps) {
           </button>
         </div>
 
+        {/* ── 匯出 xlsx section ── */}
+        <div style={{ marginTop: 28, borderTop: `1px dashed ${C.line}`, paddingTop: 20 }}>
+          <div className="flex items-baseline justify-between flex-wrap" style={{ gap: 12, marginBottom: 12 }}>
+            <div>
+              <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut3, letterSpacing: ".16em" }}>EXPORT · XLSX</div>
+              <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 16, color: C.ink }}>匯出手打單</div>
+            </div>
+            <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut3 }}>
+              分類 + 日期範圍 · 產出 xlsx 給雇主留存
+            </div>
+          </div>
+
+          {exportMsg && (
+            <div
+              style={{
+                fontFamily: F.tc, fontWeight: 700, fontSize: 12,
+                color: exportMsg.ok ? "#111" : "#fff",
+                background: exportMsg.ok ? C.green : C.red,
+                padding: "8px 12px", marginBottom: 10,
+              }}
+            >
+              {exportMsg.text}
+            </div>
+          )}
+
+          <Section title="6 · 匯出設定" color={C.acc}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10 }}>
+              <Field label="分類">
+                <select
+                  value={exportFilter}
+                  onChange={(e) => setExportFilter(e.target.value as ManualExportFilter)}
+                  style={inputStyle}
+                >
+                  {EXPORT_FILTERS.map((f) => (
+                    <option key={f} value={f}>{f}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="下單日 · 起（可空）">
+                <input type="date" value={exportFrom} onChange={(e) => setExportFrom(e.target.value)} style={inputStyle} />
+              </Field>
+              <Field label="下單日 · 訖（可空）">
+                <input type="date" value={exportTo} onChange={(e) => setExportTo(e.target.value)} style={inputStyle} />
+              </Field>
+            </div>
+            <div className="flex items-center justify-between flex-wrap" style={{ gap: 12, marginTop: 12 }}>
+              <div className="flex items-baseline" style={{ gap: 6 }}>
+                <span style={{ fontFamily: F.mono, fontSize: 10, color: C.mut3 }}>此範圍內</span>
+                <span style={{ fontFamily: F.anton, fontSize: 20, color: exportPreviewCount > 0 ? C.acc : C.mut3 }}>{exportPreviewCount}</span>
+                <span style={{ fontFamily: F.tc, fontSize: 11, color: C.mut2 }}>筆手打單</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleExport}
+                disabled={exportPreviewCount === 0}
+                style={{
+                  fontFamily: F.tc, fontWeight: 900, fontSize: 12,
+                  color: exportPreviewCount === 0 ? C.mut3 : "#111",
+                  background: exportPreviewCount === 0 ? "transparent" : C.acc,
+                  border: `1px solid ${exportPreviewCount === 0 ? C.line : C.acc}`,
+                  padding: "9px 18px", cursor: exportPreviewCount === 0 ? "not-allowed" : "pointer",
+                  letterSpacing: ".05em",
+                }}
+              >
+                📥 匯出 XLSX
+              </button>
+            </div>
+          </Section>
+
+          <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut3, marginTop: 8 }}>
+            檔名：<span style={{ color: C.mut2 }}>手打單_&lt;分類&gt;_&lt;日期範圍&gt;_匯出&lt;今日&gt;.xlsx</span>
+          </div>
+        </div>
+
         <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut3, marginTop: 20 }}>
-          手打單 ID 格式：<span style={{ color: C.mut2 }}>MAN-&lt;channel&gt;-&lt;timestamp&gt;-&lt;rand&gt;</span> · 匯出 xlsx 功能 Phase 2 補
+          手打單 ID 格式：<span style={{ color: C.mut2 }}>MAN-&lt;channel&gt;-&lt;timestamp&gt;-&lt;rand&gt;</span>
         </div>
       </div>
     </div>
