@@ -13,7 +13,8 @@ export type NavKey =
   | "kol"
   | "capacity"
   | "labels"
-  | "worksheet";
+  | "worksheet"
+  | "manual";
 
 export type NavItem = {
   key: NavKey;

@@ -15,6 +15,7 @@ import { StatsMatrixPage } from "./pages/StatsMatrixPage";
 import { KolPage } from "./pages/KolPage";
 import { LabelsPage } from "./pages/LabelsPage";
 import { WorksheetPage } from "./pages/WorksheetPage";
+import { ManualOrderPage } from "./pages/ManualOrderPage";
 
 // capacity page 已依 Yen 決策拿掉（不需工時計算、不需產能上限）
 // NavKey.capacity 若被 hash routing 誤觸、fallback 到 dashboard
@@ -29,6 +30,7 @@ const PAGES: Record<Exclude<NavKey, "capacity">, (p: PageProps) => JSX.Element> 
   kol: KolPage,
   labels: LabelsPage,
   worksheet: WorksheetPage,
+  manual: ManualOrderPage,
 };
 
 const ALL_KEYS = Object.keys(PAGES) as NavKey[];
@@ -79,6 +81,7 @@ export function AppShell({
     { key: "schedule", label: "排程" },
     { key: "pending", label: "待處理", badge: pendingCount },
     { key: "orders", label: "訂單總覽" },
+    { key: "manual", label: "手打單" },
     { key: "menu", label: "菜單" },
   ];
 

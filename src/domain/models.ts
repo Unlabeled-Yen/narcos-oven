@@ -127,6 +127,8 @@ export const ChannelIdSchema = z.enum([
   "面交_其他",
   "宅配",
   "KOL",
+  "駐店",       // Yen 2026-07-04：手打單專用（雇主到店對客人收單）
+  "彈性",       // Yen 2026-07-04：手打單兜底（其他管道 / 臨時單）
   "待分類",
 ]);
 export type ChannelId = z.infer<typeof ChannelIdSchema>;
