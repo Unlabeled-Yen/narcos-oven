@@ -52,11 +52,20 @@ const IN_PERSON_HEADER_TO_SKU: Array<[keyword: string, skuId: string]> = [
   ["240ml 香料堅果醬", "香料堅果醬240ml"],
 ];
 
+// 長 keyword 優先（防子字串誤命中）
+// Yen 2026-07-04 bug fix：
+//   舊：substring `includes` + for 找到就 return
+//   「蘋果肉桂捲四入」.includes("肉桂捲四入") = true
+//   → 先命中「經典肉桂捲4入」 → 蘋果版永遠 match 不到
+//   造成 IP-8a1t0h、IP-h88noq 等訂單被錯歸為經典肉桂捲
+const IN_PERSON_HEADER_TO_SKU_SORTED = [...IN_PERSON_HEADER_TO_SKU].sort(
+  (a, b) => b[0].length - a[0].length
+);
+
 function mapHeaderToSku(header: string): string | null {
-  for (const [kw, skuId] of IN_PERSON_HEADER_TO_SKU) {
+  for (const [kw, skuId] of IN_PERSON_HEADER_TO_SKU_SORTED) {
     if (header.includes(kw)) return skuId;
   }
-  // 若面交 c17「焙茶巴斯克 $980」跟蘋果肉桂捲重疊，優先 exact
   return null;
 }
 

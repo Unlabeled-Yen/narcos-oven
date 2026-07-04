@@ -29,9 +29,12 @@
   background: #2a2a30;
 }
 
-/* ── 列印 · 只印 .print-area 子樹（Yen 2026-07-03：簡潔明瞭 · 拿掉品牌 nav 設計）
-   經典技巧：body * visibility:hidden 全隱藏 · .print-area 及後代 visible
-   .print-area 定位到 body 左上角 · width 100% 讓內容流過所有頁
+/* ── 列印 · 只印 .print-area 子樹（Yen 2026-07-04 結構性重構）
+   舊法：body * { visibility:hidden } + 白名單補 display:none · 每加一個 AppShell 區塊
+        都要記得掛 .no-print、忘記就撐空白層 · 上方巨大留白就是 root cause
+   新法：用 :has() 結構性挑「print-area 的祖先鏈」vs「非祖先」·
+        祖先鏈全部歸零 padding/margin/flex/height、非祖先 display:none ·
+        跟 AppShell 結構解耦 · 新增區塊也不會撐空白
 */
 @media print {
   html, body, #root {
@@ -44,29 +47,35 @@
     margin: 0 !important;
     padding: 0 !important;
   }
-  body * {
-    visibility: hidden;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-  /* Yen 2026-07-04：inline overflow-y:auto 讓螢幕可滾、但印刷時 scroll container
-     被瀏覽器當成一頁高度、後面被裁 · 用 * 選擇器強制所有元素解除 overflow 限制
-     · visibility trick 已隱藏其他區域、這條 override 只影響 print-area 及其祖先鏈 */
-  html, body, #root, body * {
-    overflow: visible !important;
-    overflow-y: visible !important;
-    overflow-x: visible !important;
-    max-height: none !important;
-    height: auto !important;
-  }
 
   /* ── 預設流程（Cmd+P / 對帳單 button）：印 .print-area ── */
-  body:not(.printing-labels) .print-area,
-  body:not(.printing-labels) .print-area * {
-    visibility: visible;
+
+  /* 1. 祖先鏈：保留 display 但把所有「會撐空間」的樣式歸零 ·
+        含 h-screen / flex-1 / padding / max-width / grid / overflow-hidden · 全部清乾淨 */
+  body:not(.printing-labels) :has(.print-area) {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    width: auto !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    position: static !important;
+    flex: initial !important;
   }
+
+  /* 2. 非祖先、非 print-area 本體、非 print-area 子孫：display:none · 徹底移出 flow */
+  body:not(.printing-labels) *:not(:has(.print-area)):not(.print-area):not(.print-area *) {
+    display: none !important;
+  }
+
+  /* 3. print-area 本體：就地渲染、自然分頁 · absolute 曾讓內容卡在單頁印不完 */
   body:not(.printing-labels) .print-area {
-    /* Yen 2026-07-04：static 讓內容自然分頁 · absolute 曾讓內容卡在單頁印不完 */
     position: static !important;
     display: block !important;
     width: 100% !important;
@@ -75,17 +84,11 @@
     color: #000 !important;
     padding: 16px !important;
     overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
-  body:not(.printing-labels) .print-area .no-print { display: none !important; }
-  /* Yen 2026-07-04：非 print-area 區塊必須 display:none 才不佔 layout
-     · 只 visibility:hidden 會撐出額外空白頁（最後 4/4 全空白 root cause）
-     · print-area 外的 .no-print / .labels-preview 也要硬隱藏 */
-  body:not(.printing-labels) .no-print,
-  body:not(.printing-labels) .labels-preview {
-    display: none !important;
-  }
-  /* 核心 fix（Yen 2026-07-04）：所有子元素背景刷白、顏色刷黑、邊框刷黑
-     · 讓深色 web UI 印出來變乾淨的紙本文件、不是黑白反轉暗片 */
+
+  /* 4. print-area 內部：背景刷白、顏色刷黑、邊框刷黑 · 深色 UI → 乾淨紙本 */
   body:not(.printing-labels) .print-area * {
     background: transparent !important;
     background-color: transparent !important;
@@ -95,7 +98,12 @@
     box-shadow: none !important;
     max-height: none !important;
     overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
+
+  /* 5. print-area 內部的互動控制（.no-print 例：🖨 列印按鈕）· 不印 */
+  body:not(.printing-labels) .print-area .no-print { display: none !important; }
 
   /* ── 印標籤流程（body.printing-labels）：只印 .label-print-area ── */
   body.printing-labels .label-print-area,
