@@ -52,7 +52,8 @@ export function extractLabels(
   const labels: LabelData[] = [];
 
   const targets = orders.filter((o) => {
-    if (o.status !== "confirmed" && o.status !== "kol_shipped") return false;
+    // Yen 2026-07-04：加 shipped · 已確認出貨的訂單仍可能需重印標籤（漏印/遺失）
+    if (o.status !== "confirmed" && o.status !== "kol_shipped" && o.status !== "shipped") return false;
     if (!o.batchDate) return false;
     if (filter?.batchDate && o.batchDate !== filter.batchDate) return false;
     if (filter?.channel && o.channel !== filter.channel) return false;
