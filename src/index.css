@@ -49,6 +49,16 @@
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
+  /* Yen 2026-07-04：inline overflow-y:auto 讓螢幕可滾、但印刷時 scroll container
+     被瀏覽器當成一頁高度、後面被裁 · 用 * 選擇器強制所有元素解除 overflow 限制
+     · visibility trick 已隱藏其他區域、這條 override 只影響 print-area 及其祖先鏈 */
+  html, body, #root, body * {
+    overflow: visible !important;
+    overflow-y: visible !important;
+    overflow-x: visible !important;
+    max-height: none !important;
+    height: auto !important;
+  }
 
   /* ── 預設流程（Cmd+P / 對帳單 button）：印 .print-area ── */
   body:not(.printing-labels) .print-area,
