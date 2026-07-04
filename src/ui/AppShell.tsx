@@ -16,6 +16,7 @@ import { KolPage } from "./pages/KolPage";
 import { LabelsPage } from "./pages/LabelsPage";
 import { WorksheetPage } from "./pages/WorksheetPage";
 import { ManualOrderPage } from "./pages/ManualOrderPage";
+import { PrintLabelsPage } from "./pages/PrintLabelsPage";
 
 // capacity page 已依 Yen 決策拿掉（不需工時計算、不需產能上限）
 // NavKey.capacity 若被 hash routing 誤觸、fallback 到 dashboard
@@ -31,12 +32,13 @@ const PAGES: Record<Exclude<NavKey, "capacity">, (p: PageProps) => JSX.Element> 
   labels: LabelsPage,
   worksheet: WorksheetPage,
   manual: ManualOrderPage,
+  "print-labels": PrintLabelsPage,
 };
 
 const ALL_KEYS = Object.keys(PAGES) as NavKey[];
 
 function keyFromHash(): NavKey {
-  const m = /^#\/([a-z]+)$/.exec(window.location.hash);
+  const m = /^#\/([a-z-]+)$/.exec(window.location.hash);
   const k = m?.[1] as NavKey | undefined;
   return k && ALL_KEYS.includes(k) ? k : "dashboard";
 }
@@ -99,12 +101,13 @@ export function AppShell({
       { key: "schedule", label: "排程系統" },
       { key: "worksheet", label: "當週工單" },
       { key: "labels", label: "出貨明細" },
+      { key: "print-labels", label: "印標籤" },
     ],
   };
   // 次頁 → 所屬主項
   const GROUP_OF: Partial<Record<NavKey, NavKey>> = {
     dashboard: "dashboard", payout: "dashboard", stats: "dashboard", kol: "dashboard",
-    schedule: "schedule", worksheet: "schedule", labels: "schedule",
+    schedule: "schedule", worksheet: "schedule", labels: "schedule", "print-labels": "schedule",
   };
   const activeGroup = GROUP_OF[active] ?? active;
   const subItems = SUBNAV[activeGroup] ?? null;
