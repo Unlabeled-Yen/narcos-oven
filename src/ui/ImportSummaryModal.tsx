@@ -38,6 +38,14 @@ const C = {
   purple: "#8557C9",
 } as const;
 
+function shortDate(raw: string): string {
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${Number(iso[2])}/${Number(iso[3])}`;
+  const slash = raw.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  if (slash) return `${slash[2]}/${slash[3]}`;
+  return raw.slice(0, 10);
+}
+
 const CHANNEL_META: Record<string, { label: string; color: string }> = {
   賣貨便:    { label: "賣貨便", color: C.acc },
   面交_中壢: { label: "面交·中壢", color: C.green },
@@ -392,7 +400,8 @@ function DisappearedCard({
             )}
           </div>
           <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut3, marginTop: 4, letterSpacing: ".05em" }}>
-            {o.batchDate ?? "—"} · ${o.revenue.grossTotal}
+            {o.order_date && <><span style={{ color: C.mut2 }}>下單 {shortDate(o.order_date)}</span> · </>}
+            出貨 {o.batchDate ?? "—"} · ${o.revenue.grossTotal}
             {o.rawSource.file && <> · 來源 {o.rawSource.file}</>}
           </div>
         </div>
@@ -512,12 +521,18 @@ function ChangedCard({
       }}
     >
       <div className="flex items-start justify-between flex-wrap" style={{ gap: 10, marginBottom: 8 }}>
-        <div className="flex items-baseline flex-wrap" style={{ gap: 10 }}>
-          <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 11, color: meta.color, letterSpacing: ".05em" }}>
-            {meta.label}
-          </span>
-          <span style={{ fontFamily: F.mono, fontSize: 11, color: C.mut2 }}>{o.id}</span>
-          <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 13, color: C.ink }}>{o.recipient.name ?? "—"}</span>
+        <div className="flex-1" style={{ minWidth: 0 }}>
+          <div className="flex items-baseline flex-wrap" style={{ gap: 10 }}>
+            <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 11, color: meta.color, letterSpacing: ".05em" }}>
+              {meta.label}
+            </span>
+            <span style={{ fontFamily: F.mono, fontSize: 11, color: C.mut2 }}>{o.id}</span>
+            <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 13, color: C.ink }}>{o.recipient.name ?? "—"}</span>
+          </div>
+          <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut3, marginTop: 4, letterSpacing: ".05em" }}>
+            {o.order_date && <><span style={{ color: C.mut2 }}>下單 {shortDate(o.order_date)}</span> · </>}
+            出貨 {o.batchDate ?? "—"} · ${o.revenue.grossTotal}
+          </div>
         </div>
         <ActionCluster
           decision={decision}
