@@ -50,9 +50,11 @@ export const CHAN_COLOR: Record<ChanGroup, string> = {
 };
 
 // ── 狀態分桶 ──────────────────────────────────────────────
-export type StatusGroup = "全部" | "confirmed" | "待處理" | "已出貨" | "消失";
+// Yen 2026-07-06：「未付款」抽出獨立 group · 讓雇主一眼看到有幾單卡在等付款
+export type StatusGroup = "全部" | "未付款" | "confirmed" | "待處理" | "已出貨" | "消失";
 
 export function statusGroup(s: OrderStatus): StatusGroup {
+  if (s === "pending_payment") return "未付款";
   if (s === "confirmed") return "confirmed";
   if (s === "shipped" || s === "kol_shipped") return "已出貨";
   if (s === "disappeared_pending_resolution" || s === "canceled") return "消失";
@@ -82,6 +84,7 @@ export function statusLabel(s: OrderStatus): string {
 export type StatusStyle = { color: string; bg: string };
 export const STATUS_STYLE: Record<StatusGroup, StatusStyle> = {
   全部: { color: "#F5F4EF", bg: "transparent" },
+  未付款: { color: "#F5D400", bg: "#2a2210" },
   confirmed: { color: "#43B23C", bg: "#0f2410" },
   待處理: { color: "#E5622A", bg: "#2a1a10" },
   已出貨: { color: "#2AC7E8", bg: "#0d2830" },

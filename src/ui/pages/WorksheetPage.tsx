@@ -163,10 +163,12 @@ export function WorksheetPage({ orders, menu }: PageProps) {
           </div>
         </div>
 
-        {/* 批次選 chip · Yen 2026-07-06：一週有多個出貨日時逐一切換 */}
-        {weekShipDays.length > 1 && (
+        {/* 批次選 chip · Yen 2026-07-06：出貨日列出來讓雇主直接切換 */}
+        {weekShipDays.length >= 1 && (
           <div className="no-print" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12, alignItems: "baseline" }}>
-            <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".14em", marginRight: 4 }}>批次</span>
+            <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".14em", marginRight: 4 }}>
+              批次 · 本週 {weekShipDays.length} 個出貨日
+            </span>
             {weekShipDays.map((d) => {
               const isActive = d === anchor;
               return (

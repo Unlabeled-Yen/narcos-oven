@@ -64,8 +64,9 @@ type FilterState = {
 
 // ── 主頁面 ────────────────────────────────────────────────
 export function OrdersPage({ orders, menu, refreshOrders }: PageProps) {
+  // Yen 2026-07-06：訂單總覽預設 filter 未付款 · 一開頁就看到卡在等付款的單
   const [filter, setFilter] = useState<FilterState>({
-    channel: "全部", status: "全部", batch: "全部", query: "",
+    channel: "全部", status: "未付款", batch: "全部", query: "",
   });
   // Yen 2026-07-04：訂單狀態預設鎖定 · 點鎖 icon 才能改
   const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
@@ -109,7 +110,7 @@ export function OrdersPage({ orders, menu, refreshOrders }: PageProps) {
       for (const o of orders) channelCounts[orderChanGroup(o)] += 1;
 
       const statusCounts: Record<StatusGroup, number> = {
-        全部: orders.length, confirmed: 0, 待處理: 0, 已出貨: 0, 消失: 0,
+        全部: orders.length, 未付款: 0, confirmed: 0, 待處理: 0, 已出貨: 0, 消失: 0,
       };
       for (const o of orders) statusCounts[statusGroup(o.status)] += 1;
 
@@ -227,7 +228,7 @@ export function OrdersPage({ orders, menu, refreshOrders }: PageProps) {
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
           <span style={{ fontFamily: F.mono, fontSize: 10, color: "#6C6C74", letterSpacing: ".14em", width: 44 }}>狀態</span>
-          {(["全部", "confirmed", "待處理", "已出貨", "消失"] as StatusGroup[]).map((g) => (
+          {(["全部", "未付款", "confirmed", "待處理", "已出貨", "消失"] as StatusGroup[]).map((g) => (
             <FilterChip
               key={g} label={g} count={statusCounts[g]}
               active={filter.status === g} activeColor={STATUS_STYLE[g].color}
