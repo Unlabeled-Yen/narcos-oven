@@ -2,13 +2,16 @@
  * WorksheetPage — 當週工單（麵包師傅列印版）
  *
  * Yen 2026-07-03：整週鎖定後印給師傅使用
- *   內容：當週工作日排程 + 製作量規劃 + 當週總出貨統計（todo list 風格）
+ * Yen 2026-07-06：主要展示當週批次的「單品各項統計數量」（atom 級）· 訂單組合降為對照
+ *   內容：單品製作統計（todo list 風格）+ 訂單組合對照
  *   列印：瀏覽器 Cmd+P · print CSS 排版
  *   資料源：跟 SchedulePage 同套（accumulateAtoms / day-type / week-locks / batch range）
  */
 import { useMemo, useState } from "react";
 import { makeDayTypeOf, loadDayOverrides, shippingDayFor } from "../../domain/day-type";
 import { computeBatchRange, findWeekAnchor } from "../../domain/batch-range";
+import { accumulateAtoms } from "../../domain/production-time";
+import { getDisplayName } from "../../domain/menu";
 import { isDayLocked } from "../../db/week-locks";
 import type { PageProps } from "./types";
 
@@ -77,8 +80,16 @@ export function WorksheetPage({ orders, menu }: PageProps) {
     });
   }, [orders, anchor, dayTypeOf]);
 
-  // Yen 2026-07-04 決策：雇主只要「本週要做多少單」· 不要按日 breakdown
-  //   拿掉 byDay / displayDays / atom 級統計 · 只留 SKU 級（訂單組合）統計
+  // Yen 2026-07-06 決策：主要展示「單品各項統計」· 師傅實際要烤的是單品顆數
+  //   atom 級（單品）為主 · SKU 級（訂單組合）降為出貨對照參考
+  const atomBreakdown = useMemo(() => {
+    return [...accumulateAtoms(batchOrders).entries()]
+      .filter(([, q]) => q > 0)
+      .map(([atom, qty]) => ({ atom, qty }))
+      .sort((a, b) => b.qty - a.qty);
+  }, [batchOrders]);
+  const atomTotal = atomBreakdown.reduce((s, r) => s + r.qty, 0);
+
   const skuBreakdown = useMemo(() => {
     const m = new Map<string, number>();
     for (const o of batchOrders) {
@@ -92,7 +103,6 @@ export function WorksheetPage({ orders, menu }: PageProps) {
       .map(([sku, qty]) => ({ sku, qty }))
       .sort((a, b) => b.qty - a.qty);
   }, [batchOrders]);
-  const weekTotal = skuBreakdown.reduce((s, r) => s + r.qty, 0);
 
   return (
     <div className="h-full flex flex-col min-h-0" style={{ overflowY: "auto" }}>
@@ -153,37 +163,54 @@ export function WorksheetPage({ orders, menu }: PageProps) {
           </div>
         </div>
 
-        {/* Section 唯一：本批出貨總量 · 訂單組合（SKU）統計
-            Yen 2026-07-04：拿掉「每日排程 TODO」 · 雇主流程不需要按日排 · 只要一週要做多少 */}
+        {/* Section 主要：本批單品製作統計（atom 級）
+            Yen 2026-07-06：師傅照這張烤 · 單品顆數為主要展示 */}
         <div className="week-summary" style={{ background: "#0F0F12", border: "1px solid #26262C", padding: "14px 16px" }}>
           <div className="flex items-baseline justify-between flex-wrap" style={{ marginBottom: 12, gap: 10 }}>
             <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 16, color: "var(--acc,#F5D400)" }}>
-              📊 本週要製作 {anchor && <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", marginLeft: 6 }}>· {mdOf(anchor)} 出貨</span>}
+              📊 本週要製作 · 單品統計 {anchor && <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", marginLeft: 6 }}>· {mdOf(anchor)} 出貨</span>}
             </div>
             <div className="flex items-baseline" style={{ gap: 12 }}>
               <span style={{ fontFamily: F.anton, fontSize: 26, color: "#F5F4EF" }}>{batchOrders.length}</span>
               <span style={{ fontFamily: F.tc, fontSize: 11, color: "#8A8A93" }}>單</span>
-              <span style={{ fontFamily: F.anton, fontSize: 28, color: "var(--acc,#F5D400)" }}>{weekTotal}</span>
-              <span style={{ fontFamily: F.tc, fontSize: 11, color: "#8A8A93" }}>份</span>
+              <span style={{ fontFamily: F.anton, fontSize: 28, color: "var(--acc,#F5D400)" }}>{atomTotal}</span>
+              <span style={{ fontFamily: F.tc, fontSize: 11, color: "#8A8A93" }}>顆</span>
             </div>
           </div>
-          {skuBreakdown.length === 0 ? (
+          {atomBreakdown.length === 0 ? (
             <div style={{ fontFamily: F.mono, fontSize: 12, color: "#6C6C74", padding: "12px 0" }}>本批尚無任何排入訂單</div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "6px 14px" }}>
+              {atomBreakdown.map((r) => (
+                <div key={r.atom} className="flex items-baseline justify-between" style={{ padding: "8px 12px", background: "#141417", borderLeft: "3px solid var(--acc,#F5D400)" }}>
+                  <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 13, color: "#F5F4EF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>☐ {getDisplayName(r.atom, menu)}</span>
+                  <span style={{ fontFamily: F.anton, fontSize: 18, color: "#F5F4EF", marginLeft: 8 }}>{r.qty}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Section 次要：訂單組合（SKU）對照 · 出貨明細那邊對貨用的同一組數字 */}
+        {skuBreakdown.length > 0 && (
+          <div className="week-summary" style={{ background: "#0F0F12", border: "1px solid #26262C", padding: "12px 16px", marginTop: 10 }}>
+            <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: "#8A8A93", marginBottom: 8 }}>
+              訂單組合對照（出貨明細同數字）
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "4px 12px" }}>
               {skuBreakdown.map((r) => {
                 const p = menu.products[r.sku];
                 const name = p?.display_name ?? r.sku;
                 return (
-                  <div key={r.sku} className="flex items-baseline justify-between" style={{ padding: "8px 12px", background: "#141417", borderLeft: "3px solid var(--acc,#F5D400)" }}>
-                    <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 13, color: "#F5F4EF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>☐ {name}</span>
-                    <span style={{ fontFamily: F.anton, fontSize: 18, color: "#F5F4EF", marginLeft: 8 }}>{r.qty}</span>
+                  <div key={r.sku} className="flex items-baseline justify-between" style={{ padding: "5px 10px", background: "#141417" }}>
+                    <span style={{ fontFamily: F.tc, fontWeight: 500, fontSize: 11, color: "#C9C9CF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                    <span style={{ fontFamily: F.anton, fontSize: 14, color: "#C9C9CF", marginLeft: 8 }}>{r.qty}</span>
                   </div>
                 );
               })}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* footer 列印時省略 · 資料源說明不必要 */}
       </div>
