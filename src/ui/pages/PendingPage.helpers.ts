@@ -44,7 +44,13 @@ export const REASON_CONFIG: Record<PendingReasonCode, { label: string; color: st
 };
 
 // ── Order predicates ──────────────────────────────────────────────────────
+// Yen 2026-07-06：未付款 = 純粹等匯入 flip 的資訊性 status · 不進桶讓人誤處理
+//   匯入 diff 情境 B（diff.ts:62-80）會自動偵測「未付款→付款」翻成 confirmed
+//   若同時有其他 pendingReason（少見），仍會進桶 · 只是不用 PAYMENT_NOT_CONFIRMED 當 primary
 export function isPending(o: Order): boolean {
+  if (o.status === "pending_payment") {
+    return o.pendingReasons.some((r) => r.code !== "PAYMENT_NOT_CONFIRMED");
+  }
   return (
     o.status.startsWith("pending_") ||
     o.status === "change_pending_resolution" ||
@@ -53,7 +59,7 @@ export function isPending(o: Order): boolean {
 }
 
 export function primaryReason(o: Order) {
-  return o.pendingReasons[0] ?? null;
+  return o.pendingReasons.find((r) => r.code !== "PAYMENT_NOT_CONFIRMED") ?? null;
 }
 
 export function productSummary(o: Order, menu: Menu): string {
