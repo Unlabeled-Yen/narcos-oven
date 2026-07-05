@@ -7,9 +7,9 @@
  *   列印：瀏覽器 Cmd+P · print CSS 排版
  *   資料源：跟 SchedulePage 同套（accumulateAtoms / day-type / week-locks / batch range）
  */
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { makeDayTypeOf, loadDayOverrides, shippingDayFor } from "../../domain/day-type";
-import { computeBatchRange, findWeekAnchor } from "../../domain/batch-range";
+import { computeBatchRange } from "../../domain/batch-range";
 import { accumulateAtoms } from "../../domain/production-time";
 import { getDisplayName } from "../../domain/menu";
 import { isDayLocked } from "../../db/week-locks";
@@ -54,17 +54,32 @@ export function WorksheetPage({ orders, menu }: PageProps) {
   const weekStart = useMemo(() => mondayOf(today, weekOffset), [today, weekOffset]);
   const week = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const weekISO = week.map(toISO);
-  // Yen 2026-07-04：改為單日鎖 · 用 anchor（本週最後 shipping day）的鎖狀態
-  const anchor0 = weekISO.filter((iso) => makeDayTypeOf(menu, loadDayOverrides())(iso) === "ship").pop() ?? null;
-  const locked = anchor0 ? isDayLocked(anchor0) : false;
 
   const dayOverrides = loadDayOverrides();
   const dayTypeOf = makeDayTypeOf(menu, dayOverrides);
 
+  // Yen 2026-07-06：一週可能有多個出貨日 · 全部列出讓使用者選 · 不再只鎖定最後一個
+  const weekShipDays = useMemo(
+    () => weekISO.filter((iso) => dayTypeOf(iso) === "ship"),
+    [weekISO.join(","), dayOverrides, menu]
+  );
+
+  // 選中的 anchor：預設本週最後一個出貨日、換週時 reset
+  const [selectedAnchor, setSelectedAnchor] = useState<string | null>(null);
+  useEffect(() => {
+    if (weekShipDays.length === 0) {
+      setSelectedAnchor(null);
+    } else if (!selectedAnchor || !weekShipDays.includes(selectedAnchor)) {
+      setSelectedAnchor(weekShipDays[weekShipDays.length - 1]!);
+    }
+  }, [weekShipDays.join(","), weekOffset]);
+  const anchor = selectedAnchor && weekShipDays.includes(selectedAnchor) ? selectedAnchor : (weekShipDays[weekShipDays.length - 1] ?? null);
+
+  const locked = anchor ? isDayLocked(anchor) : false;
+
   // Yen 2026-07-03 新語意：「當週工單 = 一個批次單位」
-  //   Range = 本週最後 shipping 為 anchor · 往前掃到前一批 ship break
+  //   Range = anchor（選中的 shipping day）· 往前掃到前一批 ship break
   //   可含上週六日的工作日（跨週）· 只有 range 內的訂單算進本工單
-  const anchor = useMemo(() => findWeekAnchor(weekISO, dayTypeOf), [weekISO.join(","), dayOverrides, menu]);
   const rangeISO = useMemo(() => (anchor ? computeBatchRange(anchor, dayTypeOf) : []), [anchor, dayTypeOf, menu, dayOverrides]);
 
   // Yen 2026-07-06：shipped 徹底離開流程 · 只在訂單總覽看得到
@@ -147,6 +162,34 @@ export function WorksheetPage({ orders, menu }: PageProps) {
             </button>
           </div>
         </div>
+
+        {/* 批次選 chip · Yen 2026-07-06：一週有多個出貨日時逐一切換 */}
+        {weekShipDays.length > 1 && (
+          <div className="no-print" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12, alignItems: "baseline" }}>
+            <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".14em", marginRight: 4 }}>批次</span>
+            {weekShipDays.map((d) => {
+              const isActive = d === anchor;
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setSelectedAnchor(d)}
+                  style={{
+                    fontFamily: F.mono, fontSize: 12,
+                    color: isActive ? "#111" : "#C9C9CF",
+                    background: isActive ? "var(--acc,#F5D400)" : "transparent",
+                    border: `1px solid ${isActive ? "var(--acc,#F5D400)" : "#3a3a40"}`,
+                    padding: "5px 12px", cursor: "pointer",
+                    fontWeight: isActive ? 900 : 400,
+                    letterSpacing: ".03em",
+                  }}
+                >
+                  {mdOf(d)} 出貨
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* 簡潔列印 header（Yen 2026-07-04：緊湊排版節省空間） */}
         <div style={{ marginBottom: 10, borderBottom: "2px solid #26262C", paddingBottom: 8 }}>
