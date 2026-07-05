@@ -7,7 +7,7 @@
  *   資料源：跟 SchedulePage 同套（accumulateAtoms / day-type / week-locks / batch range）
  */
 import { useMemo, useState } from "react";
-import { makeDayTypeOf, loadDayOverrides } from "../../domain/day-type";
+import { makeDayTypeOf, loadDayOverrides, shippingDayFor } from "../../domain/day-type";
 import { computeBatchRange, findWeekAnchor } from "../../domain/batch-range";
 import { isDayLocked } from "../../db/week-locks";
 import type { PageProps } from "./types";
@@ -64,14 +64,18 @@ export function WorksheetPage({ orders, menu }: PageProps) {
   const anchor = useMemo(() => findWeekAnchor(weekISO, dayTypeOf), [weekISO.join(","), dayOverrides, menu]);
   const rangeISO = useMemo(() => (anchor ? computeBatchRange(anchor, dayTypeOf) : []), [anchor, dayTypeOf, menu, dayOverrides]);
 
-  // Range 內訂單（含上週工作日排入的 · 全部歸此工單）
+  // Yen 2026-07-05：跟「出貨明細」BatchDetailPanel 對齊
+  //   · 分組維度：shippingDayFor(batchDate) === anchor（出貨日）· 不用 rangeISO（製作日）
+  //   · Status 篩選：confirmed / kol_shipped / shipped（同 LabelsPage.batchShipList）
+  //   · 這樣 SKU 統計數字兩邊完全一致 · 麵包師傅工單 = 出貨明細對貨用的同一批
   const batchOrders = useMemo(() => {
-    if (rangeISO.length === 0) return [];
-    const rangeSet = new Set(rangeISO);
-    return orders.filter(
-      (o) => o.batchDate && o.assignment_source !== "pending" && rangeSet.has(o.batchDate)
-    );
-  }, [orders, rangeISO.join(",")]);
+    if (!anchor) return [];
+    return orders.filter((o) => {
+      if (!o.batchDate) return false;
+      if (o.status !== "confirmed" && o.status !== "kol_shipped" && o.status !== "shipped") return false;
+      return shippingDayFor(o.batchDate, dayTypeOf) === anchor;
+    });
+  }, [orders, anchor, dayTypeOf]);
 
   // Yen 2026-07-04 決策：雇主只要「本週要做多少單」· 不要按日 breakdown
   //   拿掉 byDay / displayDays / atom 級統計 · 只留 SKU 級（訂單組合）統計
