@@ -9,8 +9,11 @@ import { PageHeader } from "../brand/PageHeader";
 import { ExportBtn } from "../brand/ExportBtn";
 import { writeOverviewExcel } from "../../output/overview-excel";
 import { getDisplayName } from "../../domain/menu";
-import type { Order } from "../../domain/models";
+import type { Order, OrderStatus } from "../../domain/models";
+import { db } from "../../db/schema";
 import type { PageProps } from "./types";
+
+type OrderStatusValue = OrderStatus;
 import {
   F,
   CHAN_COLOR,
@@ -60,10 +63,26 @@ type FilterState = {
 };
 
 // ── 主頁面 ────────────────────────────────────────────────
-export function OrdersPage({ orders, menu }: PageProps) {
+export function OrdersPage({ orders, menu, refreshOrders }: PageProps) {
   const [filter, setFilter] = useState<FilterState>({
     channel: "全部", status: "全部", batch: "全部", query: "",
   });
+  // Yen 2026-07-04：訂單狀態預設鎖定 · 點鎖 icon 才能改
+  const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
+  function toggleUnlock(id: string) {
+    setUnlockedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  async function updateStatus(id: string, next: OrderStatusValue) {
+    await db.orders.update(id, { status: next, last_seen_at: new Date().toISOString() });
+    await refreshOrders();
+    // 更完成後重新鎖上（防繼續手殘）
+    setUnlockedIds((prev) => { const s = new Set(prev); s.delete(id); return s; });
+  }
 
   function toggleFilter<K extends keyof Omit<FilterState, "query">>(key: K, val: FilterState[K]) {
     setFilter((prev) => ({ ...prev, [key]: prev[key] === val ? "全部" : val }));
@@ -305,11 +324,13 @@ export function OrdersPage({ orders, menu }: PageProps) {
                   <span style={{ fontFamily: F.mono, fontSize: 11, color: "#6C6C74", textAlign: "center" }}>
                     {o.labelCount > 0 ? String(o.labelCount) : "—"}
                   </span>
-                  <span style={{ textAlign: "right" }}>
-                    <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 10, color: ss.color, background: ss.bg, padding: "3px 8px", whiteSpace: "nowrap", display: "inline-block" }}>
-                      {statusLabel(o.status)}
-                    </span>
-                  </span>
+                  <StatusCell
+                    order={o}
+                    ss={ss}
+                    unlocked={unlockedIds.has(o.id)}
+                    onToggleLock={() => toggleUnlock(o.id)}
+                    onChange={(next) => void updateStatus(o.id, next)}
+                  />
                 </div>
               );
             })}
@@ -384,5 +405,71 @@ export function OrdersPage({ orders, menu }: PageProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+// ── 訂單狀態列（預設鎖定 · 點鎖 icon 解鎖後可改）─────────────────
+const STATUS_OPTIONS: OrderStatus[] = [
+  "confirmed",
+  "shipped",
+  "canceled",
+  "kol_shipped",
+  "disappeared_pending_resolution",
+];
+
+function StatusCell({
+  order,
+  ss,
+  unlocked,
+  onToggleLock,
+  onChange,
+}: {
+  order: Order;
+  ss: { color: string; bg: string };
+  unlocked: boolean;
+  onToggleLock: () => void;
+  onChange: (next: OrderStatusValue) => void;
+}) {
+  // 包含當前 status（就算不在常用清單也顯示）
+  const options = STATUS_OPTIONS.includes(order.status)
+    ? STATUS_OPTIONS
+    : [order.status, ...STATUS_OPTIONS];
+  return (
+    <span style={{ textAlign: "right", display: "inline-flex", gap: 4, justifyContent: "flex-end", alignItems: "center" }}>
+      {unlocked ? (
+        <select
+          value={order.status}
+          onChange={(e) => onChange(e.target.value as OrderStatusValue)}
+          style={{
+            fontFamily: F.tc, fontWeight: 700, fontSize: 10, color: ss.color,
+            background: "#0A0A0C", border: `1px solid ${ss.color}`,
+            padding: "2px 6px", cursor: "pointer",
+          }}
+        >
+          {options.map((s) => (
+            <option key={s} value={s} style={{ background: "#0A0A0C", color: "#F5F4EF" }}>
+              {statusLabel(s)}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 10, color: ss.color, background: ss.bg, padding: "3px 8px", whiteSpace: "nowrap" }}>
+          {statusLabel(order.status)}
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={onToggleLock}
+        title={unlocked ? "鎖回 · 防手殘" : "解鎖 · 允許改狀態"}
+        style={{
+          fontFamily: F.mono, fontSize: 10,
+          color: unlocked ? "#F5D400" : "#6C6C74",
+          background: "transparent", border: "none",
+          padding: "2px 4px", cursor: "pointer", lineHeight: 1,
+        }}
+      >
+        {unlocked ? "🔓" : "🔒"}
+      </button>
+    </span>
   );
 }
