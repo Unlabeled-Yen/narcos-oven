@@ -10,6 +10,7 @@ import { useState, useMemo } from "react";
 import { PageHeader, PeriodChips } from "../brand/PageHeader";
 import { ExportBtn } from "../brand/ExportBtn";
 import { writePeriodSummaryExcel } from "../../output/period-summary-excel";
+import { BackupControls } from "../brand/BackupControls";
 import { getDisplayName } from "../../domain/menu";
 import {
   computeKpiCounts,
@@ -77,7 +78,7 @@ function EmptyRow() {
 
 // ── Main page ────────────────────────────────────────────────────────────────
 
-export function DashboardPage({ orders, menu }: PageProps) {
+export function DashboardPage({ orders, menu, refreshOrders }: PageProps) {
   const [period, setPeriod] = useState("8w");
 
   const kpi = useMemo(() => computeKpiCounts(orders), [orders]);
@@ -120,6 +121,7 @@ export function DashboardPage({ orders, menu }: PageProps) {
               filename="dashboard_period_summary"
               onExport={() => writePeriodSummaryExcel(orders, menu, { type: "all" })}
             />
+            <BackupControls refreshOrders={refreshOrders} />
           </div>
         } />
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
