@@ -78,7 +78,20 @@ export function OrdersPage({ orders, menu, refreshOrders }: PageProps) {
     });
   }
   async function updateStatus(id: string, next: OrderStatusValue) {
-    await db.orders.update(id, { status: next, last_seen_at: new Date().toISOString() });
+    // Yen 2026-07-06：從 shipped 改回非 shipped（誤按修復）· 同時清 batchDate + reset assignment_source
+    //   否則訂單會偷偷回到原本已排的日子上、不會出現在待排列表
+    const before = orders.find((o) => o.id === id);
+    if (before?.status === "shipped" && next !== "shipped") {
+      await db.orders.update(id, {
+        status: next,
+        last_seen_at: new Date().toISOString(),
+        batchDate: null,
+        system_suggested_date: null,
+        assignment_source: "pending",
+      });
+    } else {
+      await db.orders.update(id, { status: next, last_seen_at: new Date().toISOString() });
+    }
     await refreshOrders();
     // 更完成後重新鎖上（防繼續手殘）
     setUnlockedIds((prev) => { const s = new Set(prev); s.delete(id); return s; });

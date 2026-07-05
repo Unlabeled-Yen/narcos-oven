@@ -12,10 +12,13 @@ import { loadDayOverrides, makeDayTypeOf, shippingDayFor } from "../../domain/da
 
 export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
   const dayTypeOf = useMemo(() => makeDayTypeOf(menu, loadDayOverrides()), [menu]);
+  // Yen 2026-07-06：只算「還有非 shipped 訂單」的批次 · 全出貨的批次直接從選項消失
   const orderBatchMap = useMemo(() => {
     const m = new Map<string, string>();
     for (const o of orders) {
-      if (o.batchDate) m.set(o.id, shippingDayFor(o.batchDate, dayTypeOf));
+      if (o.batchDate && o.status !== "shipped") {
+        m.set(o.id, shippingDayFor(o.batchDate, dayTypeOf));
+      }
     }
     return m;
   }, [orders, dayTypeOf]);
@@ -40,8 +43,9 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
     return orders.filter((o) => orderBatchMap.get(o.id) === selectedBatch);
   }, [orders, orderBatchMap, selectedBatch]);
 
+  // Yen 2026-07-06：shipped 出貨後從批次消失 · 只在訂單總覽看得到
   const batchShipList = useMemo(() => {
-    return batchOrders.filter((o) => o.status === "confirmed" || o.status === "kol_shipped" || o.status === "shipped");
+    return batchOrders.filter((o) => o.status === "confirmed" || o.status === "kol_shipped");
   }, [batchOrders]);
 
   const isEmpty = shippingBatchDates.length === 0;

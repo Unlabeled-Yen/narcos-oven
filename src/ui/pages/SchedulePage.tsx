@@ -120,11 +120,12 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   const orderById = useMemo(() => new Map(orders.map((o) => [o.id, o])), [orders]);
 
   // 各日已排訂單（含跨週查詢：允許 anchor 往前掃到上週工作日）
+  // Yen 2026-07-06：shipped 從排程消失 · 只在訂單總覽看得到
   const assignedByDay = useMemo(() => {
     const m = new Map<string, Order[]>();
     for (const iso of weekISO) m.set(iso, []); // 本週 preload 空陣列 · 給週檢視 render 用
     for (const o of orders) {
-      if (o.batchDate && o.assignment_source !== "pending") {
+      if (o.batchDate && o.assignment_source !== "pending" && o.status !== "shipped") {
         if (!m.has(o.batchDate)) m.set(o.batchDate, []);
         m.get(o.batchDate)!.push(o);
       }
@@ -348,11 +349,11 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
     指定日: pending.filter((o) => !!o.customer_wish_date).length,
   }), [pending]);
 
-  // 全部有日期的訂單（月曆計數用）
+  // 全部有日期的訂單（月曆計數用）· Yen 2026-07-06：shipped 排除
   const ordersByDate = useMemo(() => {
     const m = new Map<string, Order[]>();
     for (const o of orders) {
-      if (o.batchDate && o.assignment_source !== "pending") {
+      if (o.batchDate && o.assignment_source !== "pending" && o.status !== "shipped") {
         (m.get(o.batchDate) ?? m.set(o.batchDate, []).get(o.batchDate)!).push(o);
       }
     }
@@ -491,7 +492,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
     if (currentBatchRangeISO.length === 0) return [];
     const rangeSet = new Set(currentBatchRangeISO);
     return orders.filter(
-      (o) => o.batchDate && o.assignment_source !== "pending" && rangeSet.has(o.batchDate)
+      (o) => o.batchDate && o.assignment_source !== "pending" && o.status !== "shipped" && rangeSet.has(o.batchDate)
     );
   }, [orders, currentBatchRangeISO]);
   const currentBatchOrderCount = currentBatchOrders.length;

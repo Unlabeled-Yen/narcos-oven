@@ -67,15 +67,14 @@ export function WorksheetPage({ orders, menu }: PageProps) {
   const anchor = useMemo(() => findWeekAnchor(weekISO, dayTypeOf), [weekISO.join(","), dayOverrides, menu]);
   const rangeISO = useMemo(() => (anchor ? computeBatchRange(anchor, dayTypeOf) : []), [anchor, dayTypeOf, menu, dayOverrides]);
 
-  // Yen 2026-07-05：跟「出貨明細」BatchDetailPanel 對齊
-  //   · 分組維度：shippingDayFor(batchDate) === anchor（出貨日）· 不用 rangeISO（製作日）
-  //   · Status 篩選：confirmed / kol_shipped / shipped（同 LabelsPage.batchShipList）
-  //   · 這樣 SKU 統計數字兩邊完全一致 · 麵包師傅工單 = 出貨明細對貨用的同一批
+  // Yen 2026-07-06：shipped 徹底離開流程 · 只在訂單總覽看得到
+  //   · 分組維度：shippingDayFor(batchDate) === anchor（出貨日）
+  //   · Status 篩選：confirmed / kol_shipped（已出貨的排除）
   const batchOrders = useMemo(() => {
     if (!anchor) return [];
     return orders.filter((o) => {
       if (!o.batchDate) return false;
-      if (o.status !== "confirmed" && o.status !== "kol_shipped" && o.status !== "shipped") return false;
+      if (o.status !== "confirmed" && o.status !== "kol_shipped") return false;
       return shippingDayFor(o.batchDate, dayTypeOf) === anchor;
     });
   }, [orders, anchor, dayTypeOf]);
