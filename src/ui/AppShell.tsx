@@ -3,6 +3,7 @@ import type { Menu, Order } from "../domain/models";
 import { GrainOverlay } from "./brand/GrainOverlay";
 import { WarningTape } from "./brand/WarningTape";
 import { CommandBar, type NavKey, type NavItem } from "./brand/CommandBar";
+import { GoogleSheetSyncModal } from "./GoogleSheetSyncModal";
 import type { PageProps } from "./pages/types";
 
 import { DashboardPage } from "./pages/DashboardPage";
@@ -50,6 +51,7 @@ type Props = {
   pendingCount: number;
   syncLabel?: string;
   onFiles: (files: FileList) => void;
+  onSheetSync: (sheetUrlOrId: string) => Promise<{ orderCount: number }>;
   error?: string | null;
 };
 
@@ -60,9 +62,11 @@ export function AppShell({
   pendingCount,
   syncLabel,
   onFiles,
+  onSheetSync,
   error,
 }: Props) {
   const [active, setActive] = useState<NavKey>(keyFromHash);
+  const [sheetSyncOpen, setSheetSyncOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -162,15 +166,32 @@ export function AppShell({
           onNav={navigate}
           syncLabel={syncLabel}
           right={
-            <button
-              type="button"
-              onClick={onUploadClick}
-              className="font-notoTc font-black text-[12px] text-[#111] bg-narcos-ink px-4 py-2 cursor-pointer inline-flex items-center gap-[7px]"
-            >
-              ＋ 拖檔上傳
-            </button>
+            <div className="flex items-center" style={{ gap: 6 }}>
+              <button
+                type="button"
+                onClick={() => setSheetSyncOpen(true)}
+                title="連線 Google Sheet · 拉最新面交問卷回覆"
+                className="font-notoTc font-black text-[12px] px-4 py-2 cursor-pointer inline-flex items-center gap-[7px]"
+                style={{ color: "#111", background: "#43B23C" }}
+              >
+                🔗 Sheet 同步
+              </button>
+              <button
+                type="button"
+                onClick={onUploadClick}
+                className="font-notoTc font-black text-[12px] text-[#111] bg-narcos-ink px-4 py-2 cursor-pointer inline-flex items-center gap-[7px]"
+              >
+                ＋ 拖檔上傳
+              </button>
+            </div>
           }
         />
+        {sheetSyncOpen && (
+          <GoogleSheetSyncModal
+            onClose={() => setSheetSyncOpen(false)}
+            onSync={onSheetSync}
+          />
+        )}
         <WarningTape />
 
         {/* 情境子分頁列：只在有子頁的主項（儀表板 / 排程）底下出現 */}

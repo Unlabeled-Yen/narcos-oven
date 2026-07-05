@@ -88,8 +88,20 @@ export function parseInPerson(
     );
   }
   const rows = readSheetTolerant(sh);
+  return parseInPersonRows(rows, sourceFile, menu);
+}
+
+/**
+ * 純 rows 版本入口 · Yen 2026-07-06：讓 Google Sheets API 直接送 rows 進來
+ * 沿用完全一樣的 parse 邏輯 · 保證線上同步 == 上傳 xlsx 結果一致
+ */
+export function parseInPersonRows(
+  rows: unknown[][],
+  sourceFile: string,
+  menu: Menu
+): ParseResult {
   if (rows.length < 2) {
-    throw new Error(`面交檔 sheet「${SHEET_NAME}」沒資料`);
+    throw new Error(`面交 sheet「${SHEET_NAME}」沒資料`);
   }
   const header = rows[0] ?? [];
   const orders: Order[] = [];

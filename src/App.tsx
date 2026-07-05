@@ -3,8 +3,9 @@ import menuYamlText from "../data/menu.yaml?raw";
 import { loadMenu } from "./domain/menu";
 import { lintMenu, logLintWarnings } from "./domain/menu-lint";
 import { parseSellerBuy } from "./parsers/seller-buy";
-import { parseInPerson } from "./parsers/in-person";
+import { parseInPerson, parseInPersonRows } from "./parsers/in-person";
 import { parseKol } from "./parsers/kol";
+import { getSheetRows, extractSheetId } from "./google/sheets";
 import { detectFileKind, type FileKind } from "./parsers/detect";
 import { planDiff } from "./domain/diff";
 import type { ChannelId, ImportRun, Order } from "./domain/models";
@@ -70,37 +71,19 @@ export default function App() {
     setAllOrders(list);
   }
 
-  const handleFiles = useCallback(async (files: FileList) => {
-    setError(null);
+  /**
+   * 共用 import pipeline · Yen 2026-07-06 抽出讓 xlsx 與 Google Sheet 同步共用
+   * 拿到 parsed orders + channelsTouched + sources → 跑 sanity / diff / upsert
+   */
+  const runImport = useCallback(async (
+    parsed: { orders: Order[]; fileName: string }[],
+    channelsTouched: Set<ChannelId>,
+  ) => {
+    if (parsed.length === 0) return;
     const nowIso = new Date().toISOString();
     const runId = `run-${nowIso}`;
-
-    const parsed: { kind: FileKind; orders: Order[]; fileName: string }[] = [];
-    const channelsTouched = new Set<ChannelId>();
-    for (const file of Array.from(files)) {
-      try {
-        const buf = await file.arrayBuffer();
-        const kind = detectFileKind(buf);
-        if (kind === "unknown") {
-          setError(`檔 "${file.name}" 無法辨識`);
-          continue;
-        }
-        for (const ch of CHANNEL_MAP[kind]) channelsTouched.add(ch);
-        let r;
-        if (kind === "seller-buy") r = parseSellerBuy(buf, file.name, menu);
-        else if (kind === "in-person") r = parseInPerson(buf, file.name, menu);
-        else r = parseKol(buf, file.name, menu);
-        parsed.push({ kind, orders: r.orders, fileName: file.name });
-      } catch (e) {
-        setError(`檔 "${file.name}" parse error: ${e instanceof Error ? e.message : String(e)}`);
-      }
-    }
-    if (parsed.length === 0) return;
-
     const newAll = parsed.flatMap((p) => p.orders);
     const dbActive = await getActiveByChannels([...channelsTouched]);
-
-    // Sanity check：付款回退 / 下單日回退 / 消失比例過高 → 匯入前彈警告
     const report = checkImportSanity(newAll, dbActive);
 
     const doImport = async () => {
@@ -130,7 +113,6 @@ export default function App() {
     };
 
     if (report.severity !== "ok") {
-      // 卡在 sanity modal 讓雇主拍板繼續 or 取消
       setPendingImport({
         report,
         fileNames: parsed.map((p) => p.fileName),
@@ -138,9 +120,51 @@ export default function App() {
       });
       return;
     }
-
     await doImport();
   }, []);
+
+  const handleFiles = useCallback(async (files: FileList) => {
+    setError(null);
+    const parsed: { orders: Order[]; fileName: string }[] = [];
+    const channelsTouched = new Set<ChannelId>();
+    for (const file of Array.from(files)) {
+      try {
+        const buf = await file.arrayBuffer();
+        const kind = detectFileKind(buf);
+        if (kind === "unknown") {
+          setError(`檔 "${file.name}" 無法辨識`);
+          continue;
+        }
+        for (const ch of CHANNEL_MAP[kind]) channelsTouched.add(ch);
+        let r;
+        if (kind === "seller-buy") r = parseSellerBuy(buf, file.name, menu);
+        else if (kind === "in-person") r = parseInPerson(buf, file.name, menu);
+        else r = parseKol(buf, file.name, menu);
+        parsed.push({ orders: r.orders, fileName: file.name });
+      } catch (e) {
+        setError(`檔 "${file.name}" parse error: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    await runImport(parsed, channelsTouched);
+  }, [runImport]);
+
+  /**
+   * Google Sheet 同步（面交 · in-person）
+   * 沿用完全一樣的 dedup / diff / sanity 邏輯 → 跟拖 xlsx 語意等價
+   */
+  const handleSheetSync = useCallback(async (sheetUrlOrId: string): Promise<{ orderCount: number }> => {
+    setError(null);
+    const sheetId = extractSheetId(sheetUrlOrId);
+    if (!sheetId) throw new Error("無法從 URL 抽出 Spreadsheet ID · 請貼完整 sheet 網址");
+    const rows = await getSheetRows(sheetId, "表單回覆 1");
+    const result = parseInPersonRows(rows, `google-sheet:${sheetId}`, menu);
+    const channelsTouched = new Set<ChannelId>(CHANNEL_MAP["in-person"]);
+    await runImport(
+      [{ orders: result.orders, fileName: `google-sheet:${sheetId}` }],
+      channelsTouched,
+    );
+    return { orderCount: result.orders.length };
+  }, [runImport]);
 
   return (
     <>
@@ -172,6 +196,7 @@ export default function App() {
         pendingCount={pendingCountOf(allOrders)}
         syncLabel={syncLabel}
         onFiles={handleFiles}
+        onSheetSync={handleSheetSync}
         error={error}
       />
     </>
