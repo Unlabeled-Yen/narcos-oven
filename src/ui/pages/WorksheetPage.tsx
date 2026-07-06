@@ -133,15 +133,15 @@ export function WorksheetPage({ orders, menu }: PageProps) {
         <div className="flex items-baseline justify-between flex-wrap no-print" style={{ marginBottom: 16, gap: 12 }}>
           <div>
             <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 22, color: "#F5F4EF" }}>
-              當週工單 · 麵包師傅版
+              當週工單
             </div>
             <div style={{ fontFamily: F.mono, fontSize: 11, color: "#7A7A82", marginTop: 4, letterSpacing: ".08em" }}>
               {anchor
                 ? <>批次 {mdOf(anchor)}出貨 · 製作 range {rangeISO[0] ? mdOf(rangeISO[0]) : "—"} – {mdOf(anchor)}（{rangeISO.length} 天）</>
                 : <>本週無出貨日</>}
               {locked
-                ? <span style={{ color: "var(--acc,#F5D400)", marginLeft: 10 }}>🔒 本週已鎖定</span>
-                : <span style={{ color: "#E5622A", marginLeft: 10 }}>⚠ 本週未鎖定 · 排程可能仍在調整</span>}
+                ? <span style={{ color: "var(--acc,#F5D400)", marginLeft: 10 }}>🔒 本批次已鎖定</span>
+                : <span style={{ color: "#E5622A", marginLeft: 10 }}>⚠ 本批次未鎖定 · 排程可能仍在調整</span>}
             </div>
           </div>
           <div className="flex items-center flex-wrap" style={{ gap: 10 }}>
