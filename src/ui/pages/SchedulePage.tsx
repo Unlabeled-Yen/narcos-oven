@@ -13,6 +13,7 @@ import { getDisplayName } from "../../domain/menu";
 import { accumulateAtoms } from "../../domain/production-time";
 import { upsertOrder, clearAll } from "../../db/orders";
 import { isDayLocked, setDayLocked } from "../../db/week-locks";
+import type { DayType } from "../../domain/day-type";
 import type { PageProps } from "./types";
 
 const F = {
@@ -416,8 +417,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
   // 不再用「星期幾規則」讓所有同名星期幾自動套用同類型
   // 存 localStorage：{ "2026-07-03": "ship" | "work" | "rest", ... }
   // 沒 override 的日期 → 回退 menu.scheduling 的星期幾預設（menu.yaml 可設模板）
-  //                   → 兩者都無 → 預設「工作」
-  type DayType = "ship" | "work" | "rest";
+  //                   → 兩者都無 → 預設「工作」· DayType 已從 domain/day-type.ts import
   const [dayOverrides, setDayOverrides] = useState<Record<string, DayType>>(() => {
     try { return JSON.parse(localStorage.getItem("narcos-day-overrides") ?? "{}"); }
     catch { return {}; }
@@ -575,6 +575,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                 today={today}
                 ordersByDate={ordersByDate}
                 menu={menu}
+                dayTypeOf={dayTypeOf}
                 onPickDay={(d) => { setViewMode("week"); setWeekOffset(weekOffsetForDate(d, today)); }}
               />
             </div>
@@ -1337,26 +1338,36 @@ function orderItemLabel(o: Order, menu: Menu): string {
 }
 
 // 月曆視圖：整月排程一眼（每日已排單數 + 顆數），點某日 → 跳該週檢視
+// Yen 2026-07-06：出貨日標記走 dayTypeOf（menu.scheduling + dayOverrides）· 不再硬編週二
 function MonthCalendar({
-  weeks, month, today, ordersByDate, menu, onPickDay,
+  weeks, month, today, ordersByDate, menu, dayTypeOf, onPickDay,
 }: {
   weeks: Date[][];
   month: number;
   today: Date;
   ordersByDate: Map<string, Order[]>;
   menu: Menu;
+  dayTypeOf: (iso: string) => DayType;
   onPickDay: (d: Date) => void;
 }) {
   const todayISO = toISO(today);
+  // 週幾 header 動態顯示：哪幾天有 shipping_weekdays 就標「· 出貨」（不含 single-day override）
+  const shipWeekdaySet = new Set<number>(menu.scheduling?.shipping_weekdays ?? [2]);
+  const WD_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
+  // JS getDay(): 0=日 1=一 ... 6=六 · WD_LABELS 週一起始 → wd = (i + 1) % 7
   return (
     <div className="px-6 py-2" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
       {/* 星期頭 */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6, flexShrink: 0, marginBottom: 6 }}>
-        {["一", "二", "三", "四", "五", "六", "日"].map((w, i) => (
-          <div key={w} style={{ fontFamily: F.mono, fontSize: 11, color: i === 1 ? "var(--acc,#F5D400)" : "#7A7A82", textAlign: "center", letterSpacing: ".1em" }}>
-            {w}{i === 1 ? " · 出貨" : ""}
-          </div>
-        ))}
+        {WD_LABELS.map((w, i) => {
+          const wd = (i + 1) % 7;
+          const isShipCol = shipWeekdaySet.has(wd);
+          return (
+            <div key={w} style={{ fontFamily: F.mono, fontSize: 11, color: isShipCol ? "var(--acc,#F5D400)" : "#7A7A82", textAlign: "center", letterSpacing: ".1em" }}>
+              {w}{isShipCol ? " · 出貨" : ""}
+            </div>
+          );
+        })}
       </div>
       {/* 週列 */}
       <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateRows: `repeat(${weeks.length},1fr)`, gap: 6 }}>
@@ -1365,7 +1376,7 @@ function MonthCalendar({
             {row.map((d) => {
               const iso = toISO(d);
               const inMonth = d.getMonth() === month;
-              const isShip = d.getDay() === 2;
+              const isShip = dayTypeOf(iso) === "ship";
               const isToday = iso === todayISO;
               const list = ordersByDate.get(iso) ?? [];
               const atoms = list.length ? [...accumulateAtoms(list).values()].reduce((s, n) => s + n, 0) : 0;
