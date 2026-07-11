@@ -15,7 +15,8 @@ export type NavKey =
   | "labels"
   | "worksheet"
   | "manual"
-  | "print-labels";
+  | "print-labels"
+  | "shops";
 
 export type NavItem = {
   key: NavKey;

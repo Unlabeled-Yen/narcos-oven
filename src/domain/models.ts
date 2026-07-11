@@ -44,6 +44,27 @@ export const ChannelSchema = z.object({
   color: z.string(),
 });
 
+// ---------- Shop Partner (Yen 2026-07-06 · 駐店合作店家) ----------
+// 存 IndexedDB shops table · 雇主在店家管理 UI 自行 CRUD（不進 menu.yaml）
+// item.override_price · 該店該品項的議價常態價 · null = 用 menu.wholesale_price
+export const ShopPartnerItemSchema = z.object({
+  productSkuId: z.string(),
+  override_price: z.number().nullable().default(null),
+});
+export type ShopPartnerItem = z.infer<typeof ShopPartnerItemSchema>;
+
+export const ShopPartnerSchema = z.object({
+  id: z.string(),                          // slug · e.g. "shengsheng-coffee"
+  display_name: z.string(),                // "shēngshēng coffee（台南）"
+  location: z.string().default(""),        // 地點簡註 · 「台南」
+  items: z.array(ShopPartnerItemSchema).default([]),  // 該店賣的品項清單
+  active: z.boolean().default(true),       // false = 已停止合作、UI 隱藏但保留歷史
+  notes: z.string().default(""),
+  created_at: z.string(),                  // ISO
+  updated_at: z.string(),
+});
+export type ShopPartner = z.infer<typeof ShopPartnerSchema>;
+
 export const ProductionCapacitySchema = z.object({
   daily_max_by_atom: z.record(z.string(), z.number()),
   weekly_pattern: z

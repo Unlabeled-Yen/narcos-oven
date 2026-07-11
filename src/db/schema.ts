@@ -8,12 +8,13 @@
  *   order_changes - 訂單欄位變動歷程（跨 import_run 累積）
  */
 import Dexie, { type Table } from "dexie";
-import type { ImportRun, Order, OrderChange } from "../domain/models";
+import type { ImportRun, Order, OrderChange, ShopPartner } from "../domain/models";
 
 export class NarcosDatabase extends Dexie {
   orders!: Table<Order, string>;
   import_runs!: Table<ImportRun, string>;
   order_changes!: Table<OrderChange & { order_id: string; id?: number }, number>;
+  shops!: Table<ShopPartner, string>;
 
   constructor() {
     super("narcos-oven");
@@ -23,6 +24,14 @@ export class NarcosDatabase extends Dexie {
       import_runs: "id, imported_at, fully_resolved_at",
       // auto-increment id；index by order_id
       order_changes: "++id, order_id, imported_at, import_run_id",
+    });
+    // Yen 2026-07-06 slice 2B · 駐店合作店家 registry
+    //   version bump 到 21 · dev 環境已累積到 v20（Dexie 要求 code version ≥ DB version）
+    this.version(21).stores({
+      orders: "id, channel, status, batchDate, disappeared_at",
+      import_runs: "id, imported_at, fully_resolved_at",
+      order_changes: "++id, order_id, imported_at, import_run_id",
+      shops: "id, display_name, active",
     });
   }
 }
