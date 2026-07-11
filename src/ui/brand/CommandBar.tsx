@@ -16,7 +16,8 @@ export type NavKey =
   | "worksheet"
   | "manual"
   | "print-labels"
-  | "shops";
+  | "shops"
+  | "shop-payout";
 
 export type NavItem = {
   key: NavKey;

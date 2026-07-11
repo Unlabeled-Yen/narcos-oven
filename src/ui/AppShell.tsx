@@ -19,6 +19,7 @@ import { WorksheetPage } from "./pages/WorksheetPage";
 import { ManualOrderPage } from "./pages/ManualOrderPage";
 import { PrintLabelsPage } from "./pages/PrintLabelsPage";
 import { ShopsPage } from "./pages/ShopsPage";
+import { ShopPayoutPage } from "./pages/ShopPayoutPage";
 
 // capacity page 已依 Yen 決策拿掉（不需工時計算、不需產能上限）
 // NavKey.capacity 若被 hash routing 誤觸、fallback 到 dashboard
@@ -36,6 +37,7 @@ const PAGES: Record<Exclude<NavKey, "capacity">, (p: PageProps) => JSX.Element> 
   manual: ManualOrderPage,
   "print-labels": PrintLabelsPage,
   shops: ShopsPage,
+  "shop-payout": ShopPayoutPage,
 };
 
 const ALL_KEYS = Object.keys(PAGES) as NavKey[];
@@ -102,6 +104,7 @@ export function AppShell({
       { key: "payout", label: "分潤統計" },
       { key: "stats", label: "出爐統計" },
       { key: "kol", label: "KOL ROI" },
+      { key: "shop-payout", label: "駐店對帳" },
     ],
     schedule: [
       { key: "schedule", label: "排程系統" },
@@ -116,7 +119,7 @@ export function AppShell({
   };
   // 次頁 → 所屬主項
   const GROUP_OF: Partial<Record<NavKey, NavKey>> = {
-    dashboard: "dashboard", payout: "dashboard", stats: "dashboard", kol: "dashboard",
+    dashboard: "dashboard", payout: "dashboard", stats: "dashboard", kol: "dashboard", "shop-payout": "dashboard",
     schedule: "schedule", worksheet: "schedule", labels: "schedule", "print-labels": "schedule",
     menu: "menu", shops: "menu",
   };
