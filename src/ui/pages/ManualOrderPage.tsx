@@ -9,11 +9,12 @@
  *
  * Phase 2 · 匯出 xlsx 見同頁「匯出」button（待 Yen 確認格式後補實作）
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { PageProps } from "./types";
-import type { ChannelId } from "../../domain/models";
+import type { ChannelId, Menu, ShopPartner } from "../../domain/models";
 import { buildManualOrder } from "../../domain/manual-order";
 import { upsertOrder } from "../../db/orders";
+import { listShops } from "../../db/shops";
 import { exportManualOrders, filterManualOrders, type ManualExportFilter } from "../../output/manual-orders-excel";
 
 const F = {
@@ -68,7 +69,10 @@ const nextKey = () => ++itemKeyCounter;
 
 const EXPORT_FILTERS: ManualExportFilter[] = ["全部手打", "KOL", "駐店", "彈性", "宅配", "面交_中壢", "面交_台中", "面交_其他"];
 
+type Mode = "consumer" | "shop";
+
 export function ManualOrderPage({ menu, orders, refreshOrders }: PageProps) {
+  const [mode, setMode] = useState<Mode>("consumer");
   const [channel, setChannel] = useState<ChannelId>("KOL");
   const [name, setName] = useState("");
   const [igOrLine, setIgOrLine] = useState("");
@@ -221,11 +225,44 @@ export function ManualOrderPage({ menu, orders, refreshOrders }: PageProps) {
             <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 20, color: C.ink }}>手打單</div>
           </div>
           <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut3 }}>
-            雇主直接輸入 · KOL / 駐店 / 彈性單 · 送出即進 DB · 跟 xlsx 匯入同一套資料
+            雇主直接輸入 · 送出即進 DB · 跟 xlsx 匯入同一套資料
           </div>
         </div>
 
-        {savedMsg && (
+        {/* Mode tab · Yen 2026-07-06 slice 2C */}
+        <div style={{ display: "flex", gap: 4, marginBottom: 14, borderBottom: `1px solid ${C.line}` }}>
+          {(
+            [
+              { key: "consumer" as Mode, label: "消費者手打", hint: "KOL / 彈性 / 面交 / 宅配" },
+              { key: "shop" as Mode, label: "駐店訂單", hint: "合作店家批發、附運費 + 結清狀態" },
+            ]
+          ).map((t) => {
+            const active = mode === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setMode(t.key)}
+                style={{
+                  fontFamily: F.tc, fontWeight: active ? 900 : 400, fontSize: 13,
+                  color: active ? "#111" : C.mut,
+                  background: active ? C.acc : "transparent",
+                  border: "none", borderBottom: `2px solid ${active ? C.acc : "transparent"}`,
+                  padding: "10px 18px", cursor: "pointer", letterSpacing: ".04em",
+                }}
+                title={t.hint}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {mode === "shop" && (
+          <ShopModeForm menu={menu} refreshOrders={refreshOrders} />
+        )}
+
+        {mode === "consumer" && savedMsg && (
           <div
             style={{
               fontFamily: F.tc, fontWeight: 700, fontSize: 13,
@@ -238,6 +275,7 @@ export function ManualOrderPage({ menu, orders, refreshOrders }: PageProps) {
           </div>
         )}
 
+        {mode === "consumer" && (<>
         {/* ── Section 1 · 通路 + 收件人 ── */}
         <Section title="1 · 通路 / 收件人" color={chColor}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10 }}>
@@ -496,6 +534,7 @@ export function ManualOrderPage({ menu, orders, refreshOrders }: PageProps) {
         <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut3, marginTop: 20 }}>
           手打單 ID 格式：<span style={{ color: C.mut2 }}>MAN-&lt;channel&gt;-&lt;timestamp&gt;-&lt;rand&gt;</span>
         </div>
+        </>)}
       </div>
     </div>
   );
@@ -538,6 +577,264 @@ function Field({ label, children, span }: { label: string; children: React.React
     <div style={span ? { gridColumn: `span ${span}` } : undefined}>
       <div style={{ fontFamily: F.mono, fontSize: 9, color: C.mut3, marginBottom: 3, letterSpacing: ".05em" }}>{label}</div>
       {children}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// ShopModeForm · Yen 2026-07-06 slice 2C · 駐店訂單專用手打表單
+// 選店家 → 品項限定該店 items[] → 每 item 帶入公定價（可 override）→ 到貨日 + 運費 + 費用結清
+// ─────────────────────────────────────────────────────────────────────
+
+type ShopItemLine = { key: number; skuId: string; quantity: number; unitPriceOverride: string };
+let shopItemKeyCounter = 0;
+const nextShopKey = () => ++shopItemKeyCounter;
+
+function ShopModeForm({ menu, refreshOrders }: { menu: Menu; refreshOrders: () => Promise<void> }) {
+  const [shops, setShops] = useState<ShopPartner[]>([]);
+  const [shopId, setShopId] = useState<string>("");
+  const [batchDate, setBatchDate] = useState(todayISO());
+  const [items, setItems] = useState<ShopItemLine[]>([{ key: nextShopKey(), skuId: "", quantity: 1, unitPriceOverride: "" }]);
+  const [freightCost, setFreightCost] = useState("");
+  const [settled, setSettled] = useState(false);
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => { void (async () => setShops(await listShops(false)))(); }, []);
+
+  const shop = useMemo(() => shops.find((s) => s.id === shopId) ?? null, [shops, shopId]);
+
+  // 該店可供貨的品項 · 帶入 override_price 或 menu.wholesale_price
+  const shopItemOptions = useMemo(() => {
+    if (!shop) return [];
+    return shop.items.map((it) => {
+      const p = menu.products[it.productSkuId];
+      const wholesale = p?.wholesale_price ?? null;
+      const effective = it.override_price ?? wholesale;
+      return {
+        skuId: it.productSkuId,
+        name: p?.display_name ?? it.productSkuId,
+        wholesale,
+        override: it.override_price,
+        effective,
+      };
+    });
+  }, [shop, menu]);
+
+  // 計算每個 item 的實際單價（override -> shop item override -> menu.wholesale）+ subtotal
+  const computedItems = useMemo(() => {
+    return items.map((it) => {
+      const shopItem = shop?.items.find((si) => si.productSkuId === it.skuId);
+      const p = menu.products[it.skuId];
+      const publicPrice = p?.wholesale_price ?? null;
+      const shopPrice = shopItem?.override_price ?? null;
+      const negotiated = it.unitPriceOverride === "" ? null : Number(it.unitPriceOverride);
+      const unitPrice = negotiated ?? shopPrice ?? publicPrice ?? 0;
+      const subtotal = unitPrice * it.quantity;
+      return { ...it, unitPrice, subtotal, product: p, publicPrice, shopPrice };
+    });
+  }, [items, shop, menu]);
+
+  const grossTotal = computedItems.reduce((s, it) => s + it.subtotal, 0);
+  const actualReceived = grossTotal - (Number(freightCost) || 0);
+
+  // 巴斯克總量 min 2 顆軟警告（Yen 2026-07-06：混口味 OK · 總量 < 2 時 warn）
+  const basqueTotal = computedItems.reduce((s, it) => {
+    const isBasque = it.product?.contains?.some((c) => /巴斯克$/.test(c.atom));
+    return s + (isBasque ? it.quantity : 0);
+  }, 0);
+  const basqueWarning = basqueTotal > 0 && basqueTotal < 2;
+
+  function addItem() { setItems((prev) => [...prev, { key: nextShopKey(), skuId: "", quantity: 1, unitPriceOverride: "" }]); }
+  function removeItem(key: number) { setItems((prev) => (prev.length > 1 ? prev.filter((it) => it.key !== key) : prev)); }
+  function updateItem(key: number, patch: Partial<ShopItemLine>) {
+    setItems((prev) => prev.map((it) => (it.key === key ? { ...it, ...patch } : it)));
+  }
+
+  function reset() {
+    setBatchDate(todayISO());
+    setItems([{ key: nextShopKey(), skuId: "", quantity: 1, unitPriceOverride: "" }]);
+    setFreightCost("");
+    setSettled(false);
+    setNotes("");
+  }
+
+  async function handleSave() {
+    if (saving) return;
+    if (!shopId) { setMsg({ ok: false, text: "❌ 請先選店家" }); return; }
+    const validItems = computedItems.filter((it) => it.skuId && it.quantity > 0);
+    if (validItems.length === 0) { setMsg({ ok: false, text: "❌ 至少要有一個品項" }); return; }
+    setSaving(true);
+    try {
+      const order = buildManualOrder(
+        {
+          channel: "駐店",
+          order_date: todayISO(),
+          customer_wish_date: null,
+          batchDate,
+          recipient: {
+            name: shop?.display_name ?? shopId,
+            igOrLine: null, phone: null, address: null, convStore: null,
+          },
+          items: validItems.map((it) => ({
+            skuId: it.skuId,
+            rawName: it.product?.display_name ?? it.skuId,
+            quantity: it.quantity,
+            subtotal: it.subtotal,
+          })),
+          grossTotal,
+          freight: 0,
+          discount: 0,
+          notes: notes.trim() || undefined,
+          shop_partner: shopId,
+          override_unit_price: null,
+          freight_cost: Number(freightCost) || 0,
+          settled,
+        },
+        menu
+      );
+      await upsertOrder(order);
+      await refreshOrders();
+      setMsg({ ok: true, text: `✓ ${shop?.display_name} · $${grossTotal}（實收 $${actualReceived}）· ${order.id}` });
+      reset();
+    } catch (err) {
+      setMsg({ ok: false, text: `❌ 失敗：${err instanceof Error ? err.message : String(err)}` });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const available = shopItemOptions.filter((opt) => !items.some((it) => it.skuId === opt.skuId));
+
+  if (shops.length === 0) {
+    return (
+      <div style={{ background: C.card, border: `1px dashed ${C.line}`, padding: 24, textAlign: "center" }}>
+        <div style={{ fontFamily: F.tc, fontSize: 13, color: C.mut, marginBottom: 8 }}>尚未新增任何店家</div>
+        <div style={{ fontFamily: F.mono, fontSize: 11, color: C.mut3 }}>
+          先去「菜單 → 駐店店家」新增店家（設定該店賣什麼、公定價），才能在這裡打單
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {msg && (
+        <div style={{
+          fontFamily: F.tc, fontWeight: 700, fontSize: 13,
+          color: msg.ok ? "#111" : "#fff", background: msg.ok ? C.green : C.red,
+          padding: "10px 14px", marginBottom: 14,
+        }}>{msg.text}</div>
+      )}
+
+      <Section title="1 · 店家 + 到貨日" color={C.orange}>
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10 }}>
+          <Field label="合作店家">
+            <select value={shopId} onChange={(e) => setShopId(e.target.value)} style={inputStyle}>
+              <option value="">— 選店家 —</option>
+              {shops.map((s) => (<option key={s.id} value={s.id}>{s.display_name}{s.location ? ` · ${s.location}` : ""}</option>))}
+            </select>
+          </Field>
+          <Field label="到貨日期">
+            <input type="date" value={batchDate} onChange={(e) => setBatchDate(e.target.value)} style={inputStyle} />
+          </Field>
+        </div>
+        {shop && shop.items.length === 0 && (
+          <div style={{ fontFamily: F.mono, fontSize: 11, color: C.orange, marginTop: 8 }}>
+            ⚠ 此店家尚未設定任何供貨品項 · 先到「菜單 → 駐店店家」補
+          </div>
+        )}
+      </Section>
+
+      {shop && shop.items.length > 0 && (
+        <>
+          <Section title="2 · 品項 + 議價（可 override 店家常態價）" color={C.orange}>
+            {computedItems.map((it) => (
+              <div key={it.key} style={{
+                background: C.card, border: `1px solid ${C.line2}`, padding: "8px 10px", marginBottom: 6,
+                display: "grid", gridTemplateColumns: "2fr 80px 130px 130px 32px", gap: 8, alignItems: "center",
+              }}>
+                <select value={it.skuId} onChange={(e) => updateItem(it.key, { skuId: e.target.value, unitPriceOverride: "" })} style={inputStyle}>
+                  <option value="">— 選品項 —</option>
+                  {shopItemOptions.filter((opt) => opt.skuId === it.skuId || !items.some((i) => i.skuId === opt.skuId)).map((opt) => (
+                    <option key={opt.skuId} value={opt.skuId}>
+                      {opt.name} · ${opt.effective ?? "?"}
+                    </option>
+                  ))}
+                </select>
+                <input type="number" min={1} value={it.quantity}
+                  onChange={(e) => updateItem(it.key, { quantity: Math.max(1, Number(e.target.value) || 1) })}
+                  style={{ ...inputStyle, textAlign: "right" as const }}
+                />
+                <input type="number" value={it.unitPriceOverride}
+                  placeholder={it.publicPrice != null ? `常態 $${it.shopPrice ?? it.publicPrice}` : "議價 $"}
+                  onChange={(e) => updateItem(it.key, { unitPriceOverride: e.target.value })}
+                  style={{ ...inputStyle, textAlign: "right" as const }}
+                  title="這次議價單價 · 空 = 用店家常態價 or 公定價"
+                />
+                <div style={{ fontFamily: F.anton, fontSize: 15, color: C.mut, textAlign: "right" }}>${it.subtotal}</div>
+                <button type="button" onClick={() => removeItem(it.key)} disabled={items.length <= 1}
+                  style={{
+                    fontFamily: F.mono, fontSize: 13, color: items.length <= 1 ? C.mut3 : C.red,
+                    background: "transparent", border: `1px solid ${items.length <= 1 ? C.line : C.red}`,
+                    padding: "5px 0", cursor: items.length <= 1 ? "not-allowed" : "pointer",
+                  }}
+                >✕</button>
+              </div>
+            ))}
+            {available.length > 0 && (
+              <button type="button" onClick={addItem} style={{
+                fontFamily: F.tc, fontWeight: 700, fontSize: 11, color: C.mut,
+                background: "transparent", border: `1px dashed ${C.line}`,
+                padding: "6px 12px", cursor: "pointer", marginTop: 4,
+              }}>＋ 加一列品項</button>
+            )}
+            {basqueWarning && (
+              <div style={{ fontFamily: F.mono, fontSize: 10, color: C.orange, marginTop: 8 }}>
+                ⚠ 巴斯克單筆最低 2 顆（可混口味）· 目前 {basqueTotal} 顆 · 可存但雇主自行確認
+              </div>
+            )}
+          </Section>
+
+          <Section title="3 · 運費 + 費用結清" color={C.orange}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+              <Field label="運費（雇主吸收 · 從實收扣）">
+                <input type="number" value={freightCost} onChange={(e) => setFreightCost(e.target.value)} placeholder="0" style={inputStyle} />
+              </Field>
+              <Field label="總金額（自動）">
+                <div style={{ fontFamily: F.anton, fontSize: 20, color: C.acc, padding: "6px 0" }}>${grossTotal}</div>
+              </Field>
+              <Field label="實收（總 − 運費）">
+                <div style={{ fontFamily: F.anton, fontSize: 20, color: C.green, padding: "6px 0" }}>${actualReceived}</div>
+              </Field>
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontFamily: F.mono, fontSize: 12, color: C.mut, cursor: "pointer" }}>
+              <input type="checkbox" checked={settled} onChange={(e) => setSettled(e.target.checked)} />
+              費用已結清（店家已付款）
+            </label>
+          </Section>
+
+          <Section title="4 · 備註" color={C.mut2}>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
+              placeholder="收件人、聯絡方式、特殊說明..."
+              style={{ ...inputStyle, resize: "vertical" as const }}
+            />
+          </Section>
+
+          <div className="flex items-center justify-between flex-wrap" style={{ gap: 12, marginTop: 4 }}>
+            <button type="button" onClick={reset} style={{
+              fontFamily: F.mono, fontSize: 11, color: C.mut2,
+              background: "transparent", border: `1px solid ${C.line}`, padding: "9px 14px", cursor: "pointer",
+            }}>清空</button>
+            <button type="button" onClick={handleSave} disabled={saving} style={{
+              fontFamily: F.tc, fontWeight: 900, fontSize: 14, color: "#111",
+              background: C.acc, border: "none", padding: "11px 22px", cursor: saving ? "wait" : "pointer",
+              letterSpacing: ".05em", opacity: saving ? 0.6 : 1,
+            }}>{saving ? "存入中…" : "✓ 送出駐店訂單"}</button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

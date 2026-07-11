@@ -34,6 +34,12 @@ export type ManualOrderInput = {
   discount?: number;
   labelCount?: number | null; // null → 自動 = items 總 quantity
   notes?: string;
+  // Yen 2026-07-06 slice 2C · 駐店訂單專用（其他 channel 一律不填、走預設）
+  shop_partner?: string | null;         // 合作店家 id
+  override_unit_price?: number | null;  // 議價（訂單層級）· 若各 item 有自己的價 · 從 subtotal 反推、這欄留 null
+  freight_cost?: number;                // 運費（雇主吸收）
+  settled?: boolean;                    // 費用結清
+  batchDate?: string | null;            // 到貨日 · 駐店 mode 由雇主自訂 · 其他 channel 走 null 讓排程接手
 };
 
 /**
@@ -101,7 +107,8 @@ export function buildManualOrder(input: ManualOrderInput, menu: Menu): Order {
     id,
     channel: input.channel,
     status,
-    batchDate: null, // 由雇主之後拖入排程 · 跟 parser 匯入行為一致
+    // 駐店 mode 由雇主直接填到貨日 · 其他 channel 一律 null（跟 parser 匯入行為一致、等雇主拖入排程）
+    batchDate: input.batchDate ?? null,
     recipient: input.recipient,
     items,
     revenue: {
@@ -110,11 +117,11 @@ export function buildManualOrder(input: ManualOrderInput, menu: Menu): Order {
       discount: input.discount ?? 0,
     },
     labelCount,
-    // 駐店專用四欄（其他 channel 一律 null / 預設）· Yen 2026-07-06 slice 2A
-    shop_partner: null,
-    override_unit_price: null,
-    freight_cost: 0,
-    settled: false,
+    // 駐店專用四欄 · slice 2C 已可從 input 傳入 · 其他 channel 走預設
+    shop_partner: input.shop_partner ?? null,
+    override_unit_price: input.override_unit_price ?? null,
+    freight_cost: input.freight_cost ?? 0,
+    settled: input.settled ?? false,
     pendingReasons,
     rawSource: {
       file: "手打單",
@@ -138,7 +145,8 @@ export function buildManualOrder(input: ManualOrderInput, menu: Menu): Order {
     order_date: input.order_date,
     customer_wish_date: input.customer_wish_date,
     system_suggested_date: null,
-    assignment_source: "pending",
+    // 駐店 mode 手動填 batchDate = 雇主直接拍板 · 其他 channel 保持 pending
+    assignment_source: input.batchDate ? "boss_scheduled" : "pending",
     wish_priority: null,
     estimated_production_hours: null,
     first_seen_at: now,
