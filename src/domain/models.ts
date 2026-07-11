@@ -23,6 +23,10 @@ export const ProductSchema = z.object({
   category: z.enum(["combo", "single"]),
   price: z.number().nullable(),
   cost: z.number().nullable(),
+  // Yen 2026-07-06：駐店供貨公定價 · null = 未定案 / 該品項不供貨
+  wholesale_price: z.number().nullable().default(null),
+  // Yen 2026-07-06：品項狀態 · "draft" = 研發中、店家提案但細節未定
+  status: z.enum(["active", "draft"]).default("active"),
   contains: z.array(
     z.object({
       atom: z.string(),
@@ -272,6 +276,17 @@ export const OrderSchema = z.object({
     discount: z.number(),
   }),
   labelCount: z.number().int().nonnegative(),
+
+  // Yen 2026-07-06 · 駐店訂單專用四欄（其他 channel 一律 null / 預設值）
+  //   shop_partner        : 合作店家 ID · null = 非駐店
+  //   override_unit_price : 議價單價 · null = 用公定價（menu.wholesale_price）
+  //   freight_cost        : 運費（雇主吸收、從實收扣）· 0 = 沒付運費
+  //   settled             : 費用結清狀態（店家付款了沒）
+  shop_partner: z.string().nullable().default(null),
+  override_unit_price: z.number().nullable().default(null),
+  freight_cost: z.number().nonnegative().default(0),
+  settled: z.boolean().default(false),
+
   pendingReasons: z.array(PendingReasonSchema).default([]),
   rawSource: z.object({
     file: z.string(),

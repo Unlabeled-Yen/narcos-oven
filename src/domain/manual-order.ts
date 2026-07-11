@@ -110,6 +110,11 @@ export function buildManualOrder(input: ManualOrderInput, menu: Menu): Order {
       discount: input.discount ?? 0,
     },
     labelCount,
+    // 駐店專用四欄（其他 channel 一律 null / 預設）· Yen 2026-07-06 slice 2A
+    shop_partner: null,
+    override_unit_price: null,
+    freight_cost: 0,
+    settled: false,
     pendingReasons,
     rawSource: {
       file: "手打單",

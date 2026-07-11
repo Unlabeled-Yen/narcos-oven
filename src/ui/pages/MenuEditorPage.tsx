@@ -91,6 +91,7 @@ export function MenuEditorPage({ menu }: PageProps) {
     const sg = STATIC_SUGGESTION;
     const newProd: Product = {
       display_name: sg.display_name, category: sg.category, price: sg.price, cost: sg.cost,
+      wholesale_price: null, status: "active",  // Yen 2026-07-06 slice 2A
       contains: sg.contains, aliases: sg.aliases, match_signature: sg.match_signature,
       seen_count: sg.seen_count, notes: sg.notes,
     };

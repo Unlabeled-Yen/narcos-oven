@@ -251,6 +251,10 @@ function finalizeOrder(w: WipOrder, menu: Menu): Order {
       discount: w.discount,
     },
     labelCount,
+    shop_partner: null,
+    override_unit_price: null,
+    freight_cost: 0,
+    settled: false,
     pendingReasons,
     rawSource: {
       file: w.sourceFile,

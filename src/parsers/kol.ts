@@ -180,6 +180,10 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
       items: [],
       revenue: { grossTotal: 0, freight: 0, discount: 0 },
       labelCount: 0,
+      shop_partner: null,
+      override_unit_price: null,
+      freight_cost: 0,
+      settled: false,
       pendingReasons: [],
       rawSource: {
         file: w.source_file,
@@ -257,6 +261,10 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
     items,
     revenue: { grossTotal: 0, freight: 0, discount: 0 },
     labelCount,
+    shop_partner: null,
+    override_unit_price: null,
+    freight_cost: 0,
+    settled: false,
     pendingReasons,
     rawSource: {
       file: w.source_file,

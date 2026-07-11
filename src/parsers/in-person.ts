@@ -235,6 +235,10 @@ export function parseInPersonRows(
         discount: 0,
       },
       labelCount,
+      shop_partner: null,
+      override_unit_price: null,
+      freight_cost: 0,
+      settled: false,
       pendingReasons,
       rawSource: {
         file: sourceFile,

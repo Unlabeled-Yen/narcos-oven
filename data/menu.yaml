@@ -33,6 +33,8 @@ atoms:
   香料堅果醬90ml: {unit: 罐, cost: 81.91}
   香料堅果醬240ml: {unit: 罐, cost: 205.75}
   瑕疵小脆捲10顆: {unit: 包, cost: null}   # PDF 未列
+  # Yen 2026-07-06：駐店研發中品項 · 光地蔬食提案 · 成本 / 拆解未定
+  無麩烤餅: {unit: 顆, cost: null}
 
 # ---------- PRODUCTS ----------
 # 上架 SKU。display_name = 中文精簡版；aliases = 賣貨便原文/面交/KOL/舊稱
@@ -242,6 +244,7 @@ products:
     display_name: 原味巴斯克
     category: single
     price: 650
+    wholesale_price: 450     # 駐店供貨公定價（Yen 2026-07-06 依供貨表）
     cost: null
     contains:
       - {atom: 原味巴斯克, count: 1}
@@ -271,6 +274,7 @@ products:
     display_name: 芝麻巴斯克
     category: single
     price: 720
+    wholesale_price: 520     # 駐店供貨公定價
     cost: null
     contains:
       - {atom: 芝麻巴斯克, count: 1}
@@ -324,6 +328,7 @@ products:
     display_name: 焙茶栗子巴斯克
     category: single
     price: 980
+    wholesale_price: 650     # 駐店供貨公定價
     cost: null
     contains:
       - {atom: 焙茶栗子巴斯克, count: 1}
@@ -341,6 +346,7 @@ products:
     display_name: 白玉烏龍茶巴斯克
     category: single
     price: 980
+    wholesale_price: 650     # 駐店供貨公定價
     cost: null
     contains:
       - {atom: 白玉烏龍茶巴斯克, count: 1}
@@ -384,6 +390,85 @@ products:
       include: [香料堅果醬, 240ml]
       exclude: [40ml, 90ml]
     seen_count: 0            # 賣貨便本批沒賣、面交 c20 賣 6 罐
+
+  # ============ 駐店供貨單品（Yen 2026-07-06）============
+  # 這些是「單顆為單位」的供貨 SKU · 只在駐店手打單使用
+  # 消費者端不直接下單 · aliases/match_signature 留空避免污染 parser lookup
+
+  肉桂捲_單品:
+    display_name: 肉桂捲（單顆）
+    category: single
+    price: null
+    wholesale_price: 70
+    cost: 20.90
+    contains:
+      - {atom: 肉桂捲, count: 1}
+    aliases: []
+    match_signature:
+      include: []
+      exclude: []
+    seen_count: 0
+
+  蘋果肉桂捲_單品:
+    display_name: 蘋果肉桂捲（單顆）
+    category: single
+    price: null
+    wholesale_price: 85
+    cost: 30.13
+    contains:
+      - {atom: 蘋果肉桂捲, count: 1}
+    aliases: []
+    match_signature:
+      include: []
+      exclude: []
+    seen_count: 0
+
+  芝麻焙茶奶酥磅蛋糕_單品:
+    display_name: 芝麻焙茶奶酥磅蛋糕（整顆）
+    category: single
+    price: null
+    wholesale_price: 260
+    cost: 98.52
+    contains:
+      - {atom: 芝麻焙茶奶酥磅蛋糕, count: 1}
+    aliases: []
+    match_signature:
+      include: []
+      exclude: []
+    seen_count: 0
+
+  鳳梨肉桂奶酥磅蛋糕_單品:
+    display_name: 鳳梨肉桂奶酥磅蛋糕（整顆）
+    category: single
+    price: null
+    wholesale_price: 260
+    cost: 103.37
+    contains:
+      - {atom: 鳳梨肉桂奶酥磅蛋糕, count: 1}
+    aliases: []
+    match_signature:
+      include: []
+      exclude: []
+    seen_count: 0
+
+  # 研發中：光地蔬食提案 · 細節（成本 / atom / 建議零售）尚未定案（Yen 2026-07-06）
+  無麩烤餅_單品:
+    display_name: 無麩烤餅（單顆·研發中）
+    category: single
+    status: draft
+    price: null
+    wholesale_price: null
+    cost: null
+    contains:
+      - {atom: 無麩烤餅, count: 1}
+    aliases: []
+    match_signature:
+      include: []
+      exclude: []
+    seen_count: 0
+    notes: |
+      2026-07-06 由駐店店家「光地蔬食」提案要求研發 · 供貨價 / atom 拆解 / 零售價尚未定案
+      Yen 決定後刪除 status: draft 並補全欄位
 
   # ============ 其他 / 瑕疵 ============
 
