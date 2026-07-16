@@ -12,7 +12,7 @@
  * 健康度刻意不進牌組 —— 它是產出閘門（憲章 #9/#10），
  * 是門不是分析面板，翻到第二頁去就等於沒在守。
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader, PeriodChips } from "../brand/PageHeader";
 import { ExportBtn } from "../brand/ExportBtn";
 import { writePeriodSummaryExcel } from "../../output/period-summary-excel";
@@ -131,33 +131,15 @@ function HealthStrip({ checks }: { checks: HealthCheck[] }) {
 }
 
 /**
- * 牌組翻頁器。刻意放底部、用箭頭＋圓點 —— 上方已有一排黃色子分頁
- * （總覽/分潤/出爐/KOL/駐店），再做成同款 chip 會變成兩層水平切換、分不清。
+ * 牌組頁標。Yen 2026-07-16：改成滑的為主，這裡只剩狀態、沒有說明。
+ *
+ * 圓點刻意留著（沒有再退成 0）：它不是「說明」是「狀態」——
+ * 沒有它就沒有任何東西透露「還有第二頁」，也沒有滑鼠使用者的退路
+ * （一般滑鼠沒有水平滾動，滑不動）。點仍可點，是那條退路。
  */
 function Pager({ active, onChange }: { active: number; onChange: (i: number) => void }) {
-  const arrow = (dir: -1 | 1, glyph: string) => {
-    const next = active + dir;
-    const disabled = next < 0 || next >= DECK.length;
-    return (
-      <button
-        type="button"
-        onClick={() => !disabled && onChange(next)}
-        disabled={disabled}
-        aria-label={dir === -1 ? "上一頁" : "下一頁"}
-        style={{
-          fontFamily: F.mono, fontSize: 15, lineHeight: 1,
-          color: disabled ? "#2E2E34" : "#8A8A93",
-          background: "transparent", border: "1px solid " + (disabled ? "#1C1C21" : "#26262C"),
-          padding: "5px 12px", cursor: disabled ? "default" : "pointer",
-        }}
-      >
-        {glyph}
-      </button>
-    );
-  };
   return (
-    <div style={{ flex: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "10px 24px 14px" }}>
-      {arrow(-1, "‹")}
+    <div style={{ flex: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 24px 14px" }}>
       {DECK.map((p, i) => {
         const on = i === active;
         return (
@@ -167,18 +149,20 @@ function Pager({ active, onChange }: { active: number; onChange: (i: number) => 
             onClick={() => onChange(i)}
             aria-label={`第 ${i + 1} 頁 · ${p.label}`}
             aria-current={on ? "true" : undefined}
+            title={p.label}
             style={{
-              display: "inline-flex", alignItems: "center", gap: 7,
-              background: "transparent", border: "none", padding: "5px 8px", cursor: "pointer",
+              background: "transparent", border: "none",
+              padding: "6px 4px", cursor: "pointer", lineHeight: 0,
             }}
           >
-            <span style={{ width: 7, height: 7, borderRadius: "50%", background: on ? "var(--acc,#F5D400)" : "#3E3E46", display: "inline-block" }} />
-            <span style={{ fontFamily: F.tc, fontWeight: on ? 900 : 500, fontSize: 12, color: on ? "#F5F4EF" : "#6C6C74" }}>{p.label}</span>
+            <span style={{
+              display: "inline-block", height: 6, borderRadius: 3,
+              width: on ? 22 : 6,
+              background: on ? "var(--acc,#F5D400)" : "#3E3E46",
+            }} />
           </button>
         );
       })}
-      {arrow(1, "›")}
-      <span style={{ fontFamily: F.mono, fontSize: 10, color: "#3E3E46", marginLeft: 6 }}>← →</span>
     </div>
   );
 }
@@ -210,6 +194,45 @@ export function DashboardPage({ orders, menu, refreshOrders }: PageProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  /**
+   * 觸控板兩指左右滑翻頁。
+   *
+   * 難點是「一次手勢 = 一頁」：macOS 慣性滑動在手指離開後還會噴約 1 秒的
+   * wheel 事件，用固定 cooldown 不是翻過頭就是要等太久。作法是翻完就上鎖、
+   * 只有在事件流「安靜 180ms」後才解鎖 —— 慣性尾巴會一直把計時器往後推，
+   * 所以整條尾巴都被鎖住，手真的停下來才會放行。
+   *
+   * 只吃水平為主的手勢（|deltaX| > |deltaY|），垂直捲動完全不受影響。
+   *
+   * deps 一定要有 hasOrders：訂單是非同步載入的，首次 render 走的是
+   * 「暫無資料」分支、牌組不存在 → deckRef.current 是 null。deps 若給 []，
+   * 訂單載進來後 effect 不會重跑，監聽就永遠掛不上（滑動整個失效）。
+   */
+  const hasOrders = orders.length > 0;
+  const swipeLock = useRef(false);
+  const swipeIdle = useRef<number | undefined>(undefined);
+  const deckRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = deckRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return; // 垂直手勢 · 放行
+      if (Math.abs(e.deltaX) < 8) return;                   // 微小抖動 · 忽略
+      e.preventDefault();
+      window.clearTimeout(swipeIdle.current);
+      swipeIdle.current = window.setTimeout(() => { swipeLock.current = false; }, 180);
+      if (swipeLock.current) return;
+      swipeLock.current = true;
+      const dir = e.deltaX > 0 ? 1 : -1;
+      setPage((p) => Math.min(DECK.length - 1, Math.max(0, p + dir)));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      window.clearTimeout(swipeIdle.current);
+    };
+  }, [hasOrders]);
+
   const batchDateDisplay = batchKpi.batchDate ? batchKpi.batchDate.slice(5).replace("-", "/") : "—";
   const topMax = topProducts[0]?.qty ?? 1;
   const maxRevenue = Math.max(...monthTrend.map((m) => m.revenue), 1);
@@ -217,15 +240,27 @@ export function DashboardPage({ orders, menu, refreshOrders }: PageProps) {
   const now = new Date();
   const currentYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
+  // 空狀態 = 換電腦 / 清 cache / 剛按過清空 —— 正是最需要「還原備份」的一刻。
+  // Yen 2026-07-16：這裡原本只掛 PeriodChips，BackupControls 不在，
+  // 於是「資料歸零 → 想還原 → 沒有按鈕」成了死路（拖檔上傳只吃 .xlsx、不吃備份 .json）。
   if (orders.length === 0) {
     return (
       <div className="h-full flex flex-col min-h-0" style={{ fontFamily: F.tc }}>
         <PageHeader caption="DASHBOARD · 跨批統計" title="OVEN CENTRAL"
-          right={<PeriodChips options={PERIODS} active={period} onChange={setPeriod} />} />
+          right={
+            <div className="flex items-center" style={{ gap: 10 }}>
+              <PeriodChips options={PERIODS} active={period} onChange={setPeriod} />
+              <BackupControls refreshOrders={refreshOrders} restoreOnly />
+            </div>
+          } />
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-          <div style={{ margin: "40px 24px", padding: "32px 24px", background: "#0F0F12", border: "1px solid #26262C", borderLeft: `3px solid ${EMBER}`, fontFamily: F.mono, fontSize: 13, color: "#8A8A93" }}>
+          <div style={{ margin: "40px 24px", padding: "32px 24px", background: "#0F0F12", border: "1px solid #26262C", borderLeft: `3px solid ${EMBER}`, fontFamily: F.mono, fontSize: 13, color: "#8A8A93", lineHeight: 1.9 }}>
             <span style={{ fontFamily: F.tc, fontWeight: 900, color: EMBER }}>暫無資料</span>
             {" "}— 請上傳訂單 Excel 以開始。
+            <br />
+            換過電腦、清過瀏覽器資料、或剛清空？按右上角{" "}
+            <span style={{ fontFamily: F.tc, fontWeight: 700, color: "#C9C9CF" }}>↺ 還原備份</span>
+            {" "}讀回先前的 .json 備份檔。
           </div>
         </div>
       </div>
@@ -279,7 +314,8 @@ export function DashboardPage({ orders, menu, refreshOrders }: PageProps) {
       {/* ── 釘住層 2：產出閘門燈號 ───────────────────────────────── */}
       <HealthStrip checks={healthChecks} />
 
-      {/* ── 牌組：P1 趨勢 / P2 結構 ──────────────────────────────── */}
+      {/* ── 牌組：P1 趨勢 / P2 結構 · 兩指左右滑翻頁 ─────────────── */}
+      <div ref={deckRef} style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
       {page === 0 && (
         <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(330px,1fr))", gap: 12, padding: "12px 24px 0" }}>
           {/* 出爐量趨勢 */}
@@ -411,6 +447,7 @@ export function DashboardPage({ orders, menu, refreshOrders }: PageProps) {
           </PanelBox>
         </div>
       )}
+      </div>
 
       <Pager active={page} onChange={setPage} />
     </div>
