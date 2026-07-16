@@ -1,15 +1,20 @@
 /**
- * BackupControls — 全庫備份 / 還原 button pair
+ * BackupControls — 全庫備份 / 還原 / 清空
  * Yen 2026-07-05：交付雇主前必要功能
  *   · 匯出：一鍵 dump IndexedDB → .json 檔（雇主每週丟 Google Drive）
  *   · 還原：選 .json 覆蓋（換電腦 / 清 cache 後救援）
+ *
+ * restoreOnly（Yen 2026-07-16）：資料庫空的時候只露出「還原」。
+ *   備份空庫會下載一個空的 .json —— 雇主丟進 Drive 就可能蓋掉 / 混淆真備份，
+ *   之後還原到空檔 = 資料真的沒了。清空空庫則是沒有意義的 no-op。
+ *   空狀態唯一該做的事就是還原。
  */
 import { useRef, useState } from "react";
 import { clearAllData, downloadBackup, exportBackup, importBackup } from "../../db/backup";
 
 const F = { tc: "'Noto Sans TC',sans-serif", mono: "'Space Mono',monospace" };
 
-export function BackupControls({ refreshOrders }: { refreshOrders: () => Promise<void> }) {
+export function BackupControls({ refreshOrders, restoreOnly = false }: { refreshOrders: () => Promise<void>; restoreOnly?: boolean }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<"export" | "import" | "clear" | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -84,20 +89,22 @@ export function BackupControls({ refreshOrders }: { refreshOrders: () => Promise
           e.target.value = "";
         }}
       />
-      <button
-        type="button"
-        onClick={() => void onExport()}
-        disabled={busy !== null}
-        title="下載當前資料庫備份（.json）· 建議每週丟 Google Drive"
-        style={{
-          fontFamily: F.tc, fontWeight: 900, fontSize: 12,
-          color: "#111", background: "#43B23C", border: "none",
-          padding: "8px 14px", cursor: busy ? "wait" : "pointer",
-          opacity: busy === "export" ? 0.6 : 1,
-        }}
-      >
-        {busy === "export" ? "匯出中…" : "💾 備份全部"}
-      </button>
+      {!restoreOnly && (
+        <button
+          type="button"
+          onClick={() => void onExport()}
+          disabled={busy !== null}
+          title="下載當前資料庫備份（.json）· 建議每週丟 Google Drive"
+          style={{
+            fontFamily: F.tc, fontWeight: 900, fontSize: 12,
+            color: "#111", background: "#43B23C", border: "none",
+            padding: "8px 14px", cursor: busy ? "wait" : "pointer",
+            opacity: busy === "export" ? 0.6 : 1,
+          }}
+        >
+          {busy === "export" ? "匯出中…" : "💾 備份全部"}
+        </button>
+      )}
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
@@ -105,7 +112,9 @@ export function BackupControls({ refreshOrders }: { refreshOrders: () => Promise
         title="從 .json 備份還原（會覆蓋當前資料）"
         style={{
           fontFamily: F.tc, fontWeight: 900, fontSize: 12,
-          color: "#E5622A", background: "transparent",
+          // 空狀態時它是唯一出口、也是唯一該做的事 → 給實心主行動樣式
+          color: restoreOnly ? "#111" : "#E5622A",
+          background: restoreOnly ? "#E5622A" : "transparent",
           border: "1px solid #E5622A",
           padding: "7px 12px", cursor: busy ? "wait" : "pointer",
           opacity: busy === "import" ? 0.6 : 1,
@@ -113,21 +122,23 @@ export function BackupControls({ refreshOrders }: { refreshOrders: () => Promise
       >
         {busy === "import" ? "還原中…" : "↺ 還原備份"}
       </button>
-      <button
-        type="button"
-        onClick={() => void onClear()}
-        disabled={busy !== null}
-        title="清空介面全部資料（訂單 / 匯入紀錄 / 變更紀錄）· 無法復原"
-        style={{
-          fontFamily: F.tc, fontWeight: 900, fontSize: 12,
-          color: "#E5352B", background: "transparent",
-          border: "1px solid #E5352B",
-          padding: "7px 12px", cursor: busy ? "wait" : "pointer",
-          opacity: busy === "clear" ? 0.6 : 1,
-        }}
-      >
-        {busy === "clear" ? "清空中…" : "🗑 清空資料"}
-      </button>
+      {!restoreOnly && (
+        <button
+          type="button"
+          onClick={() => void onClear()}
+          disabled={busy !== null}
+          title="清空介面全部資料（訂單 / 匯入紀錄 / 變更紀錄）· 無法復原"
+          style={{
+            fontFamily: F.tc, fontWeight: 900, fontSize: 12,
+            color: "#E5352B", background: "transparent",
+            border: "1px solid #E5352B",
+            padding: "7px 12px", cursor: busy ? "wait" : "pointer",
+            opacity: busy === "clear" ? 0.6 : 1,
+          }}
+        >
+          {busy === "clear" ? "清空中…" : "🗑 清空資料"}
+        </button>
+      )}
       {msg && (
         <div
           onClick={() => setMsg(null)}
