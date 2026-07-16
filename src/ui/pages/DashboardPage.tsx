@@ -21,19 +21,40 @@ import { getDisplayName } from "../../domain/menu";
 import {
   computeKpiCounts,
   computeBatchKpi,
+  computeBatchTrend,
   computeMonthTrend,
   computeTopProducts,
   computeChannelShare,
   computeRepeatCustomers,
   computeHealthChecks,
+  resolvePeriodWindow,
+  monthAlignedWindow,
   type HealthCheck,
+  type Period,
+  type ShipCalendar,
 } from "../../domain/compute-dashboard";
+import { loadDayOverrides, makeDayTypeOf, shippingDayFor } from "../../domain/day-type";
 import type { PageProps } from "./types";
 
 const F = { anton: "'Anton',sans-serif", tc: "'Noto Sans TC',sans-serif", mono: "'Space Mono',monospace" } as const;
-const PERIODS = [{ key: "june", label: "六月" }, { key: "8w", label: "近 8 週" }, { key: "all", label: "全部" }];
+// Yen 2026-07-17：原本是「六月」寫死 —— 開發當下是六月，之後每過一個月就更錯。
+// 接上 compute 時一併改成滾動的「近 6 月」。
+const PERIODS: { key: Period; label: string }[] = [
+  { key: "8w", label: "近 8 週" },
+  { key: "6m", label: "近 6 月" },
+  { key: "all", label: "全部" },
+];
 const DECK = [{ key: "trend", label: "趨勢" }, { key: "mix", label: "結構" }] as const;
 const EMBER = "#E5622A";
+/** 長條最大寬。不封頂的話 flex:1 會讓「只有一批」那根撐滿整個面板。 */
+const MAX_BAR_W = 56;
+/**
+ * 出爐量趨勢改用「月」為單位的格數門檻。
+ * 面板寬約 490px（雙欄）· 扣掉 gap 後超過 12 格，每根就剩不到 25px、
+ * 日期標籤（05/26）會糊成一片 —— 近 6 月是 26 個週二，實測完全不可讀。
+ * 軸的單位要跟縮放層級走：看 8 週就看批，看半年就看月。
+ */
+const MAX_BATCH_BARS = 12;
 
 // ── Small shared components ───────────────────────────────────────────────────
 
@@ -79,22 +100,41 @@ function BigNum({ v, color = "#F5F4EF", size = 38 }: { v: string | number; color
  * 長條圖的一根。高度用 % 而非固定 px —— 牌組高度隨視窗變，
  * 固定 px 會在矮螢幕爆出去、逼出滾輪（正是本次要根治的）。
  */
-function Bar({ label, v, pct, color, isHot, hatch }: { label: string; v: string; pct: number; color: string; isHot?: boolean; hatch?: boolean }) {
+function Bar({ label, v, pct, color, isHot, hatch, empty }: {
+  label: string; v: string; pct: number; color: string; isHot?: boolean; hatch?: boolean; empty?: boolean;
+}) {
   return (
-    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-      <span style={{ fontFamily: F.mono, fontSize: isHot ? 13 : 12, color: isHot ? color : "#8A8A93", fontWeight: isHot ? 700 : 400, flex: "none" }}>{v}</span>
+    <div style={{ flex: 1, minWidth: 0, maxWidth: MAX_BAR_W, display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+      <span style={{
+        fontFamily: F.mono, fontSize: isHot ? 13 : 12, flex: "none",
+        color: empty ? "#3E3E46" : isHot ? color : "#8A8A93",
+        fontWeight: isHot ? 700 : 400,
+      }}>{v}</span>
       <div style={{ flex: 1, minHeight: 0, width: "100%", display: "flex", alignItems: "flex-end" }}>
-        <div style={{ width: "100%", height: `${Math.max(pct, 0.6)}%`, background: color, position: "relative" }}>
-          {hatch && <div style={{ position: "absolute", inset: 0, background: "repeating-linear-gradient(45deg,#2E2E34 0 6px,#161619 6px 12px)" }} />}
-        </div>
+        {empty ? (
+          // 空格：一條貼底的虛線，讓「這批 0 單」看得出是一格，而不是不存在
+          <div style={{ width: "100%", height: 1, borderTop: "1px dashed #2E2E34" }} />
+        ) : (
+          <div style={{ width: "100%", height: `${Math.max(pct, 0.6)}%`, background: color, position: "relative" }}>
+            {hatch && <div style={{ position: "absolute", inset: 0, background: "repeating-linear-gradient(45deg,#2E2E34 0 6px,#161619 6px 12px)" }} />}
+          </div>
+        )}
       </div>
-      <span style={{ fontFamily: F.mono, fontSize: 11, color: isHot ? color : "#6C6C74", flex: "none" }}>{label}</span>
+      <span style={{
+        fontFamily: F.mono, fontSize: 11, flex: "none", whiteSpace: "nowrap",
+        color: empty ? "#3E3E46" : isHot ? color : "#6C6C74",
+      }}>{label}</span>
     </div>
   );
 }
 
+/** 靠左排：時間軸從左往右長，月份累積時位置固定、不會整組飄移 */
 function BarField({ children }: { children: React.ReactNode }) {
-  return <div style={{ display: "flex", alignItems: "stretch", gap: 16, flex: 1, minHeight: 0 }}>{children}</div>;
+  return (
+    <div style={{ display: "flex", alignItems: "stretch", justifyContent: "flex-start", gap: 14, flex: 1, minHeight: 0 }}>
+      {children}
+    </div>
+  );
 }
 
 function EmptyRow() {
@@ -170,15 +210,33 @@ function Pager({ active, onChange }: { active: number; onChange: (i: number) => 
 // ── Main page ────────────────────────────────────────────────────────────────
 
 export function DashboardPage({ orders, menu, refreshOrders }: PageProps) {
-  const [period, setPeriod] = useState("8w");
+  const [period, setPeriod] = useState<Period>("8w");
   const [page, setPage] = useState(0);
+
+  // 出貨行事曆：menu.scheduling 的星期幾預設 + SchedulePage 存的單日 override。
+  // 跟排程/工單/標籤用的是同一套判定 —— 儀表板不自己另外定義「哪天出爐」。
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const cal: ShipCalendar = useMemo(() => {
+    const dayTypeOf = makeDayTypeOf(menu, loadDayOverrides());
+    return {
+      isShipDay: (iso) => dayTypeOf(iso) === "ship",
+      shipDayOf: (iso) => shippingDayFor(iso, dayTypeOf),
+    };
+  }, [menu]);
+
+  const win = useMemo(
+    () => resolvePeriodWindow(period, orders, todayIso, cal),
+    [period, orders, todayIso, cal],
+  );
 
   const kpi = useMemo(() => computeKpiCounts(orders), [orders]);
   const batchKpi = useMemo(() => computeBatchKpi(orders), [orders]);
-  const monthTrend = useMemo(() => computeMonthTrend(orders), [orders]);
-  const topProducts = useMemo(() => computeTopProducts(orders), [orders]);
-  const channelShare = useMemo(() => computeChannelShare(orders), [orders]);
-  const repeatStats = useMemo(() => computeRepeatCustomers(orders), [orders]);
+  const batchTrend = useMemo(() => computeBatchTrend(orders, win, cal), [orders, win, cal]);
+  // 月圖用撐成整月的窗：8w 的窗切在月中間，直接用會讓邊緣月份謊報 0
+  const monthTrend = useMemo(() => computeMonthTrend(orders, monthAlignedWindow(win)), [win, orders]);
+  const topProducts = useMemo(() => computeTopProducts(orders, win), [orders, win]);
+  const channelShare = useMemo(() => computeChannelShare(orders, win), [orders, win]);
+  const repeatStats = useMemo(() => computeRepeatCustomers(orders, win), [orders, win]);
   const healthChecks = useMemo(() => computeHealthChecks(orders), [orders]);
 
   // 鍵盤翻頁。沿用專案既有的鍵盤流文化（待處理桶用 J/K、排程用 ‹ ›）。
@@ -236,9 +294,18 @@ export function DashboardPage({ orders, menu, refreshOrders }: PageProps) {
   const batchDateDisplay = batchKpi.batchDate ? batchKpi.batchDate.slice(5).replace("-", "/") : "—";
   const topMax = topProducts[0]?.qty ?? 1;
   const maxRevenue = Math.max(...monthTrend.map((m) => m.revenue), 1);
-  const maxOrders = Math.max(...monthTrend.map((m) => m.orders), 1);
-  const now = new Date();
-  const currentYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const maxBatchOrders = Math.max(...batchTrend.map((b) => b.orders), 1);
+  // 高亮「最後一批有單的」而非軸上最後一格 —— 補滿之後最後一格常常是未來的空批
+  const hotBatch = [...batchTrend].reverse().find((b) => b.orders > 0)?.date ?? null;
+  const hotMonth = [...monthTrend].reverse().find((m) => m.revenue > 0)?.month ?? null;
+  const currentYM = todayIso.slice(0, 7);
+  const periodLabel = PERIODS.find((p) => p.key === period)?.label ?? "";
+
+  // 出爐量的軸：格數塞得下就看批，塞不下退成月。用格數而非期間當門檻 ——
+  // 「全部」在資料還少時（10 批）仍看得到批，資料長出來後自動退成月。
+  const useBatchAxis = batchTrend.length > 0 && batchTrend.length <= MAX_BATCH_BARS;
+  const maxMonthOrders = Math.max(...monthTrend.map((m) => m.orders), 1);
+  const hotMonthOrders = [...monthTrend].reverse().find((m) => m.orders > 0)?.month ?? null;
 
   // 空狀態 = 換電腦 / 清 cache / 剛按過清空 —— 正是最需要「還原備份」的一刻。
   // Yen 2026-07-16：這裡原本只掛 PeriodChips，BackupControls 不在，
@@ -249,7 +316,7 @@ export function DashboardPage({ orders, menu, refreshOrders }: PageProps) {
         <PageHeader caption="DASHBOARD · 跨批統計" title="OVEN CENTRAL"
           right={
             <div className="flex items-center" style={{ gap: 10 }}>
-              <PeriodChips options={PERIODS} active={period} onChange={setPeriod} />
+              <PeriodChips options={PERIODS} active={period} onChange={(k) => setPeriod(k as Period)} />
               <BackupControls refreshOrders={refreshOrders} restoreOnly />
             </div>
           } />
@@ -267,14 +334,13 @@ export function DashboardPage({ orders, menu, refreshOrders }: PageProps) {
     );
   }
 
-  const latestMonth = monthTrend[monthTrend.length - 1]?.month;
 
   return (
     <div className="h-full flex flex-col min-h-0 overflow-hidden" style={{ fontFamily: F.tc }}>
       <PageHeader caption="DASHBOARD · 跨批統計" title="OVEN CENTRAL"
         right={
           <div className="flex items-center" style={{ gap: 10 }}>
-            <PeriodChips options={PERIODS} active={period} onChange={setPeriod} />
+            <PeriodChips options={PERIODS} active={period} onChange={(k) => setPeriod(k as Period)} />
             <ExportBtn
               label="匯出彙總"
               filename="dashboard_period_summary"
@@ -318,23 +384,37 @@ export function DashboardPage({ orders, menu, refreshOrders }: PageProps) {
       <div ref={deckRef} style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
       {page === 0 && (
         <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(330px,1fr))", gap: 12, padding: "12px 24px 0" }}>
-          {/* 出爐量趨勢 */}
+          {/* 出爐量趨勢 · 一格 = 一批出貨日（格數塞不下時退成月）· 空格照樣佔位 */}
           <PanelBox>
-            <PanelHead title="出爐量趨勢" sub="訂單數 / 月"
+            <PanelHead title="出爐量趨勢" sub={useBatchAxis ? "訂單數 / 批" : "訂單數 / 月"}
               right={<span style={{ fontFamily: F.mono, fontSize: 11, color: "var(--acc,#F5D400)" }}>● 週二出爐</span>} />
-            {monthTrend.length === 0 ? <EmptyRow /> : (
+            {batchTrend.length === 0 && monthTrend.length === 0 ? <EmptyRow /> : (
               <BarField>
-                {monthTrend.map((m) => {
-                  const isHot = m.month === latestMonth;
-                  return (
-                    <Bar key={m.month}
-                      label={m.month.slice(5).replace("-", "/")}
-                      v={String(m.orders)}
-                      pct={(m.orders / maxOrders) * 100}
-                      color={isHot ? "var(--acc,#F5D400)" : "#2E2E34"}
-                      isHot={isHot} />
-                  );
-                })}
+                {useBatchAxis
+                  ? batchTrend.map((b) => {
+                      const isHot = b.date === hotBatch;
+                      return (
+                        <Bar key={b.date}
+                          label={b.date.slice(5).replace("-", "/")}
+                          v={b.orders === 0 ? "·" : String(b.orders)}
+                          pct={(b.orders / maxBatchOrders) * 100}
+                          color={isHot ? "var(--acc,#F5D400)" : "#2E2E34"}
+                          isHot={isHot}
+                          empty={b.orders === 0} />
+                      );
+                    })
+                  : monthTrend.map((m) => {
+                      const isHot = m.month === hotMonthOrders;
+                      return (
+                        <Bar key={m.month}
+                          label={m.month.slice(5).replace(/^0/, "") + "月"}
+                          v={m.orders === 0 ? "·" : String(m.orders)}
+                          pct={(m.orders / maxMonthOrders) * 100}
+                          color={isHot ? "var(--acc,#F5D400)" : "#2E2E34"}
+                          isHot={isHot}
+                          empty={m.orders === 0} />
+                      );
+                    })}
               </BarField>
             )}
           </PanelBox>
@@ -343,28 +423,32 @@ export function DashboardPage({ orders, menu, refreshOrders }: PageProps) {
           <PanelBox>
             <PanelHead title="月營收趨勢" sub="NT$ · 含運"
               right={(() => {
-                if (monthTrend.length < 2) return null;
-                const prev = monthTrend[monthTrend.length - 2]!.revenue;
-                const curr = monthTrend[monthTrend.length - 1]!.revenue;
+                // 只比「有營收的」最後兩個月：補滿空月後，拿 0 當基期會算出假的 -100%
+                const withRev = monthTrend.filter((m) => m.revenue > 0);
+                if (withRev.length < 2) return null;
+                const prev = withRev[withRev.length - 2]!.revenue;
+                const curr = withRev[withRev.length - 1]!.revenue;
                 const pct = prev > 0 ? ((curr - prev) / prev) * 100 : 0;
                 return <span style={{ fontFamily: F.mono, fontSize: 11, color: pct >= 0 ? "#43B23C" : "#E5352B" }}>{pct >= 0 ? "▲" : "▼"} {Math.abs(pct).toFixed(1)}%</span>;
               })()} />
             {monthTrend.length === 0 ? <EmptyRow /> : (
               <>
                 <BarField>
-                  {monthTrend.map((m, idx) => {
-                    const isLatest = idx === monthTrend.length - 1;
+                  {monthTrend.map((m) => {
+                    const isLatest = m.month === hotMonth;
                     const isCurrentMonth = m.month === currentYM;
+                    const isEmpty = m.revenue === 0;
                     const shortLabel = m.month.slice(5).replace(/^0/, "") + "月" + (isCurrentMonth ? "*" : "");
                     const revLabel = m.revenue >= 1000 ? `${(m.revenue / 1000).toFixed(1)}k` : m.revenue.toLocaleString();
                     return (
                       <Bar key={m.month}
                         label={shortLabel}
-                        v={revLabel}
+                        v={isEmpty ? "·" : revLabel}
                         pct={(m.revenue / maxRevenue) * 100}
                         color={isLatest ? "#2AC7E8" : "#2E2E34"}
                         isHot={isLatest}
-                        hatch={isCurrentMonth} />
+                        hatch={isCurrentMonth && !isEmpty}
+                        empty={isEmpty} />
                     );
                   })}
                 </BarField>
@@ -421,9 +505,9 @@ export function DashboardPage({ orders, menu, refreshOrders }: PageProps) {
             </div>
           </PanelBox>
 
-          {/* TOP 10 品項 */}
+          {/* TOP 10 品項 · sub 跟著期間走（原本寫死「本月」但根本沒過濾時間） */}
           <PanelBox>
-            <PanelHead title="TOP 10 品項" sub="份 · 本月" />
+            <PanelHead title="TOP 10 品項" sub={`份 · ${periodLabel}`} />
             <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
               {topProducts.length === 0 ? <EmptyRow /> : topProducts.map((it, i) => {
                 const isLead = i === 0;

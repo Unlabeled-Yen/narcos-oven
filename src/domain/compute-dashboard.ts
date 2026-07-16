@@ -21,6 +21,132 @@ function isEligible(o: Order): boolean {
   return ELIGIBLE_STATUSES.has(o.status as EligibleStatus);
 }
 
+// ─── 日期工具 ────────────────────────────────────────────────────────────────
+// 一律用「本地午夜」解析。new Date("2026-07-17") 會被當 UTC 午夜，
+// 在 UTC 以西的時區 .getDay() 會退一天 → 出貨日算錯。手動拆字串避開。
+
+function parseIso(iso: string): Date {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y!, m! - 1, d!);
+}
+
+function toIso(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+export function addDays(iso: string, n: number): string {
+  const d = parseIso(iso);
+  d.setDate(d.getDate() + n);
+  return toIso(d);
+}
+
+/** "YYYY-MM" 加減月份 */
+function addMonths(ym: string, n: number): string {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y!, m! - 1 + n, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+// ─── 期間窗 ──────────────────────────────────────────────────────────────────
+
+/**
+ * 儀表板期間。
+ *
+ * Yen 2026-07-17：原本是 june / 8w / all，但 chip 從來沒接上任何 compute
+ * （點了什麼都不會變 —— 靜默失效）。接上時順手把寫死的「六月」改成滾動的
+ * 「近 6 月」：六月是開發當下的月份，寫死之後每過一個月就更錯一次。
+ */
+export type Period = "8w" | "6m" | "all";
+
+/** 日期窗（ISO，含頭尾） */
+export type DateWindow = { from: string; to: string };
+
+/**
+ * 出貨行事曆。由 caller 從 menu.scheduling + 單日 override 組出來後注入，
+ * 讓本模組維持純函式、可測（不碰 localStorage、不碰 menu）。
+ */
+export type ShipCalendar = {
+  /** iso 本身是不是出貨日 */
+  isShipDay: (iso: string) => boolean;
+  /** 任一日期 → 它所屬的出貨批（例：07/05 週日 → 07/07 週二） */
+  shipDayOf: (iso: string) => string;
+};
+
+/** 近 8 週 = 8 個出貨日（含 today 所屬的那一批） */
+export const RECENT_SHIP_DAYS = 8;
+
+/**
+ * 期間 → 日期窗。
+ *
+ * 8w  以「出貨日」為單位回推，不是硬減 56 天 —— 雇主想的是「最近 8 批」，
+ *     而出貨日可由 menu.scheduling / 單日 override 調整，不保證剛好每 7 天一次。
+ * 6m  今天往回數 6 個月（含本月）。
+ * all 資料自己的範圍（沒有已排程訂單時退回今天當單點窗）。
+ */
+export function resolvePeriodWindow(
+  period: Period,
+  orders: Order[],
+  todayIso: string,
+  cal: ShipCalendar,
+): DateWindow {
+  if (period === "all") {
+    const dates = orders.map((o) => o.batchDate).filter((d): d is string => !!d).sort();
+    if (dates.length === 0) return { from: todayIso, to: todayIso };
+    return { from: dates[0]!, to: dates[dates.length - 1]! };
+  }
+  if (period === "6m") {
+    const ym = todayIso.slice(0, 7);
+    return { from: `${addMonths(ym, -5)}-01`, to: lastDayOfMonth(ym) };
+  }
+  // 8w：從今天（含）往回蒐集 8 個出貨日
+  const days = shipDaysBackFrom(todayIso, RECENT_SHIP_DAYS, cal.isShipDay);
+  return { from: days[0] ?? todayIso, to: todayIso };
+}
+
+function lastDayOfMonth(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  return toIso(new Date(y!, m!, 0)); // 下個月第 0 天 = 本月最後一天
+}
+
+/**
+ * 把窗撐成完整月份 —— 給「按月」的圖用。
+ *
+ * 為什麼需要：8w 的窗是 05/26–07/17，五月只有最後 6 天在內。若直接拿這個窗
+ * 算月營收，五月會顯示 0，但標籤寫的是「5月」—— 讀起來就是「五月沒賺錢」，
+ * 而事實是五月有單、只是不在窗內。標籤說一件事、數字說另一件事 = 靜默失效。
+ * 撐成整月之後每根長條都對得起自己的標籤。
+ */
+export function monthAlignedWindow(w: DateWindow): DateWindow {
+  return { from: `${w.from.slice(0, 7)}-01`, to: lastDayOfMonth(w.to.slice(0, 7)) };
+}
+
+/**
+ * 從 fromIso（含）往回找 count 個出貨日，回傳由舊到新。
+ * 掃描上限 count*14 天：出貨日再稀疏也不該超過兩週一次，超過就是設定壞了、
+ * 與其無限迴圈不如吐出找到的那些（呼叫端會畫出比較短的軸、看得出不對勁）。
+ */
+function shipDaysBackFrom(fromIso: string, count: number, isShipDay: (iso: string) => boolean): string[] {
+  const out: string[] = [];
+  let cur = fromIso;
+  for (let i = 0; i < count * 14 && out.length < count; i++) {
+    if (isShipDay(cur)) out.push(cur);
+    cur = addDays(cur, -1);
+  }
+  return out.reverse();
+}
+
+function inWindow(iso: string | null | undefined, w: DateWindow): boolean {
+  return !!iso && iso >= w.from && iso <= w.to; // ISO 字串可直接比大小
+}
+
+/** 期間內、且已排定出貨日的 eligible 訂單 */
+function eligibleInWindow(orders: Order[], w: DateWindow): Order[] {
+  return orders.filter((o) => isEligible(o) && inWindow(o.batchDate, w));
+}
+
 // ─── KPI：各狀態計數 ─────────────────────────────────────────────────────────
 
 export type KpiCounts = {
@@ -128,7 +254,48 @@ export function computeBatchKpi(orders: Order[]): BatchKpi {
   return { batchDate: targetDate, cinnamonCount, otherAtoms };
 }
 
-// ─── 月營收趨勢 ──────────────────────────────────────────────────────────────
+// ─── 出爐量趨勢（按出貨批 · 補滿空格）──────────────────────────────────────
+
+export type BatchTrendEntry = {
+  date: string;    // ISO 出貨日
+  orders: number;
+  revenue: number;
+};
+
+/**
+ * window 內每一個出貨日的訂單數 —— 沒有訂單的出貨日也給 0、照樣佔一格。
+ *
+ * 補空格是刻意的：只畫「有資料的那幾根」時，一批 = 一根塞滿整個面板，
+ * 看起來像圖壞了；而且看不出中間有幾週是空的。補滿之後那根孤條有位置感，
+ * 也誠實顯示「其餘幾批還沒排」。
+ *
+ * 訂單的 batchDate 不保證是出貨日本身（雇主可排在工作日，例 07/05 週日），
+ * 一律經 cal.shipDayOf 歸到所屬批 —— 跟標籤 / 工單的歸批邏輯同一套。
+ */
+export function computeBatchTrend(
+  orders: Order[],
+  w: DateWindow,
+  cal: ShipCalendar,
+): BatchTrendEntry[] {
+  const buckets = new Map<string, { orders: number; revenue: number }>();
+  // 先鋪滿軸
+  let cur = w.from;
+  for (let i = 0; i < 400 && cur <= w.to; i++) {
+    if (cal.isShipDay(cur)) buckets.set(cur, { orders: 0, revenue: 0 });
+    cur = addDays(cur, 1);
+  }
+  // 再把訂單灌進去
+  for (const o of eligibleInWindow(orders, w)) {
+    const slot = cal.shipDayOf(o.batchDate!);
+    const b = buckets.get(slot);
+    if (!b) continue; // 歸批後落在窗外（窗尾附近才可能）· 不硬塞
+    b.orders++;
+    b.revenue += o.revenue.grossTotal;
+  }
+  return [...buckets.entries()].sort().map(([date, v]) => ({ date, ...v }));
+}
+
+// ─── 月營收趨勢（補滿空月）──────────────────────────────────────────────────
 
 export type MonthTrendEntry = {
   month: string;   // "YYYY-MM"
@@ -136,18 +303,22 @@ export type MonthTrendEntry = {
   revenue: number;
 };
 
-export function computeMonthTrend(orders: Order[]): MonthTrendEntry[] {
-  const eligible = orders.filter(isEligible);
+/** window 內每一個月，沒有訂單的月份也給 0（理由同 computeBatchTrend） */
+export function computeMonthTrend(orders: Order[], w: DateWindow): MonthTrendEntry[] {
   const byMonth = new Map<string, { orders: number; revenue: number }>();
-  for (const o of eligible) {
-    if (!o.batchDate) continue;
-    const month = o.batchDate.slice(0, 7);
-    if (!byMonth.has(month)) byMonth.set(month, { orders: 0, revenue: 0 });
-    const m = byMonth.get(month)!;
+  let ym = w.from.slice(0, 7);
+  const lastYm = w.to.slice(0, 7);
+  for (let i = 0; i < 240 && ym <= lastYm; i++) {
+    byMonth.set(ym, { orders: 0, revenue: 0 });
+    ym = addMonths(ym, 1);
+  }
+  for (const o of eligibleInWindow(orders, w)) {
+    const m = byMonth.get(o.batchDate!.slice(0, 7));
+    if (!m) continue;
     m.orders++;
     m.revenue += o.revenue.grossTotal;
   }
-  return [...byMonth.entries()].sort().map(([month, m]) => ({ month, ...m }));
+  return [...byMonth.entries()].sort().map(([month, v]) => ({ month, ...v }));
 }
 
 // ─── TOP 品項（以 SKU 份數計）───────────────────────────────────────────────
@@ -159,8 +330,12 @@ export type TopProductEntry = {
   qty: number;
 };
 
-export function computeTopProducts(orders: Order[]): TopProductEntry[] {
-  const eligible = orders.filter(isEligible);
+/**
+ * Yen 2026-07-17：加上 window。原本完全不過濾時間，UI 卻標「份 · 本月」——
+ * 標的是本月、算的是全部，標籤本身就是靜默失效。
+ */
+export function computeTopProducts(orders: Order[], w: DateWindow): TopProductEntry[] {
+  const eligible = eligibleInWindow(orders, w);
   const bySkuQty = new Map<string, number>();
 
   for (const o of eligible) {
@@ -211,8 +386,8 @@ function normalizeChannel(ch: ChannelId): ChannelBucket {
   return "待分類";
 }
 
-export function computeChannelShare(orders: Order[]): ChannelShareEntry[] {
-  const eligible = orders.filter(isEligible);
+export function computeChannelShare(orders: Order[], w: DateWindow): ChannelShareEntry[] {
+  const eligible = eligibleInWindow(orders, w);
   if (eligible.length === 0) return [];
 
   const byCh = new Map<ChannelBucket, number>();
@@ -241,8 +416,8 @@ export type RepeatCustomerStats = {
   topRepeats: Array<{ key: string; count: number }>;
 };
 
-export function computeRepeatCustomers(orders: Order[]): RepeatCustomerStats {
-  const eligible = orders.filter(isEligible);
+export function computeRepeatCustomers(orders: Order[], w: DateWindow): RepeatCustomerStats {
+  const eligible = eligibleInWindow(orders, w);
   const byCustomer = new Map<string, number>();
 
   for (const o of eligible) {
