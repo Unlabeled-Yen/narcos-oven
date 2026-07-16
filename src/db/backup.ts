@@ -48,6 +48,14 @@ export function downloadBackup(blob: Blob): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+export async function clearAllData(): Promise<void> {
+  await db.transaction("rw", db.orders, db.import_runs, db.order_changes, async () => {
+    await db.orders.clear();
+    await db.import_runs.clear();
+    await db.order_changes.clear();
+  });
+}
+
 export async function importBackup(file: File): Promise<{ ok: true; counts: { orders: number; import_runs: number; order_changes: number } } | { ok: false; error: string }> {
   let payload: BackupPayload;
   try {

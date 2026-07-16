@@ -5,13 +5,13 @@
  *   · 還原：選 .json 覆蓋（換電腦 / 清 cache 後救援）
  */
 import { useRef, useState } from "react";
-import { downloadBackup, exportBackup, importBackup } from "../../db/backup";
+import { clearAllData, downloadBackup, exportBackup, importBackup } from "../../db/backup";
 
 const F = { tc: "'Noto Sans TC',sans-serif", mono: "'Space Mono',monospace" };
 
 export function BackupControls({ refreshOrders }: { refreshOrders: () => Promise<void> }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState<"export" | "import" | null>(null);
+  const [busy, setBusy] = useState<"export" | "import" | "clear" | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   async function onExport() {
@@ -48,6 +48,27 @@ export function BackupControls({ refreshOrders }: { refreshOrders: () => Promise
       setMsg({ ok: false, text: `❌ ${result.error}` });
     }
     setBusy(null);
+  }
+
+  async function onClear() {
+    if (busy) return;
+    const confirmed1 = window.confirm(
+      "⚠ 即將清空介面全部資料（訂單 / 匯入紀錄 / 變更紀錄）· 無法復原 · 建議先「備份全部」再繼續 · 確定嗎？",
+    );
+    if (!confirmed1) return;
+    const confirmed2 = window.confirm("再次確認：清空後資料無法救回，除非你先前有下載備份檔。真的要清空嗎？");
+    if (!confirmed2) return;
+    setBusy("clear");
+    setMsg(null);
+    try {
+      await clearAllData();
+      await refreshOrders();
+      setMsg({ ok: true, text: "✓ 已清空全部資料" });
+    } catch (err) {
+      setMsg({ ok: false, text: `❌ 清空失敗：${err instanceof Error ? err.message : String(err)}` });
+    } finally {
+      setBusy(null);
+    }
   }
 
   return (
@@ -91,6 +112,21 @@ export function BackupControls({ refreshOrders }: { refreshOrders: () => Promise
         }}
       >
         {busy === "import" ? "還原中…" : "↺ 還原備份"}
+      </button>
+      <button
+        type="button"
+        onClick={() => void onClear()}
+        disabled={busy !== null}
+        title="清空介面全部資料（訂單 / 匯入紀錄 / 變更紀錄）· 無法復原"
+        style={{
+          fontFamily: F.tc, fontWeight: 900, fontSize: 12,
+          color: "#E5352B", background: "transparent",
+          border: "1px solid #E5352B",
+          padding: "7px 12px", cursor: busy ? "wait" : "pointer",
+          opacity: busy === "clear" ? 0.6 : 1,
+        }}
+      >
+        {busy === "clear" ? "清空中…" : "🗑 清空資料"}
       </button>
       {msg && (
         <div
