@@ -6,7 +6,10 @@
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": false,
+    // true 才能讓 tests/ 同時被 tsc 檢查、又被 node --test 直接跑
+    // （Node ESM 要求明確副檔名）。noEmit: true 之下不影響打包 —— 真正的
+    // bundle 由 vite 做，src 內仍是無副檔名 import。
+    "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "moduleDetection": "force",
     "noEmit": true,
