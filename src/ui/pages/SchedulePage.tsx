@@ -309,7 +309,55 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
     }
   }
 
-  // 「一鍵自動排孤兒 wish_date」handler 已於 2026-07-03 拿掉（Yen 決策不再自動排指定日）
+  // 一鍵清空「本週」排程 · Yen 2026-07-16：避免重排時要一顆一顆拖回待排
+  // Scope：batchDate ∈ 本週 7 天 且 assignment_source !== "pending"
+  // 保護：dayLocked(iso) 的日子跳過（連鎖住的都清就違反「鎖」的語意）
+  // 副作用：把訂單 batchDate=null / assignment_source=pending → 回到左側待排列表
+  const [clearingWeek, setClearingWeek] = useState(false);
+  const weekScheduledCount = useMemo(() => {
+    const weekSet = new Set(weekISO);
+    return orders.filter(
+      (o) => o.batchDate && weekSet.has(o.batchDate) && o.assignment_source !== "pending" && o.status !== "shipped"
+    ).length;
+  }, [orders, weekISO.join(",")]);
+  async function clearWeekSchedule() {
+    if (clearingWeek || weekScheduledCount === 0) return;
+    const weekSet = new Set(weekISO);
+    const targets = orders.filter(
+      (o) =>
+        o.batchDate &&
+        weekSet.has(o.batchDate) &&
+        o.assignment_source !== "pending" &&
+        o.status !== "shipped" &&
+        !dayLocked(o.batchDate),
+    );
+    const lockedSkipped = orders.filter(
+      (o) =>
+        o.batchDate &&
+        weekSet.has(o.batchDate) &&
+        o.assignment_source !== "pending" &&
+        o.status !== "shipped" &&
+        dayLocked(o.batchDate),
+    ).length;
+    if (targets.length === 0) {
+      alert(`本週沒有可清的排程（${lockedSkipped} 筆在鎖定日、要先解鎖才能清）`);
+      return;
+    }
+    const msg =
+      `即將把本週 ${targets.length} 單從排程拿回「待排」列表 · 無法一鍵復原。\n` +
+      (lockedSkipped > 0 ? `（${lockedSkipped} 筆在鎖定日、跳過不動）\n` : "") +
+      `確定嗎？`;
+    if (!confirm(msg)) return;
+    setClearingWeek(true);
+    try {
+      for (const o of targets) {
+        await upsertOrder({ ...o, batchDate: null, system_suggested_date: null, assignment_source: "pending" });
+      }
+      await refreshOrders();
+    } finally {
+      setClearingWeek(false);
+    }
+  }
 
   // 待排訂單分頁 + 搜尋（供雇主插單搜尋）
   const [pendingTab, setPendingTab] = useState<"all" | "賣貨便" | "KOL" | "面交" | "指定日">("all");
@@ -535,6 +583,30 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
             <button type="button" onClick={() => setMonthOffset((m) => m + 1)} style={btn}>下月 ›</button>
           </div>
         </>
+      )}
+      {viewMode === "week" && (
+        <button
+          type="button"
+          onClick={() => void clearWeekSchedule()}
+          disabled={clearingWeek || weekScheduledCount === 0}
+          title={
+            weekScheduledCount === 0
+              ? "本週沒有已排入的訂單"
+              : "把本週已排入的訂單一次拿回「待排」列表 · 鎖定日跳過"
+          }
+          style={{
+            fontFamily: F.mono, fontSize: 10,
+            color: weekScheduledCount === 0 ? "#4a4a52" : "#E5622A",
+            background: "transparent",
+            border: `1px solid ${weekScheduledCount === 0 ? "#26262C" : "#E5622A"}`,
+            padding: "4px 8px",
+            cursor: clearingWeek || weekScheduledCount === 0 ? "not-allowed" : "pointer",
+            letterSpacing: ".1em",
+            opacity: clearingWeek ? 0.6 : 1,
+          }}
+        >
+          {clearingWeek ? "清空中…" : `🧹 清空本週排程${weekScheduledCount > 0 ? ` (${weekScheduledCount})` : ""}`}
+        </button>
       )}
       <button
         type="button"
