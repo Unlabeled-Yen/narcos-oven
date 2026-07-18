@@ -204,7 +204,7 @@ function SourceRow({ stats, highlight }: { stats: SourceStats; highlight: string
         </span>
         {skipped && (
           <span style={{ fontFamily: F.mono, fontSize: 9, color: C.mut3, letterSpacing: ".05em" }}>
-            {stats.newCount === 0 ? "· 本輪未匯入" : "· DB 尚無資料"}
+            {stats.newCount === 0 ? "· 本輪未匯入" : "· 目前尚無資料"}
           </span>
         )}
       </div>
@@ -212,8 +212,14 @@ function SourceRow({ stats, highlight }: { stats: SourceStats; highlight: string
         <span style={{ fontFamily: F.anton, fontSize: 16, color: C.ink }}>{stats.newCount}</span>
         <span style={{ fontFamily: F.mono, fontSize: 9, color: C.mut3 }}>本輪</span>
         <span style={{ fontFamily: F.mono, fontSize: 9, color: C.mut3 }}>/</span>
-        <span style={{ fontFamily: F.anton, fontSize: 16, color: C.mut }}>{stats.dbCount}</span>
-        <span style={{ fontFamily: F.mono, fontSize: 9, color: C.mut3 }}>DB</span>
+        {/* 顯示「範圍內」筆數（消失比例的分母），不是通路全量。避免「50 目前 · 0% 消失」的錯覺。*/}
+        <span style={{ fontFamily: F.anton, fontSize: 16, color: C.mut }}>{stats.dbInRangeCount}</span>
+        <span style={{ fontFamily: F.mono, fontSize: 9, color: C.mut3 }}>目前</span>
+        {stats.dbInRangeCount !== stats.dbCount && (
+          <span style={{ fontFamily: F.mono, fontSize: 9, color: C.mut3 }}>
+            （全 {stats.dbCount}）
+          </span>
+        )}
       </div>
       <div className="flex items-baseline" style={{ gap: 4 }}>
         <span
@@ -233,7 +239,7 @@ function SourceRow({ stats, highlight }: { stats: SourceStats; highlight: string
         {skipped
           ? "—"
           : stats.maxOrderDateNew && stats.maxOrderDateDb
-          ? `${stats.maxOrderDateNew.slice(5)} vs DB ${stats.maxOrderDateDb.slice(5)}`
+          ? `${stats.maxOrderDateNew.slice(5)} vs 目前 ${stats.maxOrderDateDb.slice(5)}`
           : "無下單日資料"}
       </div>
     </div>

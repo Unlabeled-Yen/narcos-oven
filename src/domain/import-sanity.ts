@@ -44,7 +44,10 @@ export type SanityWarning = {
 export type SourceStats = {
   source: SourceKind;
   newCount: number;
+  /** 這通路目前資料總筆數（不限日期）*/
   dbCount: number;
+  /** 目前資料中「落在本輪 xlsx 涵蓋日期範圍內」的筆數 —— 這才是「消失比例」的分母 */
+  dbInRangeCount: number;
   disappearCount: number;
   disappearRatio: number;
   maxOrderDateNew: string | null;
@@ -132,39 +135,53 @@ function checkOneSource(
       source,
       title: `[${src}] ${paymentReversalIds.length} 筆訂單付款狀態回退`,
       detail:
-        "DB 記錄「付款完成」、這輪 xlsx 卻標「未付款」。付款是不可逆事件、幾乎肯定這輪檔源是舊備份。建議取消匯入。",
+        "目前記錄「付款完成」、這輪 xlsx 卻標「未付款」。付款是不可逆事件、幾乎肯定這輪檔源是舊備份。建議取消匯入。",
       affectedIds: paymentReversalIds,
     });
   }
 
-  // B · 下單日回退
+  // 「範圍內比對」是核心防護（Yen 2026-07-19）：
+  //   之前 disappearCount = 「所有目前資料 - 這輪 xlsx」，假設「每次匯入 = 該通路完整快照」。
+  //   實務上雇主分批拖同通路不同時段的檔（例如先拖近期 1.xlsx、再補歷史 2.xlsx）是常態，
+  //   舊邏輯會把「歷史檔沒包含近期訂單」誤判成「近期訂單消失」→ CRITICAL 誤報。
+  //   → 只比對「這輪 xlsx 涵蓋日期範圍內」的目前訂單。範圍外的目前資料不算「消失」。
+  const [rangeMin, rangeMax] = orderDateRange(newInSrc);
+  const dbInRange = rangeMin && rangeMax
+    ? dbInSrc.filter((o) => o.order_date && o.order_date >= rangeMin && o.order_date <= rangeMax)
+    : [];
+
+  // B · 消失比例過高
+  let disappearCount = 0;
+  for (const o of dbInRange) {
+    if (!newMap.has(o.id)) disappearCount++;
+  }
+  const disappearRatio = dbInRange.length === 0 ? 0 : disappearCount / dbInRange.length;
+  if (disappearRatio > 0.5 && dbInRange.length >= 10) {
+    outWarnings.push({
+      code: "MASSIVE_DISAPPEARANCE",
+      severity: disappearRatio > 0.8 ? "critical" : "warn",
+      source,
+      title: `[${src}] ${(disappearRatio * 100).toFixed(0)}% 訂單同時消失（${disappearCount} / ${dbInRange.length}）`,
+      detail:
+        "自然消失通常 < 20%。這麼高的比例代表檔源可能不同（換了期別、匯出範圍縮短、或匯入了舊備份）。（比對範圍：這輪 xlsx 涵蓋的下單日內。）",
+    });
+  }
+
+  // C · 下單日回退
+  //   只在「範圍內有真的消失」時才視為問題。分批補歷史（disappearCount=0）不誤報。
   const maxOrderDateNew = maxOrderDate(newInSrc);
   const maxOrderDateDb = maxOrderDate(dbInSrc);
-  if (maxOrderDateNew && maxOrderDateDb && maxOrderDateNew < maxOrderDateDb) {
+  if (
+    maxOrderDateNew && maxOrderDateDb && maxOrderDateNew < maxOrderDateDb &&
+    disappearCount > 0
+  ) {
     const daysBack = daysBetween(maxOrderDateNew, maxOrderDateDb);
     outWarnings.push({
       code: "ORDER_DATE_REGRESSION",
       severity: daysBack > 30 ? "critical" : daysBack > 7 ? "warn" : "notice",
       source,
-      title: `[${src}] 這輪最新下單日比 DB 舊 ${daysBack} 天`,
-      detail: `DB 最新下單日：${maxOrderDateDb}｜這輪 xlsx 最新下單日：${maxOrderDateNew}。若你剛下載的檔應該包含最新訂單、這代表檔源可能拿錯了。`,
-    });
-  }
-
-  // C · 消失比例過高
-  let disappearCount = 0;
-  for (const id of dbMap.keys()) {
-    if (!newMap.has(id)) disappearCount++;
-  }
-  const disappearRatio = disappearCount / dbInSrc.length;
-  if (disappearRatio > 0.5 && dbInSrc.length >= 10) {
-    outWarnings.push({
-      code: "MASSIVE_DISAPPEARANCE",
-      severity: disappearRatio > 0.8 ? "critical" : "warn",
-      source,
-      title: `[${src}] ${(disappearRatio * 100).toFixed(0)}% 訂單同時消失（${disappearCount} / ${dbInSrc.length}）`,
-      detail:
-        "自然消失通常 < 20%。這麼高的比例代表檔源可能不同（換了期別、匯出範圍縮短、或匯入了舊備份）。",
+      title: `[${src}] 這輪最新下單日比目前資料舊 ${daysBack} 天`,
+      detail: `目前最新下單日：${maxOrderDateDb}｜這輪 xlsx 最新下單日：${maxOrderDateNew}。若你剛下載的檔應該包含最新訂單、這代表檔源可能拿錯了。`,
     });
   }
 
@@ -172,6 +189,7 @@ function checkOneSource(
     source,
     newCount: newInSrc.length,
     dbCount: dbInSrc.length,
+    dbInRangeCount: dbInRange.length,
     disappearCount,
     disappearRatio,
     maxOrderDateNew,
@@ -185,6 +203,7 @@ function zeroStats(source: SourceKind, newInSrc: Order[], dbInSrc: Order[]): Sou
     source,
     newCount: newInSrc.length,
     dbCount: dbInSrc.length,
+    dbInRangeCount: 0,
     disappearCount: 0,
     disappearRatio: 0,
     maxOrderDateNew: maxOrderDate(newInSrc),
@@ -230,6 +249,20 @@ function maxOrderDate(orders: Order[]): string | null {
     if (max === null || d > max) max = d;
   }
   return max;
+}
+
+/** [min, max] 下單日 · 只取 ISO 前綴合法的 · 空陣列或全無日期回 [null, null] */
+function orderDateRange(orders: Order[]): [string | null, string | null] {
+  let min: string | null = null;
+  let max: string | null = null;
+  for (const o of orders) {
+    const d = o.order_date;
+    if (!d) continue;
+    if (!/^\d{4}-\d{2}-\d{2}/.test(d)) continue;
+    if (min === null || d < min) min = d;
+    if (max === null || d > max) max = d;
+  }
+  return [min, max];
 }
 
 function daysBetween(a: string, b: string): number {

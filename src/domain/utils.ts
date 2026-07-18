@@ -13,7 +13,15 @@ export function toNum(v: unknown): number | null {
     return Number.isFinite(v) ? v : null;
   }
   if (typeof v === "string") {
-    const cleaned = v.replace(/,/g, "").trim();
+    // 剝掉：貨幣符號（半形/全形 $、¥、NT$）、千分位逗號、全形空白、
+    //   trailing 「元」單位 —— 這些都是人手填的裝飾字，數字語意不變。
+    //   Yen 2026-07-19：詹易臻面交單 c23="$640"（帶錢字號），原本 Number("$640")=NaN
+    //   → grossTotal 掉成 0 → 金額一致亮橘燈誤報。走 strip 後 640 正確入帳。
+    const cleaned = v
+      .replace(/NT\$/gi, "")
+      .replace(/[$＄¥,　]/g, "")
+      .replace(/元\s*$/g, "")
+      .trim();
     if (cleaned === "") return null;
     const n = Number(cleaned);
     return Number.isFinite(n) ? n : null;
