@@ -7,9 +7,11 @@
  *   #8  洞察附 sourceOrderIds
  *
  * 成本假設：
- *   「寄出成本」= 該 KOL 訂單的所有 items，
- *     每個 item 取 menu.products[productSkuId].cost × item.quantity，
- *     cost 為 null 時以 0 計（loud 標記 isEstimated）。
+ *   「寄出成本」= 該 KOL 訂單的所有 items 的成本合計。
+ *     每個 item 先看 menu.products[productSkuId].cost；
+ *     product.cost 為 null 時 fallback 到 menu.atoms 加總（用 item.atoms.count）
+ *     —— atom cost 是精確資料、非估算。
+ *     只有 product 和 atom 都缺才算真的估算（isEstimated=true）。
  *   KOL 訂單識別：channel === "KOL"。
  *   帶單營收 = order.revenue.grossTotal。
  *   ROI     = 帶單營收 / 寄出成本（成本為 0 則為 null）。
@@ -156,19 +158,32 @@ export function computeKolRoi(orders: Order[], menu: Menu): KolRoiResult {
     for (const o of grpOrders) {
       for (const item of o.items) {
         const skuId = item.productSkuId;
-        if (skuId) {
-          const displayName = getDisplayName(skuId, menu);
-          itemNameSet.add(displayName);
-          const product = menu.products[skuId];
-          if (product?.cost != null) {
-            cost += product.cost * item.quantity;
-          } else {
-            // cost 未設：估算用 0 但標記為估算
-            isEstimated = true;
-          }
-        } else {
+        if (!skuId) {
           // 品項未識別：全估算
           isEstimated = true;
+          continue;
+        }
+        const displayName = getDisplayName(skuId, menu);
+        itemNameSet.add(displayName);
+        const product = menu.products[skuId];
+        if (product?.cost != null) {
+          cost += product.cost * item.quantity;
+          continue;
+        }
+        // product.cost 未設 · fallback 到 atoms 加總（精確資料、非估算）
+        //   compute-payout 早就這樣做，KOL 沒接上。item.atoms.count 對 seller-buy /
+        //   in-person 是已含 quantity；KOL 是 per-unit 但 quantity 恆為 1，皆不需再乘。
+        let itemAtomCost = 0;
+        let itemHasNull = false;
+        for (const a of item.atoms) {
+          const atom = menu.atoms[a.atomId];
+          if (!atom || atom.cost == null) { itemHasNull = true; break; }
+          itemAtomCost += atom.cost * a.count;
+        }
+        if (itemHasNull) {
+          isEstimated = true;
+        } else {
+          cost += itemAtomCost;
         }
       }
     }

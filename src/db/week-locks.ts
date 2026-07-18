@@ -39,3 +39,24 @@ export function setDayLocked(iso: string, locked: boolean): void {
 export const loadWeekLocks = loadDayLocks;
 export const isWeekLocked = isDayLocked;
 export const setWeekLocked = setDayLocked;
+
+// ── 備份 / 還原用 · 讓 backup.ts 不必碰 localStorage key ────────────────
+export function dumpDayLocks(): Record<string, true> {
+  return loadDayLocks();
+}
+
+export function restoreDayLocks(locks: Record<string, true>): void {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(locks));
+  } catch {
+    /* quota 錯不 loud、讓上層 UI 端自行讀 loadDayLocks 判斷 */
+  }
+}
+
+export function clearDayLocks(): void {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    /* 同上 */
+  }
+}

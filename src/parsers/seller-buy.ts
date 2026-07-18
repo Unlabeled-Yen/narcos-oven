@@ -302,8 +302,5 @@ function deriveStatus(reasons: PendingReason[]): Order["status"] {
   for (const p of reasons) {
     if (p.code === "AMOUNT_MISMATCH") return "pending_amount";
   }
-  for (const p of reasons) {
-    if (p.code === "MISSING_BATCH_DATE") return "pending_batch_date";
-  }
   return "pending_amount";
 }

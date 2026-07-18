@@ -45,10 +45,9 @@ export function BackupControls({ refreshOrders, restoreOnly = false }: { refresh
     const result = await importBackup(file);
     if (result.ok) {
       await refreshOrders();
-      setMsg({
-        ok: true,
-        text: `✓ 已還原 · orders ${result.counts.orders} / runs ${result.counts.import_runs} / changes ${result.counts.order_changes}`,
-      });
+      const base = `✓ 已還原 · orders ${result.counts.orders} / runs ${result.counts.import_runs} / changes ${result.counts.order_changes} / 日鎖 ${result.counts.day_locks}`;
+      const warn = result.warnings.length > 0 ? ` · ⚠ ${result.warnings.join(" · ")}` : "";
+      setMsg({ ok: true, text: base + warn });
     } else {
       setMsg({ ok: false, text: `❌ ${result.error}` });
     }

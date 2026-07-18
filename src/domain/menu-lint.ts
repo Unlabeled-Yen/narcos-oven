@@ -138,22 +138,41 @@ export function lintMenu(menu: Menu): LintWarning[] {
   return warnings;
 }
 
-/** Console 印出 lint 結果（開發輔助） */
+/** Console 印出 lint 結果（開發輔助）
+ *  Yen 2026-07-19：COUNT_MISMATCH 是 informational（見程式碼 §3 註解，「N 入」
+ *  在中文有三種語意，無法自動判斷是否 bug），噴 warn 只是噪音，且會被誤認為
+ *  真的檢查失敗（曾誤導 Yen 以為 HealthStrip #1 有問題）。改用 console.debug 靜默上報，
+ *  真要 review 時開 DevTools 濾 debug 即可。ALIAS_* / REVERSE_LOOKUP_* 是真警訊、維持 warn。
+ */
 export function logLintWarnings(warnings: LintWarning[]): void {
   if (warnings.length === 0) {
     // eslint-disable-next-line no-console
     console.log("[menu-lint] ✓ menu.yaml 無 SKU lookup 衝突");
     return;
   }
-  const critical = warnings.filter((w) => w.severity === "critical");
-  const warn = warnings.filter((w) => w.severity === "warn");
-  // eslint-disable-next-line no-console
-  console.warn(
-    `[menu-lint] ⚠ 發現 ${warnings.length} 個問題（${critical.length} critical / ${warn.length} warn）· 靜默 SKU 誤匹配風險`
-  );
-  for (const w of warnings) {
-    const tag = w.severity === "critical" ? "🔴 CRITICAL" : "🟡 WARN";
+  const loud = warnings.filter((w) => w.code !== "COUNT_MISMATCH");
+  const quiet = warnings.filter((w) => w.code === "COUNT_MISMATCH");
+
+  if (loud.length > 0) {
+    const critical = loud.filter((w) => w.severity === "critical");
+    const warn = loud.filter((w) => w.severity === "warn");
     // eslint-disable-next-line no-console
-    console.warn(`  ${tag} [${w.code}] ${w.message}`);
+    console.warn(
+      `[menu-lint] ⚠ 發現 ${loud.length} 個問題（${critical.length} critical / ${warn.length} warn）· 靜默 SKU 誤匹配風險`
+    );
+    for (const w of loud) {
+      const tag = w.severity === "critical" ? "🔴 CRITICAL" : "🟡 WARN";
+      // eslint-disable-next-line no-console
+      console.warn(`  ${tag} [${w.code}] ${w.message}`);
+    }
+  }
+
+  if (quiet.length > 0) {
+    // eslint-disable-next-line no-console
+    console.debug(`[menu-lint] ${quiet.length} informational（COUNT_MISMATCH · 需人工判斷「N 入」語意）`);
+    for (const w of quiet) {
+      // eslint-disable-next-line no-console
+      console.debug(`  [${w.code}] ${w.message}`);
+    }
   }
 }

@@ -239,8 +239,6 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
   const status: Order["status"] =
     pendingReasons.length === 0
       ? "confirmed"
-      : pendingReasons.some((p) => p.code === "MISSING_BATCH_DATE")
-      ? "pending_batch_date"
       : pendingReasons.some((p) => p.code === "KOL_CHOICE_UNRESOLVED")
       ? "pending_kol_choice"
       : "pending_product";

@@ -300,7 +300,6 @@ function derivePendingStatus(reasons: PendingReason[]): Order["status"] {
   if (reasons.length === 0) return "confirmed";
   const first = reasons[0]!.code;
   if (first === "AMBIGUOUS_CHANNEL") return "pending_channel";
-  if (first === "MISSING_BATCH_DATE") return "pending_batch_date";
   if (first === "UNKNOWN_PRODUCT") return "pending_product";
   return "pending_channel";
 }

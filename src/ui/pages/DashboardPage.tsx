@@ -34,6 +34,7 @@ import {
   type ShipCalendar,
 } from "../../domain/compute-dashboard";
 import { loadDayOverrides, makeDayTypeOf, shippingDayFor } from "../../domain/day-type";
+import { checkReleaseGate, type GateStatus } from "../../domain/release-gate";
 import type { PageProps } from "./types";
 
 const F = { anton: "'Anton',sans-serif", tc: "'Noto Sans TC',sans-serif", mono: "'Space Mono',monospace" } as const;
@@ -142,29 +143,78 @@ function EmptyRow() {
 }
 
 /**
- * 資料健康度狀態條 —— 產出閘門的常駐燈號。永遠釘在 KPI 底下、翻頁翻不掉。
+ * 資料檢查狀態條 —— 產出閘門的常駐燈號。永遠釘在 KPI 底下、翻頁翻不掉。
+ *
+ * 選項二布局（Yen 2026-07-19）：
+ *   全綠時：一行安靜；四顆綠燈 + 右邊小字「可產出」
+ *   有 blocker（gate.can_release=false）時：條往下長高、列出白話原因，
+ *     附「→ 前往處理」跳到待處理桶
+ *   有橘燈但不 blocker（例如金額一致=否）時：四顆維持顯示、但不長警語
+ *     —— 訊號跟行為對齊，說擋才擋、否則不亂喊
  */
-function HealthStrip({ checks }: { checks: HealthCheck[] }) {
-  const blocked = checks.some((h) => h.color === EMBER);
+function HealthStrip({ checks, gate }: { checks: HealthCheck[]; gate: GateStatus }) {
+  const blocked = !gate.can_release;
   return (
     <div style={{
-      flex: "none", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap",
-      padding: "8px 24px", background: "#0F0F12",
+      flex: "none", display: "flex", flexDirection: "column",
+      background: "#0F0F12",
       borderTop: "1px solid #26262C", borderBottom: "1px solid #26262C",
     }}>
-      <span style={{ fontFamily: F.mono, fontSize: 10, color: "#6C6C74", letterSpacing: ".12em" }}>資料健康度 · 憲章防護</span>
-      {checks.map((h) => (
-        <span key={h.label} style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: h.color, flexShrink: 0, display: "inline-block" }} />
-          <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 12, color: "#C9C9CF" }}>{h.label}</span>
-          <span style={{ fontFamily: F.mono, fontSize: 11, color: h.color }}>{h.value}</span>
-        </span>
-      ))}
+      {/* 上排：四顆檢查燈（永遠顯示）*/}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap",
+        padding: "8px 24px",
+      }}>
+        <span style={{ fontFamily: F.mono, fontSize: 10, color: "#6C6C74", letterSpacing: ".12em" }}>資料檢查</span>
+        {checks.map((h) => (
+          <span key={h.label} style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: h.color, flexShrink: 0, display: "inline-block" }} />
+            <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 12, color: "#C9C9CF" }}>{h.label}</span>
+            <span style={{ fontFamily: F.mono, fontSize: 11, color: h.color }}>{h.value}</span>
+          </span>
+        ))}
+        {!blocked && (
+          <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: F.tc, fontSize: 11, color: "#43B23C" }}>
+            ✓ 可產出
+          </span>
+        )}
+      </div>
+
+      {/* 下排：閘門展開（只有真的擋出爐時才長出來，且能點過去處理）*/}
       {blocked && (
-        <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 7, padding: "3px 11px", background: "#161619", borderLeft: `3px solid ${EMBER}` }}>
-          <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 11, color: EMBER }}>⚠ 產出閘門</span>
-          <span style={{ fontFamily: F.tc, fontWeight: 500, fontSize: 11, color: "#8A8A93" }}>待處理清空前 Excel/PDF disabled</span>
-        </span>
+        <div style={{
+          display: "flex", flexDirection: "column", gap: 6,
+          padding: "10px 24px 12px",
+          background: "#181114", borderTop: `1px solid ${EMBER}`,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 12, color: EMBER, letterSpacing: ".05em" }}>
+              ⚠ 尚未通過檢查 · 暫不可產出
+            </span>
+            <span style={{ fontFamily: F.tc, fontSize: 11, color: "#8A8A93" }}>
+              （處理完後「產出 Excel／PDF」自動解鎖）
+            </span>
+          </div>
+          {gate.blockers.map((msg) => (
+            <a
+              key={msg}
+              href="#/pending"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                fontFamily: F.tc, fontSize: 12, color: "#F5F4EF",
+                textDecoration: "none",
+              }}
+              onMouseOver={(e) => (e.currentTarget.style.color = EMBER)}
+              onMouseOut={(e) => (e.currentTarget.style.color = "#F5F4EF")}
+            >
+              <span style={{ color: EMBER }}>•</span>
+              <span>{msg}</span>
+              <span style={{ fontFamily: F.mono, fontSize: 11, color: "#8A8A93", marginLeft: 4 }}>
+                → 前往處理
+              </span>
+            </a>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -238,6 +288,7 @@ export function DashboardPage({ orders, menu, refreshOrders }: PageProps) {
   const channelShare = useMemo(() => computeChannelShare(orders, win), [orders, win]);
   const repeatStats = useMemo(() => computeRepeatCustomers(orders, win), [orders, win]);
   const healthChecks = useMemo(() => computeHealthChecks(orders), [orders]);
+  const releaseGate = useMemo(() => checkReleaseGate(orders), [orders]);
 
   // 鍵盤翻頁。沿用專案既有的鍵盤流文化（待處理桶用 J/K、排程用 ‹ ›）。
   useEffect(() => {
@@ -366,8 +417,8 @@ export function DashboardPage({ orders, menu, refreshOrders }: PageProps) {
         <Kpi accent={EMBER} labelColor={EMBER} label="待處理桶" foot="標籤未定">
           <BigNum v={kpi.pending} color={EMBER} />
         </Kpi>
-        <Kpi accent="#43B23C" labelColor="#43B23C" label="消失待拍板"
-          foot={kpi.disappeared === 0 ? "✓ 可產出" : `${kpi.disappeared} 待確認`}
+        <Kpi accent="#43B23C" labelColor="#43B23C" label="消失待確認"
+          foot={kpi.disappeared === 0 ? "✓ 可產出" : `${kpi.disappeared} 筆待確認`}
           footColor={kpi.disappeared === 0 ? "#43B23C" : EMBER}>
           <BigNum v={kpi.disappeared} color={kpi.disappeared === 0 ? "#F5F4EF" : EMBER} />
         </Kpi>
@@ -378,7 +429,7 @@ export function DashboardPage({ orders, menu, refreshOrders }: PageProps) {
       </div>
 
       {/* ── 釘住層 2：產出閘門燈號 ───────────────────────────────── */}
-      <HealthStrip checks={healthChecks} />
+      <HealthStrip checks={healthChecks} gate={releaseGate} />
 
       {/* ── 牌組：P1 趨勢 / P2 結構 · 兩指左右滑翻頁 ─────────────── */}
       <div ref={deckRef} style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>

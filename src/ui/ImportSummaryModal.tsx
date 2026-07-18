@@ -117,13 +117,13 @@ export function ImportSummaryModal({
             <div className="flex items-baseline flex-wrap" style={{ gap: 12 }}>
               <span style={{ fontFamily: F.mono, fontSize: 10, color: C.mut2, letterSpacing: ".18em" }}>IMPORT · DIFF</span>
               <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 16, color: C.ink }}>匯入異動摘要</span>
-              <span style={{ fontFamily: F.mono, fontSize: 10, color: C.mut3 }}>· 憲章 #9/#10 逐筆拍板</span>
+              <span style={{ fontFamily: F.mono, fontSize: 10, color: C.mut3 }}>· 逐筆確認</span>
             </div>
             <button
               type="button"
               disabled={!canClose}
               onClick={onClose}
-              title={canClose ? "全部處理完、送出" : `還有 ${needsResolution - resolvedCount} 筆待拍板`}
+              title={canClose ? "全部處理完、送出" : `還有 ${needsResolution - resolvedCount} 筆待確認`}
               style={{
                 fontFamily: F.tc, fontWeight: 900, fontSize: 12,
                 color: canClose ? "#111" : C.mut3,
@@ -362,7 +362,7 @@ function DisappearedSection({
       <SectionHeader
         color={C.red}
         title={`消失待確認（${orders.length} 筆）`}
-        hint="憲章 #9 必須逐一拍板"
+        hint="必須逐一確認"
         unresolvedCount={unresolved.length}
         bulkOptions={bulkOptions}
         pendingBulk={pendingBulk}

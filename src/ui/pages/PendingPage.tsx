@@ -3,7 +3,7 @@
  *
  * 設計稿：design_handoff_oven_control/出爐指揮台 待處理桶.dc.html
  * 品牌 pattern：DashboardPage.demo.tsx
- * DB 寫法：PendingPage.helpers.ts（沿用 PendingBucket.tsx 的 db.orders.update）
+ * DB 寫法：PendingPage.helpers.ts（權威 resolve 實作）
  *
  * 憲章紅線：
  *  #1  品項顯示經 getDisplayName（禁 hardcode）
@@ -205,7 +205,7 @@ export function PendingPage(props: PageProps) {
           <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 24, color: C.ink }}>桶已清空</div>
           <div style={{ fontFamily: F.mono, fontSize: 13, color: C.mut }}>可產出 Excel / PDF / 出爐統計</div>
           <div style={{ marginTop: 16, background: C.panel, border: `1px solid ${C.green}`, borderLeft: `3px solid ${C.green}`, padding: "14px 20px" }}>
-            <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: C.green }}>✓ 產出閘門已開 · 憲章 #9</div>
+            <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: C.green }}>✓ 已可產出</div>
             <div style={{ fontFamily: F.tc, fontWeight: 500, fontSize: 11, color: C.mut, marginTop: 5 }}>待處理桶清空 · 可產出出爐統計 / 標籤 PDF</div>
           </div>
         </div>
@@ -222,7 +222,7 @@ export function PendingPage(props: PageProps) {
         right={
           <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
             <span style={{ fontFamily: F.anton, fontSize: 34, color: C.orange }}>{remaining}</span>
-            <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 16, color: C.mut }}>筆待拍板</span>
+            <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 16, color: C.mut }}>筆待確認</span>
           </div>
         }
       />
@@ -294,7 +294,7 @@ export function PendingPage(props: PageProps) {
                   )}
                   <span style={{ flex: 1 }} />
                   {isResolved
-                    ? <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 11, color: "#111", background: C.green, padding: "3px 10px" }}>✓ 已拍板</span>
+                    ? <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 11, color: "#111", background: C.green, padding: "3px 10px" }}>✓ 已確認</span>
                     : reason && (
                       <span style={{ fontFamily: F.mono, fontSize: 11, color: conf >= 0.9 ? C.green : C.mut }}>
                         建議信心 {Math.round(conf * 100)}%
@@ -372,7 +372,7 @@ export function PendingPage(props: PageProps) {
             <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 15, color: C.ink, marginBottom: 12 }}>處理進度</div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
               <span style={{ fontFamily: F.anton, fontSize: 36, color: C.ink, lineHeight: 0.85 }}>{done}</span>
-              <span style={{ fontFamily: F.mono, fontSize: 12, color: C.mut2 }}>/ {total} 已拍板</span>
+              <span style={{ fontFamily: F.mono, fontSize: 12, color: C.mut2 }}>/ {total} 已確認</span>
             </div>
             <div style={{ height: 12, background: C.track }}>
               <div style={{ width: `${pct}%`, height: 12, background: C.green, transition: "width .3s" }} />
@@ -380,17 +380,17 @@ export function PendingPage(props: PageProps) {
             <div style={{ fontFamily: F.mono, fontSize: 10, color: "#6C6C74", marginTop: 6, textAlign: "right" }}>剩 {remaining} 筆</div>
           </div>
 
-          {/* 產出閘門 (憲章 #9) */}
+          {/* 產出閘門（對應：消失/變動訂單需先確認才能產出）*/}
           {!isGateOpen ? (
             <div style={{ background: C.panel, border: `1px solid ${C.orange}`, borderLeft: `3px solid ${C.orange}`, padding: "14px 16px" }}>
-              <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: C.orange }}>🔒 產出閘門 · 憲章 #9</div>
+              <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: C.orange }}>🔒 尚未可產出</div>
               <div style={{ fontFamily: F.tc, fontWeight: 500, fontSize: 11, color: C.mut, marginTop: 5 }}>
-                尚有 {remaining} 筆未拍板 · Excel / PDF / 標籤產出 disabled
+                尚有 {remaining} 筆待確認 · 產出鍵已鎖
               </div>
             </div>
           ) : (
             <div style={{ background: C.panel, border: `1px solid ${C.green}`, borderLeft: `3px solid ${C.green}`, padding: "14px 16px" }}>
-              <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: C.green }}>✓ 產出閘門已開 · 憲章 #9</div>
+              <div style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 13, color: C.green }}>✓ 已可產出</div>
               <div style={{ fontFamily: F.tc, fontWeight: 500, fontSize: 11, color: C.mut, marginTop: 5 }}>待處理桶清空 · 可產出出爐統計 / 標籤 PDF</div>
               <span style={{ display: "inline-block", marginTop: 10, fontFamily: F.tc, fontWeight: 900, fontSize: 11, color: "#111", background: C.green, padding: "7px 14px", cursor: "pointer" }}>
                 產出全部 →

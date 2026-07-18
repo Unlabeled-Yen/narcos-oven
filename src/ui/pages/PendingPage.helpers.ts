@@ -1,6 +1,6 @@
 /**
  * PendingPage.helpers — pure logic extracted to keep PendingPage.tsx under 500 lines.
- * DB mutation helpers mirror PendingBucket.tsx exactly.
+ * 待處理訂單的權威 resolve 實作(含 autoScheduleIfCleared 安全網 + 憲章 #2 ISO 檢查)。
  */
 import { db } from "../../db/schema";
 import { getDisplayName, explodeToAtoms } from "../../domain/menu";
@@ -170,7 +170,7 @@ export function buildOptions(o: Order, menu: Menu): OptionEntry[] {
   return opts.slice(0, 9);
 }
 
-// ── DB mutation helpers (mirroring PendingBucket.tsx) ───────────────────
+// ── DB mutation helpers(權威實作) ────────────────────────────────────────
 
 /**
  * 桶清空 → 自動排入 helper

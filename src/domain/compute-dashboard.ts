@@ -476,24 +476,32 @@ export type HealthCheck = {
 };
 
 /**
- * 憲章防護燈。
- * #1 總數守恆：所有非 canceled 訂單 items 都有 atoms。
- * #9 消失守恆：disappeared_pending_resolution 計數。
- * #10 變動守恆：change_pending_resolution 計數。
- * 金額對帳：已有 revenue.grossTotal 的訂單比例。
+ * 資料檢查燈（四項）。內部憲章代號 #1/#2/#9/#10 不對外顯示：
+ *
+ *   筆數一致  ← #1 總數守恆：所有非 canceled 訂單的 items 都有對到 SKU
+ *   金額一致  ← #2 金額對帳：付費通路的訂單都有 grossTotal
+ *                （KOL 是免費合作、天生 grossTotal=0，排除在分母外）
+ *   無缺漏紀錄 ← #9 消失守恆：disappeared_pending_resolution 計數
+ *   無異常異動 ← #10 變動守恆：change_pending_resolution 計數
+ *
+ * blocking：只有「無缺漏紀錄 / 無異常異動」非綠會擋出爐（見 release-gate.ts）。
+ * 「筆數一致 / 金額一致」非綠只是視覺提示、不擋。
  */
 export function computeHealthChecks(orders: Order[]): HealthCheck[] {
   const nonCanceled = orders.filter((o) => o.status !== "canceled");
 
-  // 金額對帳：grossTotal !== 0 視為有金額
-  const withAmount = nonCanceled.filter((o) => o.revenue.grossTotal > 0).length;
-  const total = nonCanceled.length;
-  const amountOk = total === 0 || withAmount === total;
+  // 金額一致：只算「應該有金流」的通路。
+  //   KOL 是免費樣品換曝光、天生 grossTotal=0，把它列入分母會永遠報橘燈（就是 2026-07-19 遇到的 bug）。
+  //   之後多免費通路（試吃、內部）也加進這個 filter。
+  const paidOrders = nonCanceled.filter((o) => o.channel !== "KOL");
+  const withAmount = paidOrders.filter((o) => o.revenue.grossTotal > 0).length;
+  const paidTotal = paidOrders.length;
+  const amountOk = paidTotal === 0 || withAmount === paidTotal;
 
-  // 總數守恆：所有 items 有 productSkuId（null 算 broken）
-  const brokenItems = nonCanceled.some((o) =>
+  // 筆數一致：items 有沒有 productSkuId=null（parser 未識別）
+  const brokenItems = nonCanceled.filter((o) =>
     o.items.some((it) => it.productSkuId === null)
-  );
+  ).length;
 
   const disappeared = orders.filter(
     (o) => o.status === "disappeared_pending_resolution"
@@ -505,23 +513,23 @@ export function computeHealthChecks(orders: Order[]): HealthCheck[] {
 
   return [
     {
-      label: "金額對帳 #2",
-      value: amountOk ? `${withAmount}/${total} ✓` : `${withAmount}/${total} ！`,
+      label: "筆數一致",
+      value: brokenItems === 0 ? "一致" : `${brokenItems} 筆品項未識別`,
+      color: brokenItems === 0 ? "#43B23C" : "#E5622A",
+    },
+    {
+      label: "金額一致",
+      value: amountOk ? "一致" : `${paidTotal - withAmount} 筆金額為 0`,
       color: amountOk ? "#43B23C" : "#E5622A",
     },
     {
-      label: "總數守恆 #1",
-      value: brokenItems ? "有未知品項" : "一致",
-      color: brokenItems ? "#E5622A" : "#43B23C",
-    },
-    {
-      label: "消失守恆 #9",
-      value: disappeared === 0 ? "0 待拍板" : `${disappeared} 待拍板`,
+      label: "無缺漏紀錄",
+      value: disappeared === 0 ? "無" : `${disappeared} 筆待確認`,
       color: disappeared === 0 ? "#43B23C" : "#E5622A",
     },
     {
-      label: "變動守恆 #10",
-      value: changePending === 0 ? "0 待確認" : `${changePending} 待確認`,
+      label: "無異常異動",
+      value: changePending === 0 ? "無" : `${changePending} 筆待確認`,
       color: changePending === 0 ? "#43B23C" : "#E5622A",
     },
   ];
