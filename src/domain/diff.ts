@@ -105,11 +105,26 @@ export function planDiff(
     }
   }
 
-  // 情境 C: 消失
-  for (const id of dbMap.keys()) {
-    if (!newMap.has(id)) {
-      disappeared.push(id);
+  // 情境 C: 消失 —— 範圍內比對（Yen 2026-07-19）
+  //   之前假設「每次匯入 = 該通路完整快照」，DB 有但 new 沒 = 消失。
+  //   實務上雇主分批拖同通路不同時段的檔（例如先拖近期 1.xlsx、再補歷史 2.xlsx）
+  //   會被誤標為「50 筆消失」→ 逐筆確認的假債。跟 import-sanity 同樣治理：
+  //   只把「日期落在這輪 xlsx 涵蓋範圍內」的 DB 訂單視為候選消失。範圍外的 skip。
+  const [rangeMin, rangeMax] = orderDateRange(newOrders);
+  const inRange = (d: string | null | undefined): boolean => {
+    if (!rangeMin || !rangeMax) return false;
+    if (!d || !/^\d{4}-\d{2}-\d{2}/.test(d)) return false;
+    return d >= rangeMin && d <= rangeMax;
+  };
+  for (const [id, existing] of dbMap) {
+    if (newMap.has(id)) continue;
+    if (!inRange(existing.order_date)) {
+      // 範圍外 · 這輪 xlsx 本來就不涵蓋這個日期、不應該視為消失。
+      // 也要把它推進 upserts 保留原狀（避免 upsertMany 覆蓋掉 last_seen_at 之外的東西——
+      //   實際上 upsertMany 只寫傳進來的、不會動到沒 upsert 的、所以這裡不 push 就好）。
+      continue;
     }
+    disappeared.push(id);
   }
 
   return {
@@ -151,6 +166,20 @@ function compareSnapshots(
     }
   }
   return changed;
+}
+
+/** [min, max] 下單日 · 只取 ISO 前綴合法的 · 空陣列或全無日期回 [null, null] */
+function orderDateRange(orders: Order[]): [string | null, string | null] {
+  let min: string | null = null;
+  let max: string | null = null;
+  for (const o of orders) {
+    const d = o.order_date;
+    if (!d) continue;
+    if (!/^\d{4}-\d{2}-\d{2}/.test(d)) continue;
+    if (min === null || d < min) min = d;
+    if (max === null || d > max) max = d;
+  }
+  return [min, max];
 }
 
 function eq(a: unknown, b: unknown): boolean {
