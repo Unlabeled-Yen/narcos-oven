@@ -1,0 +1,69 @@
+{
+  "generated_note": "見 scripts/build-golden-baseline.mjs 頂端註解",
+  "results": {
+    "seller-buy/1.xlsx": {
+      "label": "seller-buy/1.xlsx",
+      "order_count": 50,
+      "by_status": {
+        "confirmed": 47,
+        "pending_payment": 3
+      },
+      "gross_total_sum": 32455,
+      "item_line_count": 59,
+      "payout_eligible_order_count": 47,
+      "payout_gross_total": 29247,
+      "payout_cogs_total": 6581.11,
+      "payout_net_profit": 18670.89,
+      "payout_is_estimated": true,
+      "raw_row_count": 50
+    },
+    "seller-buy/2.xlsx": {
+      "label": "seller-buy/2.xlsx",
+      "order_count": 8,
+      "by_status": {
+        "confirmed": 8
+      },
+      "gross_total_sum": 5610,
+      "item_line_count": 10,
+      "payout_eligible_order_count": 8,
+      "payout_gross_total": 5610,
+      "payout_cogs_total": 1408.15,
+      "payout_net_profit": 3521.85,
+      "payout_is_estimated": true,
+      "raw_row_count": 8
+    },
+    "in-person": {
+      "label": "in-person",
+      "order_count": 25,
+      "by_status": {
+        "confirmed": 13,
+        "pending_product": 5,
+        "pending_channel": 7
+      },
+      "gross_total_sum": 67933,
+      "item_line_count": 27,
+      "payout_eligible_order_count": 13,
+      "payout_gross_total": 12840,
+      "payout_cogs_total": 3502.18,
+      "payout_net_profit": 8882.82,
+      "payout_is_estimated": true,
+      "raw_row_count": 25
+    },
+    "kol": {
+      "label": "kol",
+      "order_count": 25,
+      "by_status": {
+        "confirmed": 23,
+        "pending_kol_choice": 2
+      },
+      "gross_total_sum": 0,
+      "item_line_count": 25,
+      "payout_eligible_order_count": 23,
+      "payout_gross_total": 0,
+      "payout_cogs_total": 2264.26,
+      "payout_net_profit": -4219.26,
+      "payout_is_estimated": true,
+      "raw_row_count": 25
+    }
+  }
+}
