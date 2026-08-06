@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { PageProps } from "./types";
 import type { ChannelId, Menu, ShopPartner } from "../../domain/models";
+import { groupProducts } from "../../domain/menu";
 import { buildManualOrder } from "../../domain/manual-order";
 import { upsertOrder } from "../../db/orders";
 import { listShops } from "../../db/shops";
@@ -122,10 +123,7 @@ export function ManualOrderPage({ menu, orders, refreshOrders }: PageProps) {
     }
   }
 
-  const sortedSkus = useMemo(
-    () => Object.entries(menu.products).sort(([, a], [, b]) => a.display_name.localeCompare(b.display_name)),
-    [menu]
-  );
+  const productGroups = useMemo(() => groupProducts(menu), [menu]);
 
   const computedItems = useMemo(() => {
     return items.map((it) => {
@@ -341,10 +339,14 @@ export function ManualOrderPage({ menu, orders, refreshOrders }: PageProps) {
                   style={inputStyle}
                 >
                   <option value="">— 選 SKU —</option>
-                  {sortedSkus.map(([id, p]) => (
-                    <option key={id} value={id}>
-                      {p.display_name} {p.price != null ? `· $${p.price}` : ""}
-                    </option>
+                  {productGroups.map((g) => (
+                    <optgroup key={g.group} label={g.group}>
+                      {g.items.map(({ skuId, product: p }) => (
+                        <option key={skuId} value={skuId}>
+                          {p.display_name} {p.price != null ? `· $${p.price}` : ""}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
                 <input
@@ -622,6 +624,16 @@ function ShopModeForm({ menu, refreshOrders }: { menu: Menu; refreshOrders: () =
     });
   }, [shop, menu]);
 
+  // #3 分類 · 限定該店供貨品項子集，group 仍照 menu.yaml 定義、不因子集而改變
+  type ShopItemOption = (typeof shopItemOptions)[number];
+  function groupShopItemOptions(options: ShopItemOption[]) {
+    const bySku = new Map(options.map((o) => [o.skuId, o]));
+    return groupProducts(menu, options.map((o) => o.skuId)).map((g) => ({
+      group: g.group,
+      items: g.items.map(({ skuId }) => bySku.get(skuId)!),
+    }));
+  }
+
   // 計算每個 item 的實際單價（override -> shop item override -> menu.wholesale）+ subtotal
   const computedItems = useMemo(() => {
     return items.map((it) => {
@@ -757,10 +769,16 @@ function ShopModeForm({ menu, refreshOrders }: { menu: Menu; refreshOrders: () =
               }}>
                 <select value={it.skuId} onChange={(e) => updateItem(it.key, { skuId: e.target.value, unitPriceOverride: "" })} style={inputStyle}>
                   <option value="">— 選品項 —</option>
-                  {shopItemOptions.filter((opt) => opt.skuId === it.skuId || !items.some((i) => i.skuId === opt.skuId)).map((opt) => (
-                    <option key={opt.skuId} value={opt.skuId}>
-                      {opt.name} · ${opt.effective ?? "?"}
-                    </option>
+                  {groupShopItemOptions(
+                    shopItemOptions.filter((opt) => opt.skuId === it.skuId || !items.some((i) => i.skuId === opt.skuId))
+                  ).map((g) => (
+                    <optgroup key={g.group} label={g.group}>
+                      {g.items.map((opt) => (
+                        <option key={opt.skuId} value={opt.skuId}>
+                          {opt.name} · ${opt.effective ?? "?"}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
                 <input type="number" min={1} value={it.quantity}

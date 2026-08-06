@@ -18,6 +18,22 @@ export const MatchSignatureSchema = z.object({
   exclude: z.array(z.string()).default([]),
 });
 
+// Yen 2026-08-06（#3）：手打單品項下拉分類。固定枚舉，不接受任意字串——
+// 分類漂移（打錯字、新造一類沒人看到）本身就是一種靜默失效。
+// 沒填 → default "其他"，不是拒載；但值不在枚舉內 → zod 直接拒載。
+export const ProductGroupSchema = z
+  .enum(["肉桂捲", "磅蛋糕", "巴斯克", "堅果醬", "禮盒組", "其他"])
+  .default("其他");
+export type ProductGroup = z.infer<typeof ProductGroupSchema>;
+export const PRODUCT_GROUP_ORDER = [
+  "肉桂捲",
+  "磅蛋糕",
+  "巴斯克",
+  "堅果醬",
+  "禮盒組",
+  "其他",
+] as const;
+
 export const ProductSchema = z.object({
   display_name: z.string(),
   category: z.enum(["combo", "single"]),
@@ -27,6 +43,7 @@ export const ProductSchema = z.object({
   wholesale_price: z.number().nullable().default(null),
   // Yen 2026-07-06：品項狀態 · "draft" = 研發中、店家提案但細節未定
   status: z.enum(["active", "draft"]).default("active"),
+  group: ProductGroupSchema,
   contains: z.array(
     z.object({
       atom: z.string(),

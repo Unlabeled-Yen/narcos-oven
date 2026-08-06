@@ -92,6 +92,7 @@ export function MenuEditorPage({ menu }: PageProps) {
     const newProd: Product = {
       display_name: sg.display_name, category: sg.category, price: sg.price, cost: sg.cost,
       wholesale_price: null, status: "active",  // Yen 2026-07-06 slice 2A
+      group: "其他",  // #3 2026-08-06：新 SKU 未分類、雇主可在 menu.yaml 補
       contains: sg.contains, aliases: sg.aliases, match_signature: sg.match_signature,
       seen_count: sg.seen_count, notes: sg.notes,
     };

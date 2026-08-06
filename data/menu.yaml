@@ -46,6 +46,7 @@ products:
   經典肉桂捲4入:
     display_name: 經典肉桂捲 四入禮盒
     category: combo
+    group: 禮盒組
     price: 400
     cost: null                # 待雇主補
     contains:
@@ -63,6 +64,7 @@ products:
   蘋果肉桂捲4入:
     display_name: 蘋果肉桂捲 四入禮盒
     category: combo
+    group: 禮盒組
     price: 480
     cost: null
     contains:
@@ -80,6 +82,7 @@ products:
   方型3入_焦糖蘋果:
     display_name: 方型三入 肉桂×2＋焦糖蘋果
     category: combo
+    group: 禮盒組
     price: 400
     cost: null
     contains:
@@ -97,6 +100,7 @@ products:
   方型3入_芝麻磅:
     display_name: 方型三入 肉桂×2＋芝麻焙茶磅
     category: combo
+    group: 禮盒組
     price: 560
     cost: null
     contains:
@@ -114,6 +118,7 @@ products:
   方型3入_鳳梨磅:
     display_name: 方型三入 肉桂×2＋鳳梨肉桂磅
     category: combo
+    group: 禮盒組
     price: 560
     cost: null
     contains:
@@ -132,6 +137,7 @@ products:
   方型4入_肉桂蘋果:
     display_name: 方型四入 肉桂×2＋蘋果×2
     category: combo
+    group: 禮盒組
     price: 440
     cost: null
     contains:
@@ -152,6 +158,7 @@ products:
   經典肉桂捲6入:
     display_name: 經典肉桂捲 六入禮盒
     category: combo
+    group: 禮盒組
     price: 600
     cost: null
     contains:
@@ -169,6 +176,7 @@ products:
   蘋果肉桂捲6入:
     display_name: 蘋果肉桂捲 六入禮盒
     category: combo
+    group: 禮盒組
     price: 700
     cost: null
     contains:
@@ -186,6 +194,7 @@ products:
   長型6入_混合:
     display_name: 長型六入 肉桂×3＋蘋果×2＋堅果醬
     category: combo
+    group: 禮盒組
     price: 640
     cost: null
     contains:
@@ -205,6 +214,7 @@ products:
   長型4入_兩磅:
     display_name: 無敵組盒 肉桂×2＋芝麻焙茶磅＋鳳梨肉桂磅
     category: combo
+    group: 禮盒組
     price: 920
     cost: null
     contains:
@@ -222,6 +232,7 @@ products:
   長型3入_三磅:
     display_name: 長型三入 蘋果肉桂麵包＋芝麻焙茶磅＋鳳梨肉桂磅
     category: combo
+    group: 禮盒組
     price: 920
     cost: null
     contains:
@@ -243,6 +254,7 @@ products:
   原味巴斯克:
     display_name: 原味巴斯克
     category: single
+    group: 巴斯克
     price: 650
     wholesale_price: 450     # 駐店供貨公定價（Yen 2026-07-06 依供貨表）
     cost: null
@@ -259,6 +271,7 @@ products:
   白玉原味巴斯克:
     display_name: 白玉原味巴斯克
     category: single
+    group: 巴斯克
     price: 750           # 原味 650 + 白玉夾餡升級 100
     cost: null
     contains:
@@ -273,6 +286,7 @@ products:
   芝麻巴斯克:
     display_name: 芝麻巴斯克
     category: single
+    group: 巴斯克
     price: 720
     wholesale_price: 520     # 駐店供貨公定價
     cost: null
@@ -289,6 +303,7 @@ products:
   白玉芝麻巴斯克:
     display_name: 白玉芝麻巴斯克
     category: single
+    group: 巴斯克
     price: 820           # 芝麻 720 + 白玉 100
     cost: null
     contains:
@@ -309,6 +324,7 @@ products:
   焙茶巴斯克:              # 純焙茶（無栗子）= $880
     display_name: 焙茶巴斯克（純焙茶）
     category: single
+    group: 巴斯克
     price: 880
     cost: null
     contains:
@@ -327,6 +343,7 @@ products:
   焙茶栗子巴斯克:            # 有栗子 = $980
     display_name: 焙茶栗子巴斯克
     category: single
+    group: 巴斯克
     price: 980
     wholesale_price: 650     # 駐店供貨公定價
     cost: null
@@ -345,6 +362,7 @@ products:
   白玉烏龍茶巴斯克:
     display_name: 白玉烏龍茶巴斯克
     category: single
+    group: 巴斯克
     price: 980
     wholesale_price: 650     # 駐店供貨公定價
     cost: null
@@ -363,6 +381,7 @@ products:
   香料堅果醬90ml:
     display_name: 香料堅果醬 90ml
     category: single
+    group: 堅果醬
     price: 200
     cost: null
     contains:
@@ -380,6 +399,7 @@ products:
   香料堅果醬240ml:
     display_name: 香料堅果醬 240ml
     category: single
+    group: 堅果醬
     price: 500
     cost: null
     contains:
@@ -398,6 +418,7 @@ products:
   肉桂捲_單品:
     display_name: 肉桂捲（單顆）
     category: single
+    group: 肉桂捲
     price: null
     wholesale_price: 70
     cost: 20.90
@@ -412,6 +433,7 @@ products:
   蘋果肉桂捲_單品:
     display_name: 蘋果肉桂捲（單顆）
     category: single
+    group: 肉桂捲
     price: null
     wholesale_price: 85
     cost: 30.13
@@ -426,6 +448,7 @@ products:
   芝麻焙茶奶酥磅蛋糕_單品:
     display_name: 芝麻焙茶奶酥磅蛋糕（整顆）
     category: single
+    group: 磅蛋糕
     price: null
     wholesale_price: 260
     cost: 98.52
@@ -440,6 +463,7 @@ products:
   鳳梨肉桂奶酥磅蛋糕_單品:
     display_name: 鳳梨肉桂奶酥磅蛋糕（整顆）
     category: single
+    group: 磅蛋糕
     price: null
     wholesale_price: 260
     cost: 103.37
@@ -455,6 +479,7 @@ products:
   無麩烤餅_單品:
     display_name: 無麩烤餅（單顆·研發中）
     category: single
+    group: 其他
     status: draft
     price: null
     wholesale_price: null
@@ -475,6 +500,7 @@ products:
   瑕疵小脆捲10顆:
     display_name: 瑕疵小脆捲 10 顆
     category: single
+    group: 其他
     price: 500
     cost: null
     contains:

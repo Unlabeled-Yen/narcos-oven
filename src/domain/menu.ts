@@ -8,7 +8,7 @@
  *   3. 找不到 → 回 null（進 pending_product）
  */
 import { load as yamlLoad } from "js-yaml";
-import { MenuSchema, type Menu, type Product } from "./models";
+import { MenuSchema, PRODUCT_GROUP_ORDER, type Menu, type Product } from "./models";
 
 /** 從 raw yaml text 載入並驗證 menu。 */
 export function loadMenu(yamlText: string): Menu {
@@ -70,4 +70,38 @@ export function explodeToAtoms(
 /** 取 SKU 顯示名。 */
 export function getDisplayName(skuId: string, menu: Menu): string {
   return menu.products[skuId]?.display_name ?? skuId;
+}
+
+export type ProductGroupBucket = {
+  group: string;
+  items: Array<{ skuId: string; product: Product }>;
+};
+
+/**
+ * #3 手打單品項分類：把 menu.products 依 product.group 分組、組內依
+ * display_name 排序。傳 allowedSkuIds 可限定子集（駐店模式只顯示該店供貨
+ * 品項）——限定後每個 SKU 仍照它在 menu.yaml 裡的 group 歸類，不會因為
+ * 子集而改變分類，也不會漏掉或多出任何一個允許的 SKU。
+ */
+export function groupProducts(
+  menu: Menu,
+  allowedSkuIds?: string[]
+): ProductGroupBucket[] {
+  const allowed = allowedSkuIds ? new Set(allowedSkuIds) : null;
+  const buckets = new Map<string, Array<{ skuId: string; product: Product }>>();
+  for (const [skuId, product] of Object.entries(menu.products)) {
+    if (allowed && !allowed.has(skuId)) continue;
+    const g = product.group;
+    if (!buckets.has(g)) buckets.set(g, []);
+    buckets.get(g)!.push({ skuId, product });
+  }
+  for (const items of buckets.values()) {
+    items.sort((a, b) => a.product.display_name.localeCompare(b.product.display_name));
+  }
+  const ordered: ProductGroupBucket[] = [];
+  for (const g of PRODUCT_GROUP_ORDER) {
+    const items = buckets.get(g);
+    if (items) ordered.push({ group: g, items });
+  }
+  return ordered;
 }
