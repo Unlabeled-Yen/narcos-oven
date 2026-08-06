@@ -12,8 +12,8 @@
       "item_line_count": 59,
       "payout_eligible_order_count": 47,
       "payout_gross_total": 29247,
-      "payout_cogs_total": 6581.11,
-      "payout_net_profit": 18670.89,
+      "payout_cogs_total": 6104.56,
+      "payout_net_profit": 19147.44,
       "payout_is_estimated": true,
       "raw_row_count": 50
     },
@@ -27,8 +27,8 @@
       "item_line_count": 10,
       "payout_eligible_order_count": 8,
       "payout_gross_total": 5610,
-      "payout_cogs_total": 1408.15,
-      "payout_net_profit": 3521.85,
+      "payout_cogs_total": 1302.25,
+      "payout_net_profit": 3627.75,
       "payout_is_estimated": true,
       "raw_row_count": 8
     },
@@ -44,8 +44,8 @@
       "item_line_count": 27,
       "payout_eligible_order_count": 13,
       "payout_gross_total": 12840,
-      "payout_cogs_total": 3502.18,
-      "payout_net_profit": 8882.82,
+      "payout_cogs_total": 3131.53,
+      "payout_net_profit": 9253.47,
       "payout_is_estimated": true,
       "raw_row_count": 25
     },

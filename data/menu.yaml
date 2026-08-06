@@ -156,7 +156,7 @@ products:
     cost: null
     contains:
       - {atom: 肉桂捲, count: 5}
-      - {atom: 香料堅果醬90ml, count: 1}
+      - {atom: 香料堅果醬40ml, count: 1}  # Yen 2026-08-06 修正：組合附醬一律 40ml、90ml 為單買
     aliases:
       - 經典肉桂捲 六入禮盒（五顆肉桂捲＋一盒香料堅果醬）
       - 經典肉桂捲 六入禮盒（肉桂捲x5＋香料堅果醬x1）
@@ -173,7 +173,7 @@ products:
     cost: null
     contains:
       - {atom: 蘋果肉桂捲, count: 5}
-      - {atom: 香料堅果醬90ml, count: 1}
+      - {atom: 香料堅果醬40ml, count: 1}  # Yen 2026-08-06 修正：組合附醬一律 40ml、90ml 為單買
     aliases:
       - 蘋果肉桂捲 禮盒組 六入禮盒（五顆蘋果肉桂捲＋一盒香料堅果醬）
       - 蘋果肉桂捲 禮盒組 六入禮盒（蘋果肉桂捲x5＋香料堅果醬x1）
@@ -191,7 +191,7 @@ products:
     contains:
       - {atom: 肉桂捲, count: 3}
       - {atom: 蘋果肉桂捲, count: 2}
-      - {atom: 香料堅果醬90ml, count: 1}
+      - {atom: 香料堅果醬40ml, count: 1}  # Yen 2026-08-06 修正：組合附醬一律 40ml、90ml 為單買
     aliases:
       - 我想要組合 ✧ 長型禮盒組 六入組 肉桂捲x3＋蘋果肉桂捲x2＋香料堅果醬x1
       - 我想要組合 ✧ 長型禮盒組 三顆肉桂捲＋兩顆蘋果肉桂捲＋一個香料堅果醬
