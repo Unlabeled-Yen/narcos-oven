@@ -1,9 +1,10 @@
 /**
  * LabelsPage 的子元件（LabelCard / LabelPage）。
  *
- * 依真實出貨標籤 JPG 重寫（2026-07-03）：
- *   純白紙、黑字、置中、三張一頁、虛線裁切。
- *   通路差異只在 top_line / mid_line / bottom_line 的字級與意涵。
+ * #1 2026-08-06 改版：真實尺寸 4cm×3cm、一標一頁（Xprinter XP-P3301B，
+ * 見 src/domain/label-layout.ts）。畫面預覽用 CSS transform 放大同一份
+ * mm/pt 標記的 DOM，列印時 transform 歸零——預覽跟印出來的東西是同一份
+ * 標記、不是兩套樣式，不會有「畫面看起來對、印出來不對」的落差。
  *
  * label-data.ts 的三行契約：
  *   賣貨便: top=訂單後5碼 | mid=分盒編號+品項簡稱 | bottom=門市
@@ -12,6 +13,7 @@
  *   宅配/待分類：走面交同版式
  */
 import type { LabelData } from "../../output/label-data";
+import { type LabelLayout, mmToPx, truncateForLabel } from "../../domain/label-layout";
 
 // ── 字型常數 ──────────────────────────────────────────────────
 export const F = {
@@ -35,47 +37,49 @@ export const C = {
   accHex: "#F5D400",
   red: "#E5352B",
   orange: "#E5622A",
-  // 標籤紙（依真實 JPG）：純白 + 黑字 + 灰虛線
+  // 標籤紙：純白 + 純黑字（203dpi 單色熱感應——彩色對比反而更差，見 label-layout.ts）
   paper: "#FFFFFF",
-  paperInk: "#0B0B0C",
-  paperMut: "#8A8A8A",
+  paperInk: "#000000",
   dash: "#B8B8B8",
 } as const;
 
-export const LABEL_W = 590;
-export const LABEL_H = 315;
-export const LABELS_PER_PAGE = 3;
+/** 螢幕預覽放大倍率（只影響畫面、不影響列印——列印永遠是 layout 的真實 mm） */
+const PREVIEW_ZOOM = 4;
 
-// ── 單張標籤（極簡黑白） ─────────────────────────────────────
-export function LabelCard({
-  label,
-  isLast,
-}: {
-  label: LabelData;
-  isLast: boolean;
-  sizeLabel?: string;
-}) {
+// ── 單張標籤（真實 mm/pt、一標一頁） ─────────────────────────
+export function LabelCard({ label, layout }: { label: LabelData; layout: LabelLayout }) {
   const isSellerBuy = label.kind === "賣貨便";
   const isKOL = label.kind === "KOL";
-  // 面交 / 宅配 / 待分類 共用同版式（頂部通路大字）
+  const { fontPt, maxChars, safetyMarginMm } = layout;
+
+  const topText = truncateForLabel(label.top_line, maxChars.top);
+  const midText = truncateForLabel(label.mid_line, maxChars.mid);
+  const bottomText = truncateForLabel(label.bottom_line, maxChars.bottom);
+
+  const lineClamp: React.CSSProperties = {
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    maxWidth: "100%",
+  };
 
   return (
     <div
+      className="label-card"
       style={{
-        position: "relative",
-        width: LABEL_W,
-        height: LABEL_H,
+        width: `${layout.pageWidthMm}mm`,
+        height: `${layout.pageHeightMm}mm`,
         background: C.paper,
-        borderBottom: isLast ? "none" : `1.5px dashed ${C.dash}`,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "22px 24px 18px",
+        padding: `${safetyMarginMm}mm`,
         boxSizing: "border-box",
+        overflow: "hidden",
       }}
     >
-      {/* 上區塊：三行主資訊 */}
+      {/* 上區塊：top + mid */}
       <div
         style={{
           display: "flex",
@@ -83,159 +87,102 @@ export function LabelCard({
           alignItems: "center",
           justifyContent: "center",
           flex: 1,
-          gap: 6,
+          gap: "0.15em",
           width: "100%",
+          minHeight: 0,
         }}
       >
-        {/* Top line：通路頭銜或訂單編號 */}
-        {isSellerBuy ? (
-          // 賣貨便：訂單後 5 碼，最大 Anton
-          <div
-            style={{
-              fontFamily: F.anton,
-              fontSize: 82,
-              color: C.paperInk,
-              lineHeight: 0.9,
-              letterSpacing: "0.02em",
-            }}
-          >
-            {label.top_line}
-          </div>
-        ) : isKOL ? (
-          // KOL：頂 "KOL" Anton 極大
-          <div
-            style={{
-              fontFamily: F.anton,
-              fontSize: 76,
-              color: C.paperInk,
-              lineHeight: 0.9,
-              letterSpacing: "0.05em",
-            }}
-          >
-            {label.top_line}
-          </div>
-        ) : (
-          // 面交/宅配/待分類：頂 = 通路大字（中壢面交/台中面交/面交/宅配/待分類）
-          <div
-            style={{
-              fontFamily: F.tc,
-              fontWeight: 900,
-              fontSize: 52,
-              color: C.paperInk,
-              lineHeight: 1,
-              letterSpacing: "0.04em",
-            }}
-          >
-            {label.top_line}
-          </div>
-        )}
+        <div
+          style={{
+            fontFamily: isSellerBuy || isKOL ? F.anton : F.tc,
+            fontWeight: 900,
+            fontSize: `${fontPt.top}pt`,
+            color: C.paperInk,
+            lineHeight: 1.05,
+            letterSpacing: "0.02em",
+            ...lineClamp,
+          }}
+        >
+          {topText}
+        </div>
 
-        {/* Mid line：KOL 是 @handle 放大，其他是分盒+品項 */}
-        {isKOL ? (
-          <div
-            style={{
-              fontFamily: F.tc,
-              fontWeight: 500,
-              fontSize: 34,
-              color: C.paperInk,
-              lineHeight: 1.1,
-              marginTop: 4,
-            }}
-          >
-            {label.mid_line}
-          </div>
-        ) : (
-          <div
-            style={{
-              fontFamily: F.tc,
-              fontWeight: 500,
-              fontSize: 26,
-              color: C.paperInk,
-              lineHeight: 1.15,
-              marginTop: 2,
-              textAlign: "center",
-            }}
-          >
-            {label.mid_line}
-          </div>
-        )}
+        <div
+          style={{
+            fontFamily: F.tc,
+            fontWeight: 700,
+            fontSize: `${fontPt.mid}pt`,
+            color: C.paperInk,
+            lineHeight: 1.15,
+            textAlign: "center",
+            ...lineClamp,
+          }}
+        >
+          {midText}
+        </div>
       </div>
 
-      {/* 下區塊：底部灰字（門市 / IG / 分盒+品項） */}
+      {/* 下區塊：bottom */}
       <div
         style={{
           fontFamily: F.tc,
-          fontWeight: 500,
-          fontSize: isKOL ? 20 : 18,
-          color: C.paperMut,
+          fontWeight: 600,
+          fontSize: `${fontPt.bottom}pt`,
+          color: C.paperInk,
           textAlign: "center",
           width: "100%",
+          ...lineClamp,
         }}
       >
-        {label.bottom_line}
+        {bottomText}
       </div>
 
-      {/* 資料不一致警告（極小、右下角） */}
+      {/* 資料不一致警告——純黑（熱感應對顏色沒語意）、靠 ⚠ 符號辨識而非顏色 */}
       {label.warning && (
         <div
           style={{
             position: "absolute",
-            bottom: 3,
-            right: 8,
+            bottom: "1mm",
+            right: "1mm",
             fontFamily: F.mono,
-            fontSize: 8,
-            color: C.red,
+            fontWeight: 600,
+            fontSize: `${fontPt.warning}pt`,
+            color: C.paperInk,
           }}
         >
-          ⚠ {label.warning}
+          ⚠
         </div>
       )}
     </div>
   );
 }
 
-// ── 一頁（最多 3 張） ────────────────────────────────────────
-export function LabelPage({
-  labels,
-}: {
-  labels: LabelData[];
-  sizeLabel?: string;
-  pageIndex?: number;
-  totalPages?: number;
-}) {
+// ── 一頁 = 一張標籤（螢幕預覽用 transform 放大，列印時歸零） ──
+export function LabelPage({ label, layout }: { label: LabelData; layout: LabelLayout }) {
+  const wPx = mmToPx(layout.pageWidthMm);
+  const hPx = mmToPx(layout.pageHeightMm);
   return (
     <div
+      className="label-page"
       style={{
-        background: C.paper,
-        width: LABEL_W,
+        width: wPx * PREVIEW_ZOOM,
+        height: hPx * PREVIEW_ZOOM,
         maxWidth: "100%",
         boxShadow: "0 30px 70px rgba(0,0,0,.5)",
-        display: "flex",
-        flexDirection: "column",
+        overflow: "hidden",
       }}
-      className="label-page"
     >
-      {labels.map((l, i) => (
-        <LabelCard
-          key={`${l.order_id}-${l.index}`}
-          label={l}
-          isLast={i === labels.length - 1}
-        />
-      ))}
-      {/* 不足 3 張時補空白留位（列印對齊用） */}
-      {labels.length < LABELS_PER_PAGE &&
-        Array.from({ length: LABELS_PER_PAGE - labels.length }).map((_, i) => (
-          <div
-            key={`empty-${i}`}
-            style={{
-              width: LABEL_W,
-              height: LABEL_H,
-              background: C.paper,
-              borderTop: `1.5px dashed ${C.dash}`,
-              opacity: 0.3,
-            }}
-          />
-        ))}
+      <div
+        className="label-page-zoom"
+        style={{
+          width: `${layout.pageWidthMm}mm`,
+          height: `${layout.pageHeightMm}mm`,
+          transform: `scale(${PREVIEW_ZOOM})`,
+          transformOrigin: "top left",
+          position: "relative",
+        }}
+      >
+        <LabelCard label={label} layout={layout} />
+      </div>
     </div>
   );
 }

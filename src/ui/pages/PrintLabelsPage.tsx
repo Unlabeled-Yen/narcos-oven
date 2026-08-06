@@ -1,22 +1,22 @@
 /**
  * PrintLabelsPage · 印標籤（熱感紙預覽 + 印出 · Yen 2026-07-04 從 LabelsPage 拆出）
  *
+ * #1 2026-08-06 改版：真實尺寸 4cm×3cm、一標一頁（Xprinter XP-P3301B 熱感應
+ * 標籤機，203dpi）。@page size 跟著選的尺寸走，不再是固定「每頁 3 張」的
+ * 文案版面——見 src/domain/label-layout.ts。
+ *
  * 左控制欄：批次選擇、尺寸切換、標籤規則、總數計算、印出按鈕
- * 右預覽（淺色熱感紙 #F5F1E6）：每頁 3 張直排 + 虛線裁切線
+ * 右預覽：畫面用 CSS transform 放大同一份 mm/pt 標記（跟列印同源，不會
+ *         有「畫面看起來對、印出來不對」的落差）
  *
  * LabelsPage 現在只負責出貨明細（BatchDetailPanel）· 印標籤獨立為此頁
  */
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { extractLabels } from "../../output/label-data";
 import type { PageProps } from "./types";
-import { F, C, LABELS_PER_PAGE, LabelPage } from "./LabelsPage.helpers";
+import { F, C, LabelPage } from "./LabelsPage.helpers";
+import { labelLayout, pagesFor, LABEL_PRESET_ORDER, type LabelPresetKey } from "../../domain/label-layout";
 import { loadDayOverrides, makeDayTypeOf, shippingDayFor } from "../../domain/day-type";
-
-const SIZES = [
-  { key: "60x90", label: "60×90mm", note: "熱感應標籤機預設" },
-  { key: "75x120", label: "75×120mm", note: "200 DPI 換算" },
-] as const;
-type SizeKey = (typeof SIZES)[number]["key"];
 
 export function PrintLabelsPage({ orders, menu }: PageProps) {
   const dayTypeOf = useMemo(() => makeDayTypeOf(menu, loadDayOverrides()), [menu]);
@@ -42,11 +42,11 @@ export function PrintLabelsPage({ orders, menu }: PageProps) {
       setSelectedBatch(shippingBatchDates[shippingBatchDates.length - 1]!);
     }
   }, [shippingBatchDates.join(",")]);
-  const [size, setSize] = useState<SizeKey>("60x90");
+  const [sizeKey, setSizeKey] = useState<LabelPresetKey>("4x3cm");
   const [previewPage, setPreviewPage] = useState(0);
   const [printing, setPrinting] = useState(false);
 
-  const sizeObj = SIZES.find((s) => s.key === size) ?? SIZES[0]!;
+  const layout = labelLayout(sizeKey);
 
   const batchOrders = useMemo(() => {
     if (!selectedBatch) return [];
@@ -63,17 +63,10 @@ export function PrintLabelsPage({ orders, menu }: PageProps) {
     return out;
   }, [batchOrders, menu, selectedBatch]);
 
-  const pages = useMemo(() => {
-    const result: (typeof allLabels)[] = [];
-    for (let i = 0; i < allLabels.length; i += LABELS_PER_PAGE) {
-      result.push(allLabels.slice(i, i + LABELS_PER_PAGE));
-    }
-    return result;
-  }, [allLabels]);
-
-  const totalPages = pages.length;
+  // 一標一頁：頁數 = 標籤數，不再分批分組
+  const totalPages = pagesFor(allLabels.length, layout);
   const safePageIdx = Math.min(previewPage, Math.max(0, totalPages - 1));
-  const currentPageLabels = pages[safePageIdx] ?? [];
+  const currentLabel = allLabels[safePageIdx];
 
   const orderCount = useMemo(() => new Set(allLabels.map((l) => l.order_id)).size, [allLabels]);
   const nonSellerBuyCount = useMemo(() => allLabels.filter((l) => l.kind !== "賣貨便").length, [allLabels]);
@@ -100,10 +93,13 @@ export function PrintLabelsPage({ orders, menu }: PageProps) {
     <div className="h-full flex flex-col min-h-0" style={{ overflowY: "auto" }}>
       <style>{`
         @media print {
+          @page { ${layout.pageCss} }
           .label-print-area, .label-print-area * { visibility: visible !important; }
           .label-print-area { position: absolute !important; top: 0 !important; left: 0 !important; width: 100% !important; }
-          .label-page { box-shadow: none !important; page-break-after: always; }
+          .label-page { box-shadow: none !important; width: auto !important; height: auto !important; page-break-after: always; }
           .label-page:last-child { page-break-after: auto; }
+          .label-page-zoom { transform: none !important; }
+          .label-card { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
       `}</style>
 
@@ -148,14 +144,14 @@ export function PrintLabelsPage({ orders, menu }: PageProps) {
             )}
 
             <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut2, letterSpacing: ".12em", margin: "16px 0 8px" }}>標籤尺寸</div>
-            <div style={{ display: "flex", gap: 2 }}>
-              {SIZES.map((s) => {
-                const isActive = s.key === size;
+            <div style={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+              {LABEL_PRESET_ORDER.map((key) => {
+                const isActive = key === sizeKey;
                 return (
                   <button
-                    key={s.key}
+                    key={key}
                     type="button"
-                    onClick={() => setSize(s.key)}
+                    onClick={() => { setSizeKey(key); setPreviewPage(0); }}
                     style={{
                       fontFamily: F.mono, fontSize: 12,
                       color: isActive ? "#0B0B0C" : C.mut2,
@@ -164,13 +160,13 @@ export function PrintLabelsPage({ orders, menu }: PageProps) {
                       cursor: "pointer", fontWeight: isActive ? 700 : 400,
                     }}
                   >
-                    {s.label}
+                    {labelLayout(key).displayLabel}
                   </button>
                 );
               })}
             </div>
             <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut3, lineHeight: 1.7, marginTop: 10 }}>
-              單張 590×315px（1.87:1）· 每頁 3 張直排、虛線分隔 · {sizeObj.note}
+              真實尺寸 {layout.pageWidthMm}×{layout.pageHeightMm}mm · 一標一頁
             </div>
           </div>
 
@@ -220,7 +216,7 @@ export function PrintLabelsPage({ orders, menu }: PageProps) {
         {/* 右預覽 */}
         <div className="labels-preview" style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 10, minHeight: 0, overflowY: "auto" }}>
           <div style={{ fontFamily: F.mono, fontSize: 11, color: C.mut3 }}>
-            {isEmpty ? "（無標籤）" : `預覽 · 第 ${safePageIdx + 1} 頁 / ${totalPages} · ${sizeObj.label}`}
+            {isEmpty ? "（無標籤）" : `預覽 · 第 ${safePageIdx + 1} 張 / 共 ${totalPages} 張 · ${layout.displayLabel}`}
           </div>
 
           {isEmpty && (
@@ -240,17 +236,10 @@ export function PrintLabelsPage({ orders, menu }: PageProps) {
             </div>
           )}
 
-          {!isEmpty && (
-            <LabelPage
-              labels={currentPageLabels}
-              sizeLabel={sizeObj.label}
-              pageIndex={safePageIdx}
-              totalPages={totalPages}
-            />
-          )}
+          {!isEmpty && currentLabel && <LabelPage label={currentLabel} layout={layout} />}
 
           {!isEmpty && totalPages > 1 && (
-            <div style={{ display: "flex", gap: 6, alignSelf: "center", marginTop: 4 }}>
+            <div style={{ display: "flex", gap: 6, alignSelf: "center", marginTop: 4, flexWrap: "wrap", maxWidth: 590 }}>
               {Array.from({ length: totalPages }).map((_, i) => {
                 const isActive = i === safePageIdx;
                 return (
@@ -277,14 +266,8 @@ export function PrintLabelsPage({ orders, menu }: PageProps) {
 
       {/* Label Print Area · 螢幕隱藏、印時透過 body.printing-labels 顯示 */}
       <div className="label-print-area" style={{ display: "none" }} aria-hidden="true">
-        {pages.map((pageLabels, pi) => (
-          <LabelPage
-            key={pi}
-            labels={pageLabels}
-            sizeLabel={sizeObj.label}
-            pageIndex={pi}
-            totalPages={totalPages}
-          />
+        {allLabels.map((label, i) => (
+          <LabelPage key={`${label.order_id}-${label.index}-${i}`} label={label} layout={layout} />
         ))}
       </div>
     </div>
