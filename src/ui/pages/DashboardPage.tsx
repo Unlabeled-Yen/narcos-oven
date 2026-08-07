@@ -27,6 +27,7 @@ import {
   computeChannelShare,
   computeRepeatCustomers,
   computeHealthChecks,
+  codUnsettledSummary,
   resolvePeriodWindow,
   monthAlignedWindow,
   type HealthCheck,
@@ -289,6 +290,7 @@ export function DashboardPage({ orders, menu, refreshOrders }: PageProps) {
   const repeatStats = useMemo(() => computeRepeatCustomers(orders, win), [orders, win]);
   const healthChecks = useMemo(() => computeHealthChecks(orders), [orders]);
   const releaseGate = useMemo(() => checkReleaseGate(orders), [orders]);
+  const codUnsettled = useMemo(() => codUnsettledSummary(orders), [orders]);
 
   // 鍵盤翻頁。沿用專案既有的鍵盤流文化（待處理桶用 J/K、排程用 ‹ ›）。
   useEffect(() => {
@@ -430,6 +432,21 @@ export function DashboardPage({ orders, menu, refreshOrders }: PageProps) {
 
       {/* ── 釘住層 2：產出閘門燈號 ───────────────────────────────── */}
       <HealthStrip checks={healthChecks} gate={releaseGate} />
+
+      {/* #9 2026-08-06：貨到付款未入帳提示——純資訊、不擋出爐，只有真的有未入帳才長出來 */}
+      {codUnsettled.count > 0 && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "8px 24px", background: "#181114", borderTop: `1px solid ${EMBER}`,
+        }}>
+          <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 12, color: EMBER, letterSpacing: ".05em" }}>
+            💰 貨到付款未入帳 {codUnsettled.count} 筆 · ${codUnsettled.totalGross.toLocaleString()}
+          </span>
+          <span style={{ fontFamily: F.tc, fontSize: 11, color: "#8A8A93" }}>
+            （c5 狀態 flip 成「付款完成」後自動消失）
+          </span>
+        </div>
+      )}
 
       {/* ── 牌組：P1 趨勢 / P2 結構 · 兩指左右滑翻頁 ─────────────── */}
       <div ref={deckRef} style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>

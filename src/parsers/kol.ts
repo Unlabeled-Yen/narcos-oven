@@ -184,6 +184,7 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
       override_unit_price: null,
       freight_cost: 0,
       settled: false,
+      payment_method: null, // KOL 無 c9 概念
       pendingReasons: [],
       rawSource: {
         file: w.source_file,
@@ -263,6 +264,7 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
     override_unit_price: null,
     freight_cost: 0,
     settled: false,
+    payment_method: null, // KOL 無 c9 概念
     pendingReasons,
     rawSource: {
       file: w.source_file,

@@ -332,8 +332,18 @@ export function OrdersPage({ orders, menu, refreshOrders }: PageProps) {
                   <span style={{ fontFamily: F.mono, fontSize: 11, color: "#8A8A93" }}>
                     {o.batchDate ?? "待排"}
                   </span>
-                  <span style={{ fontFamily: F.mono, fontSize: 11, color: "#E7E7EA", textAlign: "right" }}>
-                    {amountStr}
+                  <span style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
+                    {o.payment_method === "取貨付款" && (
+                      <span
+                        title="貨到付款 · 金流尚未收（除非 c5 已 flip 成付款完成）"
+                        style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 9, color: "#E5622A", border: "1px solid #E5622A", padding: "1px 4px", whiteSpace: "nowrap" }}
+                      >
+                        💰 貨到付款
+                      </span>
+                    )}
+                    <span style={{ fontFamily: F.mono, fontSize: 11, color: "#E7E7EA", textAlign: "right" }}>
+                      {amountStr}
+                    </span>
                   </span>
                   <span style={{ fontFamily: F.mono, fontSize: 11, color: "#6C6C74", textAlign: "center" }}>
                     {o.labelCount > 0 ? String(o.labelCount) : "—"}

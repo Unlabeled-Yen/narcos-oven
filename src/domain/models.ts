@@ -330,6 +330,11 @@ export const OrderSchema = z.object({
   freight_cost: z.number().nonnegative().default(0),
   settled: z.boolean().default(false),
 
+  // Yen 2026-08-06（#9）：賣貨便「付款方式」欄（c9）。null = 未知/該通路無此概念。
+  // "取貨付款" 時訂單可出貨（見 seller-buy.ts），金流是否已收要另看
+  // snapshot.c5_status 是否已 flip 成「付款完成」。
+  payment_method: z.string().nullable().default(null),
+
   pendingReasons: z.array(PendingReasonSchema).default([]),
   rawSource: z.object({
     file: z.string(),

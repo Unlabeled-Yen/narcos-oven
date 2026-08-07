@@ -322,6 +322,14 @@ function OrderCard({ order: o, menu, color }: { order: Order; menu: Menu; color:
               下單 {shortDate(o.order_date)}
             </span>
           )}
+          {o.payment_method === "取貨付款" && (
+            <span
+              title="貨到付款 · 金流尚未收（除非 c5 已 flip 成付款完成）"
+              style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 10, color: "#E5622A", border: "1px solid #E5622A", padding: "1px 5px" }}
+            >
+              💰 貨到付款
+            </span>
+          )}
         </div>
         <div className="flex items-baseline" style={{ gap: 4 }}>
           <span style={{ fontFamily: F.anton, fontSize: 18, color }}>{o.labelCount}</span>

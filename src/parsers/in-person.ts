@@ -237,6 +237,7 @@ export function parseInPersonRows(
       labelCount,
       shop_partner: null,
       override_unit_price: null,
+      payment_method: null, // 面交無 c9 概念
       freight_cost: 0,
       settled: false,
       pendingReasons,

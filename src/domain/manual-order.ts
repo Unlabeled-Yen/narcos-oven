@@ -122,6 +122,7 @@ export function buildManualOrder(input: ManualOrderInput, menu: Menu): Order {
     override_unit_price: input.override_unit_price ?? null,
     freight_cost: input.freight_cost ?? 0,
     settled: input.settled ?? false,
+    payment_method: null, // 手打單無 c9 概念
     pendingReasons,
     rawSource: {
       file: "手打單",

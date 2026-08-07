@@ -487,6 +487,30 @@ export type HealthCheck = {
  * blocking：只有「無缺漏紀錄 / 無異常異動」非綠會擋出爐（見 release-gate.ts）。
  * 「筆數一致 / 金額一致」非綠只是視覺提示、不擋。
  */
+// ─── 貨到付款未入帳（#9 2026-08-06）──────────────────────────────────────────
+
+export type CodUnsettledSummary = {
+  count: number;
+  totalGross: number;
+  orderIds: string[];
+};
+
+/**
+ * 「取貨付款」單可以出貨（見 seller-buy.ts），但金流是否已收要另看
+ * snapshot.c5_status 有沒有 flip 成「付款完成」。這裡算的是還沒收到錢的
+ * 那批，供儀表板顯示提示卡——不擋任何流程，純資訊。
+ */
+export function codUnsettledSummary(orders: Order[]): CodUnsettledSummary {
+  const unsettled = orders.filter(
+    (o) => o.payment_method === "取貨付款" && !o.snapshot.c5_status.includes("付款完成")
+  );
+  return {
+    count: unsettled.length,
+    totalGross: unsettled.reduce((s, o) => s + o.revenue.grossTotal, 0),
+    orderIds: unsettled.map((o) => o.id),
+  };
+}
+
 export function computeHealthChecks(orders: Order[]): HealthCheck[] {
   const nonCanceled = orders.filter((o) => o.status !== "canceled");
 

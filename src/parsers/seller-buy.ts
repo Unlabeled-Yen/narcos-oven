@@ -98,6 +98,7 @@ type RawItem = {
 type WipOrder = {
   order_id: string;
   status_raw: string;
+  payment_method_raw: string | null;
   c22: number | null;
   freight: number | null;
   discount: number;
@@ -119,6 +120,7 @@ function beginOrder(r: unknown[], rowIndex: number, sourceFile: string): WipOrde
   return {
     order_id: String(r[4]).trim(),
     status_raw: r[5] != null ? String(r[5]) : "",
+    payment_method_raw: r[9] != null ? String(r[9]) : null,
     c22: toNum(r[22]),
     freight: toNum(r[17]),
     discount: (toNum(r[18]) ?? 0) + (toNum(r[19]) ?? 0) + (toNum(r[20]) ?? 0),
@@ -145,9 +147,15 @@ function makeRawItem(r: unknown[]): RawItem {
 function finalizeOrder(w: WipOrder, menu: Menu): Order {
   const pendingReasons: PendingReason[] = [];
 
+  // ---- Yen 2026-08-06（#9）：c9 付款方式 ----
+  // 「取貨付款」= 貨到付款，出貨前金流本就不會顯示付款完成，
+  // 不能跟「訂單成立、可能棄單」的一般未付款單混為一談。
+  const isCOD = (w.payment_method_raw ?? "").includes("取貨付款");
+  const paymentMethod = w.payment_method_raw?.split("\n")[0]?.trim() || null;
+
   // ---- 憲章 Stage 1: 付款 filter ----
   const paid = w.status_raw.includes("付款完成");
-  if (!paid) {
+  if (!paid && !isCOD) {
     pendingReasons.push({
       code: "PAYMENT_NOT_CONFIRMED",
       humanMessage: `訂單 ${w.order_id} 尚未付款（狀態：${w.status_raw.split("\n")[0]}）`,
@@ -255,6 +263,7 @@ function finalizeOrder(w: WipOrder, menu: Menu): Order {
     override_unit_price: null,
     freight_cost: 0,
     settled: false,
+    payment_method: paymentMethod,
     pendingReasons,
     rawSource: {
       file: w.sourceFile,

@@ -5,15 +5,14 @@
       "label": "seller-buy/1.xlsx",
       "order_count": 50,
       "by_status": {
-        "confirmed": 47,
-        "pending_payment": 3
+        "confirmed": 50
       },
       "gross_total_sum": 32455,
       "item_line_count": 59,
-      "payout_eligible_order_count": 47,
-      "payout_gross_total": 29247,
-      "payout_cogs_total": 6104.56,
-      "payout_net_profit": 19147.44,
+      "payout_eligible_order_count": 50,
+      "payout_gross_total": 32455,
+      "payout_cogs_total": 6783.15,
+      "payout_net_profit": 21421.85,
       "payout_is_estimated": true,
       "raw_row_count": 50
     },
