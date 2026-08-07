@@ -28,7 +28,8 @@ function sourceOf(channel: string): SourceKind | "other" {
 export type SanityCode =
   | "PAYMENT_REVERSAL"
   | "ORDER_DATE_REGRESSION"
-  | "MASSIVE_DISAPPEARANCE";
+  | "MASSIVE_DISAPPEARANCE"
+  | "ZERO_WISH_DATE";
 
 export type Severity = "notice" | "warn" | "critical";
 
@@ -183,6 +184,24 @@ function checkOneSource(
       title: `[${src}] 這輪最新下單日比目前資料舊 ${daysBack} 天`,
       detail: `目前最新下單日：${maxOrderDateDb}｜這輪 xlsx 最新下單日：${maxOrderDateNew}。若你剛下載的檔應該包含最新訂單、這代表檔源可能拿錯了。`,
     });
+  }
+
+  // D · 這批完全沒有任何指定出貨日（#12 2026-08-06）
+  //   指定日目前唯一來源是 xlsx c12 文字裡的「指定出貨日 M/D」marker——有些
+  //   賣貨便匯出格式不帶這行、系統會靜默當成「這批全都沒指定」。這不一定是
+  //   真的沒人指定，只是這份 xlsx 沒帶到；只有賣貨便通路有這個 marker 概念。
+  if (source === "seller-buy" && newInSrc.some((o) => o.customer_wish_date == null)) {
+    const zeroWishDate = newInSrc.every((o) => o.customer_wish_date == null);
+    if (zeroWishDate) {
+      outWarnings.push({
+        code: "ZERO_WISH_DATE",
+        severity: "notice",
+        source,
+        title: `[${src}] 本批 ${newInSrc.length} 筆訂單未偵測到任何指定出貨日`,
+        detail:
+          "若這批確實有客人指定出貨日、但這份 xlsx 沒帶到，請補拖賣貨便網頁存檔（.htm）——指定日有時只出現在網頁版、xlsx 匯出會漏掉。",
+      });
+    }
   }
 
   return {

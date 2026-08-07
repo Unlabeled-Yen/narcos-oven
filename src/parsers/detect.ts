@@ -1,13 +1,18 @@
 /**
  * 檔案類型智慧辨識
  * 依 sheet name + column header 特徵判斷是賣貨便/面交/KOL/未知
+ * #12 2026-08-06：.htm/.html 一律當賣貨便網頁存檔（唯一會拖 html 進來的情境）
+ *   ——純看副檔名判斷，不嘗試 XLSX.read（binary sniff 對純文字檔沒意義、會直接噴錯）。
  */
 import * as XLSX from "xlsx";
 import { readSheetTolerant } from "../domain/xlsx-tolerant";
 
-export type FileKind = "seller-buy" | "in-person" | "kol" | "unknown";
+export type FileKind = "seller-buy" | "in-person" | "kol" | "seller-buy-html" | "unknown";
 
-export function detectFileKind(buffer: ArrayBuffer): FileKind {
+export function detectFileKind(buffer: ArrayBuffer, fileName?: string): FileKind {
+  if (fileName && /\.html?$/i.test(fileName.trim())) {
+    return "seller-buy-html";
+  }
   const wb = XLSX.read(buffer, { type: "array" });
   const names = wb.SheetNames;
 

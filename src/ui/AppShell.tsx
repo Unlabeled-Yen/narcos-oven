@@ -161,7 +161,7 @@ export function AppShell({
       <input
         ref={fileInputRef}
         type="file"
-        accept=".xlsx"
+        accept=".xlsx,.htm,.html"
         multiple
         hidden
         onChange={(e) => {

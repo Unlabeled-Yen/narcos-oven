@@ -147,6 +147,19 @@ export function buildOptions(o: Order, menu: Menu): OptionEntry[] {
       opts.push({ label: "保留待定", isSuggest: false, value: DEFER_SENTINEL });
       break;
     }
+    case "CONFLICT_DATE_C12_C28": {
+      // #12 2026-08-06：xlsx 指定日 vs html 網頁存檔指定日不一致，讓人擇一。
+      // reason.suggestion = html 給的日期；o.customer_wish_date 維持 xlsx 原值不動。
+      if (o.customer_wish_date && ISO_DATE_RE.test(o.customer_wish_date)) {
+        const [, , mm, dd] = o.customer_wish_date.match(/^(\d{4})-(\d{2})-(\d{2})$/) ?? [];
+        opts.push({ label: `保留 xlsx 指定日 · ${mm}/${dd}`, isSuggest: false, value: o.customer_wish_date });
+      }
+      if (reason.suggestion && ISO_DATE_RE.test(reason.suggestion)) {
+        const [, , mm, dd] = reason.suggestion.match(/^(\d{4})-(\d{2})-(\d{2})$/) ?? [];
+        opts.push({ label: `改用 html 指定日 · ${mm}/${dd}`, isSuggest: highConf, value: reason.suggestion });
+      }
+      break;
+    }
     case "UNKNOWN_PRODUCT": {
       const allSkus = Object.keys(menu.products).slice(0, 9);
       if (reason.suggestion) {
@@ -239,6 +252,24 @@ async function resolveBatchDate(o: Order, date: string): Promise<void> {
   });
 }
 
+async function resolveWishDateConflict(o: Order, date: string): Promise<void> {
+  // 憲章 #2 靜默失效零容忍：拒絕非 ISO 日期，loud 失敗
+  if (!ISO_DATE_RE.test(date)) {
+    // eslint-disable-next-line no-console
+    console.error(`[resolveWishDateConflict] 拒絕非 ISO 日期: ${JSON.stringify(date)} · order ${o.id}`);
+    throw new Error(`指定出貨日必須是 YYYY-MM-DD、收到「${date}」（憲章 #2）`);
+  }
+  // 只補寫 customer_wish_date（雇主拍板要用哪個），不動 batchDate——
+  // 排程仍要雇主另外拖排，跟 MISSING_BATCH_DATE 是不同語意。
+  const filteredReasons = o.pendingReasons.filter((r) => r.code !== "CONFLICT_DATE_C12_C28");
+  await db.orders.update(o.id, {
+    customer_wish_date: date,
+    pendingReasons: filteredReasons,
+    status: filteredReasons.length === 0 ? "confirmed" : o.status,
+    ...autoScheduleIfCleared(o, filteredReasons),
+  });
+}
+
 async function resolveProduct(o: Order, skuId: string, menu: Menu): Promise<void> {
   const atoms = explodeToAtoms(skuId, menu);
   const newItems = o.items.map((it) =>
@@ -288,6 +319,9 @@ export async function resolveOrderByOption(o: Order, optionValue: string, menu: 
       break;
     case "MISSING_BATCH_DATE":
       await resolveBatchDate(o, optionValue); // 內部強制 ISO 檢查
+      break;
+    case "CONFLICT_DATE_C12_C28":
+      await resolveWishDateConflict(o, optionValue); // 內部強制 ISO 檢查
       break;
     case "UNKNOWN_PRODUCT":
       await resolveProduct(o, findSku(optionValue), menu);
