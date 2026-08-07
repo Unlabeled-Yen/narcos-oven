@@ -105,16 +105,58 @@
   /* 5. print-area 內部的互動控制（.no-print 例：🖨 列印按鈕）· 不印 */
   body:not(.printing-labels) .print-area .no-print { display: none !important; }
 
-  /* ── 印標籤流程（body.printing-labels）：只印 .label-print-area ── */
-  body.printing-labels .label-print-area,
-  body.printing-labels .label-print-area * {
-    visibility: visible;
+  /* ── 印標籤 / 印成分表流程（body.printing-labels / body.printing-nutrition）
+     跟上面 .print-area 一樣的 :has() 技巧、只是目標子樹換成
+     .label-print-area / .nutrition-print-area。
+     2026-08-06 補：原本只有 visibility:visible + absolute，沒有真的把
+     其他區塊移出 flow，印出來可能疊到控制欄——比照 .print-area 流程補齊。 */
+  body.printing-labels :has(.label-print-area) {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    width: auto !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    position: static !important;
+    flex: initial !important;
+  }
+  body.printing-labels *:not(:has(.label-print-area)):not(.label-print-area):not(.label-print-area *) {
+    display: none !important;
   }
   body.printing-labels .label-print-area {
     display: block !important;
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
+    position: static !important;
+    width: 100% !important;
+  }
+
+  body.printing-nutrition :has(.nutrition-print-area) {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    width: auto !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    position: static !important;
+    flex: initial !important;
+  }
+  body.printing-nutrition *:not(:has(.nutrition-print-area)):not(.nutrition-print-area):not(.nutrition-print-area *) {
+    display: none !important;
+  }
+  body.printing-nutrition .nutrition-print-area {
+    display: block !important;
+    position: static !important;
     width: 100% !important;
   }
 }

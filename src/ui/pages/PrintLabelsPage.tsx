@@ -17,8 +17,17 @@ import type { PageProps } from "./types";
 import { F, C, LabelPage } from "./LabelsPage.helpers";
 import { labelLayout, pagesFor, LABEL_PRESET_ORDER, type LabelPresetKey } from "../../domain/label-layout";
 import { loadDayOverrides, makeDayTypeOf, shippingDayFor } from "../../domain/day-type";
+import { NutritionLabelsPanel } from "./NutritionLabelsPanel";
+
+const INNER_TABS = [
+  { key: "shipping", label: "出貨標籤" },
+  { key: "nutrition", label: "營養成分表" },
+] as const;
+type InnerTabKey = (typeof INNER_TABS)[number]["key"];
 
 export function PrintLabelsPage({ orders, menu }: PageProps) {
+  const [innerTab, setInnerTab] = useState<InnerTabKey>("shipping");
+
   const dayTypeOf = useMemo(() => makeDayTypeOf(menu, loadDayOverrides()), [menu]);
   const orderBatchMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -33,6 +42,7 @@ export function PrintLabelsPage({ orders, menu }: PageProps) {
     return Array.from(seen).sort();
   }, [orderBatchMap]);
 
+  // #15：印標籤跟營養成分表共用同一個批次選擇器
   const [selectedBatch, setSelectedBatch] = useState<string>(
     shippingBatchDates[shippingBatchDates.length - 1] ?? ""
   );
@@ -42,16 +52,17 @@ export function PrintLabelsPage({ orders, menu }: PageProps) {
       setSelectedBatch(shippingBatchDates[shippingBatchDates.length - 1]!);
     }
   }, [shippingBatchDates.join(",")]);
-  const [sizeKey, setSizeKey] = useState<LabelPresetKey>("4x3cm");
-  const [previewPage, setPreviewPage] = useState(0);
-  const [printing, setPrinting] = useState(false);
-
-  const layout = labelLayout(sizeKey);
 
   const batchOrders = useMemo(() => {
     if (!selectedBatch) return [];
     return orders.filter((o) => orderBatchMap.get(o.id) === selectedBatch);
   }, [orders, orderBatchMap, selectedBatch]);
+
+  const [sizeKey, setSizeKey] = useState<LabelPresetKey>("4x3cm");
+  const [previewPage, setPreviewPage] = useState(0);
+  const [printing, setPrinting] = useState(false);
+
+  const layout = labelLayout(sizeKey);
 
   const allLabels = useMemo(() => {
     if (!selectedBatch || batchOrders.length === 0) return [];
@@ -91,11 +102,12 @@ export function PrintLabelsPage({ orders, menu }: PageProps) {
 
   return (
     <div className="h-full flex flex-col min-h-0" style={{ overflowY: "auto" }}>
+      {/* 「只印 .label-print-area、其餘區塊移出 flow」的規則在 index.css
+          （body.printing-labels 那段、跟 .print-area 同一套 :has() 技巧）。
+          這裡只放版面相關、隨選擇的尺寸而變的規則。 */}
       <style>{`
         @media print {
           @page { ${layout.pageCss} }
-          .label-print-area, .label-print-area * { visibility: visible !important; }
-          .label-print-area { position: absolute !important; top: 0 !important; left: 0 !important; width: 100% !important; }
           .label-page { box-shadow: none !important; width: auto !important; height: auto !important; page-break-after: always; }
           .label-page:last-child { page-break-after: auto; }
           .label-page-zoom { transform: none !important; }
@@ -103,12 +115,70 @@ export function PrintLabelsPage({ orders, menu }: PageProps) {
         }
       `}</style>
 
+      {/* 分頁切換 + 共用批次選擇器（#15：出貨標籤/營養成分表共用同一個批次） */}
+      <div className="no-print" style={{ padding: "16px 24px 0", display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", gap: 2 }}>
+          {INNER_TABS.map((t) => {
+            const isActive = t.key === innerTab;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => { setInnerTab(t.key); setPreviewPage(0); }}
+                style={{
+                  fontFamily: F.tc, fontWeight: 700, fontSize: 13,
+                  color: isActive ? "#0B0B0C" : C.mut2,
+                  background: isActive ? C.acc : C.line2,
+                  padding: "8px 18px", border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ background: C.panel, border: `1px solid ${C.line}`, padding: 16 }}>
+          <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut2, letterSpacing: ".12em", marginBottom: 8 }}>批次</div>
+          {shippingBatchDates.length === 0 ? (
+            <div style={{ fontFamily: F.mono, fontSize: 12, color: C.mut3 }}>（無批次）</div>
+          ) : (
+            <div style={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+              {shippingBatchDates.map((d) => {
+                const isActive = d === selectedBatch;
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => { setSelectedBatch(d); setPreviewPage(0); }}
+                    style={{
+                      fontFamily: F.mono, fontSize: 12,
+                      color: isActive ? "#0B0B0C" : C.mut2,
+                      background: isActive ? C.acc : C.line2,
+                      padding: "7px 14px", border: "none",
+                      cursor: "pointer", fontWeight: isActive ? 700 : 400,
+                    }}
+                  >
+                    {d}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {innerTab === "nutrition" ? (
+        <div style={{ padding: "0 24px 16px", flex: 1, minHeight: 0, display: "flex" }}>
+          <NutritionLabelsPanel batchOrders={batchOrders} menu={menu} selectedBatch={selectedBatch} />
+        </div>
+      ) : (
       <div
         style={{
           display: "grid",
           gridTemplateColumns: "300px 1fr",
           gap: 16,
-          padding: "16px 24px 0",
+          padding: "0 24px 16px",
           flex: 1,
           minHeight: 0,
         }}
@@ -116,34 +186,7 @@ export function PrintLabelsPage({ orders, menu }: PageProps) {
         {/* 左控制欄 */}
         <div className="no-print" style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0, overflowY: "auto" }}>
           <div style={{ background: C.panel, border: `1px solid ${C.line}`, padding: 16 }}>
-            <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut2, letterSpacing: ".12em", marginBottom: 8 }}>批次</div>
-            {shippingBatchDates.length === 0 ? (
-              <div style={{ fontFamily: F.mono, fontSize: 12, color: C.mut3 }}>（無批次）</div>
-            ) : (
-              <div style={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
-                {shippingBatchDates.map((d) => {
-                  const isActive = d === selectedBatch;
-                  return (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => { setSelectedBatch(d); setPreviewPage(0); }}
-                      style={{
-                        fontFamily: F.mono, fontSize: 12,
-                        color: isActive ? "#0B0B0C" : C.mut2,
-                        background: isActive ? C.acc : C.line2,
-                        padding: "7px 14px", border: "none",
-                        cursor: "pointer", fontWeight: isActive ? 700 : 400,
-                      }}
-                    >
-                      {d}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut2, letterSpacing: ".12em", margin: "16px 0 8px" }}>標籤尺寸</div>
+            <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut2, letterSpacing: ".12em", marginBottom: 8 }}>標籤尺寸</div>
             <div style={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
               {LABEL_PRESET_ORDER.map((key) => {
                 const isActive = key === sizeKey;
@@ -263,6 +306,7 @@ export function PrintLabelsPage({ orders, menu }: PageProps) {
           )}
         </div>
       </div>
+      )}
 
       {/* Label Print Area · 螢幕隱藏、印時透過 body.printing-labels 顯示 */}
       <div className="label-print-area" style={{ display: "none" }} aria-hidden="true">

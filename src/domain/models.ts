@@ -11,6 +11,11 @@ export const AtomSchema = z.object({
   // 全成本（食材＋包裝分攤＋營養貼紙 $1）· 每顆/每瓶
   // 資料源：全品項成本總覽 PDF · 版本 2026-07-03
   cost: z.number().nullable().optional(),
+  // Yen 2026-08-06（#15）：src/assets/nutrition/ 底下的檔名（例："肉桂捲.jpg"）。
+  // null = 未決（留空）——匯出時要 loud 警告，不能靜默當免貼；
+  // "none" = 明確確認免貼（例：瑕疵品、研發中品項）。
+  // 兩者語意不同，杜絕「忘了設定」跟「確認免貼」混淆。
+  nutrition_label: z.string().nullable().default(null),
 });
 
 export const MatchSignatureSchema = z.object({

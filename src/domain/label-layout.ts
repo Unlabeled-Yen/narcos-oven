@@ -16,7 +16,7 @@
  * （@page size 同步），不再只是文案。
  */
 
-export type LabelPresetKey = "4x3cm" | "60x90mm" | "75x120mm";
+export type LabelPresetKey = "4x3cm" | "60x90mm" | "75x120mm" | "5x8cm";
 
 export type LabelLayout = {
   key: LabelPresetKey;
@@ -77,8 +77,25 @@ export const LABEL_PRESETS: Record<LabelPresetKey, LabelLayout> = {
     maxChars: { top: 14, mid: 36, bottom: 28 },
     pageCss: "size: 75mm 120mm; margin: 0;",
   },
+  // #15 2026-08-06：營養成分表——內容是現成圖檔滿版列印，不是文字排版，
+  // fontPt/maxChars 對這個 preset無意義（保留欄位只為滿足型別、不會被用到）。
+  "5x8cm": {
+    key: "5x8cm",
+    displayLabel: "5×8cm（營養成分表）",
+    pageWidthMm: 50,
+    pageHeightMm: 80,
+    labelsPerPage: 1,
+    safetyMarginMm: 0,
+    minFontPt: 8,
+    minFontWeight: 600,
+    fontPt: { top: 8, mid: 8, bottom: 8, warning: 8 },
+    maxChars: { top: 0, mid: 0, bottom: 0 },
+    pageCss: "size: 50mm 80mm; margin: 0;",
+  },
 };
 
+/** 出貨標籤尺寸選單順序——5x8cm 是營養成分表專用 preset，不列入這裡，
+ *  不會出現在出貨標籤的尺寸選擇器（兩個功能各自用 labelLayout() 取自己的 key）。 */
 export const LABEL_PRESET_ORDER: LabelPresetKey[] = ["4x3cm", "60x90mm", "75x120mm"];
 
 export function labelLayout(preset: LabelPresetKey): LabelLayout {

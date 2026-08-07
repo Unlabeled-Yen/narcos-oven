@@ -17,24 +17,24 @@
 # 最小可拆解單位。出爐統計以 atom 為單位計數。
 atoms:
   # cost = 全成本/顆（食材＋包裝分攤＋營養標籤貼紙 $1）· 資料源：成本總覽 PDF 2026-07-03
-  肉桂捲: {unit: 顆, cost: 20.90}
-  蘋果肉桂捲: {unit: 顆, cost: 30.13}
-  焦糖蘋果肉桂麵包: {unit: 顆, cost: 46.34}
-  芝麻焙茶奶酥磅蛋糕: {unit: 顆, cost: 98.52}
-  鳳梨肉桂奶酥磅蛋糕: {unit: 顆, cost: 103.37}
-  原味巴斯克: {unit: 顆, cost: 142.26}
-  白玉原味巴斯克: {unit: 顆, cost: 172.26}
-  芝麻巴斯克: {unit: 顆, cost: 166.92}
-  白玉芝麻巴斯克: {unit: 顆, cost: 196.92}
-  焙茶巴斯克: {unit: 顆, cost: 203.50}     # 純焙茶（無栗子）· 食材 $172.50 + 包裝 $30 + 貼紙 $1（Yen 2026-07-03 補）
-  焙茶栗子巴斯克: {unit: 顆, cost: 289.82}
-  白玉烏龍茶巴斯克: {unit: 顆, cost: 224.57}
-  香料堅果醬40ml: {unit: 罐, cost: 28.96}  # PDF 標「估算」· 依 90ml 比例換算、包裝待確認
-  香料堅果醬90ml: {unit: 罐, cost: 81.91}
-  香料堅果醬240ml: {unit: 罐, cost: 205.75}
-  瑕疵小脆捲10顆: {unit: 包, cost: null}   # PDF 未列
+  肉桂捲: {unit: 顆, cost: 20.90, nutrition_label: "肉桂捲.jpg"}
+  蘋果肉桂捲: {unit: 顆, cost: 30.13, nutrition_label: "蘋果肉桂捲.jpg"}
+  焦糖蘋果肉桂麵包: {unit: 顆, cost: 46.34, nutrition_label: "焦糖蘋果肉桂麵包.jpg"}
+  芝麻焙茶奶酥磅蛋糕: {unit: 顆, cost: 98.52, nutrition_label: "芝麻焙茶奶酥磅蛋糕.jpg"}
+  鳳梨肉桂奶酥磅蛋糕: {unit: 顆, cost: 103.37, nutrition_label: "鳳梨肉桂奶酥磅蛋糕.jpg"}
+  原味巴斯克: {unit: 顆, cost: 142.26, nutrition_label: "原味巴斯克.jpg"}
+  白玉原味巴斯克: {unit: 顆, cost: 172.26, nutrition_label: "白玉原味巴斯克.jpg"}
+  芝麻巴斯克: {unit: 顆, cost: 166.92, nutrition_label: "芝麻巴斯克.jpg"}
+  白玉芝麻巴斯克: {unit: 顆, cost: 196.92, nutrition_label: "白玉芝麻巴斯克.jpg"}
+  焙茶巴斯克: {unit: 顆, cost: 203.50, nutrition_label: "焙茶巴斯克.jpg"}     # 純焙茶（無栗子）· 食材 $172.50 + 包裝 $30 + 貼紙 $1（Yen 2026-07-03 補）
+  焙茶栗子巴斯克: {unit: 顆, cost: 289.82, nutrition_label: "焙茶栗子巴斯克.jpg"}
+  白玉烏龍茶巴斯克: {unit: 顆, cost: 224.57, nutrition_label: "白玉烏龍茶巴斯克.jpg"}
+  香料堅果醬40ml: {unit: 罐, cost: 28.96, nutrition_label: "香料堅果醬40ml.jpg"}  # PDF 標「估算」· 依 90ml 比例換算、包裝待確認
+  香料堅果醬90ml: {unit: 罐, cost: 81.91, nutrition_label: "香料堅果醬90ml.jpg"}
+  香料堅果醬240ml: {unit: 罐, cost: 205.75, nutrition_label: "香料堅果醬240ml.jpg"}
+  瑕疵小脆捲10顆: {unit: 包, cost: null, nutrition_label: "none"}   # PDF 未列
   # Yen 2026-07-06：駐店研發中品項 · 光地蔬食提案 · 成本 / 拆解未定
-  無麩烤餅: {unit: 顆, cost: null}
+  無麩烤餅: {unit: 顆, cost: null, nutrition_label: "none"}
 
 # ---------- PRODUCTS ----------
 # 上架 SKU。display_name = 中文精簡版；aliases = 賣貨便原文/面交/KOL/舊稱
