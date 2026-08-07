@@ -39,6 +39,17 @@ function logisticsCostFor(o: Order, menu: Menu): { cost: number; isEstimated: bo
 }
 
 /**
+ * 駐店運費（Yen 2026-08-06 #7）：老闆自付、從實收扣（見 models.ts freight_cost 註解）。
+ * 不併進 logisticsCostFor 的 fallback 表——駐店運費是每單各自實填的真實值，
+ * 不是通路級預設值，且要在成本拆解上獨立成一列「駐店運費（老闆自付）」，
+ * 不能被生產費用/包材那些估算值稀釋在一起。
+ */
+function shopFreightFor(o: Order): { cost: number; isEstimated: boolean } {
+  if (o.channel !== "駐店") return { cost: 0, isEstimated: false };
+  return { cost: o.freight_cost, isEstimated: false };
+}
+
+/**
  * 品項成本：主軌 product.cost × quantity；product.cost=null 時 fallback 到 atoms 加總
  *   fallback 依 menu.atoms[*].cost（成本總覽 PDF · 2026-07-03 寫入）· item.atoms.count 已含 quantity
  *   atom fallback 是精確資料（非估算）· isEstimated 只在真的缺資料時才 true
@@ -98,6 +109,8 @@ export type ChannelPayout = {
   cogs: number;
   packaging: number;
   logistics: number;
+  /** 駐店運費（老闆自付、從實收扣）——只有「駐店」通路會有值 */
+  shopFreight: number;
   netProfit: number;
   /** 有任何成本是估算值 */
   isEstimated: boolean;
@@ -110,6 +123,7 @@ export type PayoutResult = {
   cogs: number;
   packaging: number;
   logistics: number;
+  shopFreight: number;
   netProfit: number;
   netMargin: number; // 0–1
   byChannel: ChannelPayout[];
@@ -140,6 +154,7 @@ export function computePayout(orders: Order[], menu: Menu): PayoutResult {
     cogs: number;
     packaging: number;
     logistics: number;
+    shopFreight: number;
     isEstimated: boolean;
   }>();
 
@@ -148,7 +163,7 @@ export function computePayout(orders: Order[], menu: Menu): PayoutResult {
   for (const o of eligible) {
     const key = o.channel;
     if (!map.has(key)) {
-      map.set(key, { orderCount: 0, grossTotal: 0, cogs: 0, packaging: 0, logistics: 0, isEstimated: false });
+      map.set(key, { orderCount: 0, grossTotal: 0, cogs: 0, packaging: 0, logistics: 0, shopFreight: 0, isEstimated: false });
     }
     const acc = map.get(key)!;
     acc.orderCount += 1;
@@ -176,13 +191,16 @@ export function computePayout(orders: Order[], menu: Menu): PayoutResult {
       if (o.channel === "宅配") estimatedReasonSet.add("宅配物流使用預設 $130");
       if (o.channel === "KOL") estimatedReasonSet.add("KOL 物流使用預設 $60");
     }
+
+    const shopFreightR = shopFreightFor(o);
+    acc.shopFreight += shopFreightR.cost;
   }
 
   // 轉成 byChannel
   const byChannel: ChannelPayout[] = [];
   for (const [channelId, acc] of map.entries()) {
     const meta = CHANNEL_META[channelId] ?? { name: channelId, color: "#8A8A93" };
-    const net = acc.grossTotal - acc.cogs - acc.packaging - acc.logistics;
+    const net = acc.grossTotal - acc.cogs - acc.packaging - acc.logistics - acc.shopFreight;
     byChannel.push({
       channelId,
       name: meta.name,
@@ -192,6 +210,7 @@ export function computePayout(orders: Order[], menu: Menu): PayoutResult {
       cogs: acc.cogs,
       packaging: acc.packaging,
       logistics: acc.logistics,
+      shopFreight: acc.shopFreight,
       netProfit: net,
       isEstimated: acc.isEstimated,
     });
@@ -205,7 +224,8 @@ export function computePayout(orders: Order[], menu: Menu): PayoutResult {
   const totalCogs = byChannel.reduce((s, c) => s + c.cogs, 0);
   const totalPkg = byChannel.reduce((s, c) => s + c.packaging, 0);
   const totalLog = byChannel.reduce((s, c) => s + c.logistics, 0);
-  const totalNet = totalGross - totalCogs - totalPkg - totalLog;
+  const totalShopFreight = byChannel.reduce((s, c) => s + c.shopFreight, 0);
+  const totalNet = totalGross - totalCogs - totalPkg - totalLog - totalShopFreight;
   const anyEstimated = byChannel.some((c) => c.isEstimated);
 
   return {
@@ -213,6 +233,7 @@ export function computePayout(orders: Order[], menu: Menu): PayoutResult {
     grossTotal: totalGross,
     cogs: totalCogs,
     packaging: totalPkg,
+    shopFreight: totalShopFreight,
     logistics: totalLog,
     netProfit: totalNet,
     netMargin: totalGross > 0 ? totalNet / totalGross : 0,

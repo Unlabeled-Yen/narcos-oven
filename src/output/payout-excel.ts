@@ -24,6 +24,9 @@ function logisticsCostFor(o: Order, menu: Menu): number {
   if (o.channel === "宅配") return table["宅配"] ?? 130;
   if (o.channel.startsWith("面交")) return table["面交"] ?? 0;
   if (o.channel === "KOL") return table["KOL"] ?? 60;
+  // Yen 2026-08-06（#7）：駐店運費是老闆自付、從實收扣，同 compute-payout.ts
+  // shopFreightFor() 的口徑——不能讓這份 Excel 跟儀表板算出不同數字。
+  if (o.channel === "駐店") return o.freight_cost;
   return 0;
 }
 

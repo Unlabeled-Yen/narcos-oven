@@ -63,6 +63,7 @@ export function PayoutPage({ orders, menu }: PageProps) {
     cogs,
     packaging,
     logistics,
+    shopFreight,
     netProfit,
     netMargin,
     byChannel,
@@ -87,6 +88,7 @@ export function PayoutPage({ orders, menu }: PageProps) {
           cogs: ex.cogs + ch.cogs,
           packaging: ex.packaging + ch.packaging,
           logistics: ex.logistics + ch.logistics,
+          shopFreight: ex.shopFreight + ch.shopFreight,
           netProfit: ex.netProfit + ch.netProfit,
           isEstimated: ex.isEstimated || ch.isEstimated,
         });
@@ -181,6 +183,9 @@ export function PayoutPage({ orders, menu }: PageProps) {
             <WaterfallRow label="− 品項成本" value={cogs} width={pctOf(cogs) * 100} color={C.orange} labelColor="#9A9AA2" negative isEstimated={isEstimated} />
             <WaterfallRow label="− 包材" value={packaging} width={pctOf(packaging) * 100} color={C.orange} labelColor="#9A9AA2" negative isEstimated={isEstimated} />
             <WaterfallRow label="− 物流實付" value={logistics} width={pctOf(logistics) * 100} color={C.orange} labelColor="#9A9AA2" negative isEstimated={isEstimated} />
+            {shopFreight > 0 && (
+              <WaterfallRow label="− 駐店運費（老闆自付）" value={shopFreight} width={pctOf(shopFreight) * 100} color={C.orange} labelColor="#9A9AA2" negative />
+            )}
             <div style={{ height: 1, background: C.line, margin: "2px 0" }} />
             <WaterfallRow label="= 淨利" value={netProfit} width={pctOf(netProfit) * 100} color={C.acc} labelColor={C.ink} bold />
           </div>
@@ -198,6 +203,9 @@ export function PayoutPage({ orders, menu }: PageProps) {
                 <div style={{ width: `${pctOf(cogs) * 100}%`, background: C.orange }} />
                 <div style={{ width: `${pctOf(packaging) * 100}%`, background: C.pkgColor }} />
                 <div style={{ width: `${pctOf(logistics) * 100}%`, background: C.purple }} />
+                {shopFreight > 0 && (
+                  <div style={{ width: `${pctOf(shopFreight) * 100}%`, background: C.red }} />
+                )}
                 <div style={{ width: `${pctOf(netProfit) * 100}%`, background: C.acc }} />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 9, fontFamily: F.mono, fontSize: 12 }}>
@@ -209,6 +217,9 @@ export function PayoutPage({ orders, menu }: PageProps) {
                   pct={pctOf(logistics)}
                   estimated={isEstimated}
                 />
+                {shopFreight > 0 && (
+                  <CostLegend color={C.red} label="駐店運費（老闆自付）" pct={pctOf(shopFreight)} />
+                )}
                 <CostLegend color={C.acc} label="淨利" pct={netMargin} bold />
               </div>
             </>
