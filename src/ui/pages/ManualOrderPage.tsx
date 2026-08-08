@@ -17,6 +17,7 @@ import { buildManualOrder } from "../../domain/manual-order";
 import { upsertOrder } from "../../db/orders";
 import { listShops } from "../../db/shops";
 import { exportManualOrders, filterManualOrders, type ManualExportFilter } from "../../output/manual-orders-excel";
+import { CustomComboForm } from "./ManualOrderPage.CustomComboForm";
 
 const F = {
   anton: "'Anton',sans-serif",
@@ -70,7 +71,7 @@ const nextKey = () => ++itemKeyCounter;
 
 const EXPORT_FILTERS: ManualExportFilter[] = ["全部手打", "KOL", "駐店", "彈性", "宅配", "面交_中壢", "面交_台中", "面交_其他"];
 
-type Mode = "consumer" | "shop";
+type Mode = "consumer" | "shop" | "custom";
 
 export function ManualOrderPage({ menu, orders, refreshOrders }: PageProps) {
   const [mode, setMode] = useState<Mode>("consumer");
@@ -233,6 +234,7 @@ export function ManualOrderPage({ menu, orders, refreshOrders }: PageProps) {
             [
               { key: "consumer" as Mode, label: "消費者手打", hint: "KOL / 彈性 / 面交 / 宅配" },
               { key: "shop" as Mode, label: "駐店訂單", hint: "合作店家批發、附運費 + 結清狀態" },
+              { key: "custom" as Mode, label: "客製組合", hint: "自由組合單品、分盒、自訂總價" },
             ]
           ).map((t) => {
             const active = mode === t.key;
@@ -258,6 +260,10 @@ export function ManualOrderPage({ menu, orders, refreshOrders }: PageProps) {
 
         {mode === "shop" && (
           <ShopModeForm menu={menu} refreshOrders={refreshOrders} />
+        )}
+
+        {mode === "custom" && (
+          <CustomComboForm menu={menu} refreshOrders={refreshOrders} />
         )}
 
         {mode === "consumer" && savedMsg && (

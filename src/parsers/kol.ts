@@ -230,6 +230,7 @@ function finalizeKol(w: WipKol, menu: Menu): Order {
       rawName: p,
       quantity: 1,
       subtotal: null,
+      box_no: null,
       atoms: perUnitAtoms.map((a) => ({ atomId: a.atomId, count: a.count })),
     });
   }

@@ -196,6 +196,7 @@ function finalizeOrder(w: WipOrder, menu: Menu): Order {
         quantity: raw.qty ?? 1,
         subtotal: raw.subtotal,
         atoms: [],
+        box_no: null,
       });
       continue;
     }
@@ -207,6 +208,7 @@ function finalizeOrder(w: WipOrder, menu: Menu): Order {
       rawName: raw.name,
       quantity: qty,
       subtotal: raw.subtotal,
+      box_no: null,
       atoms: perUnitAtoms.map((a) => ({ atomId: a.atomId, count: a.count * qty })),
     });
   }

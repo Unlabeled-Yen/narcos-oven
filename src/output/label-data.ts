@@ -61,6 +61,29 @@ export function extractLabels(
   });
 
   for (const o of targets) {
+    // #2 客製組合（分盒）：帶 box_no 的訂單一盒一張標籤、內容列出盒內各單品簡稱×數量
+    //   （spec：出貨標籤張數自動 = 盒數，不是逐單位展開）
+    const hasBoxes = o.items.some((it) => it.box_no != null);
+    if (hasBoxes) {
+      const byBox = new Map<string, typeof o.items>();
+      for (const it of o.items) {
+        const key = it.box_no ?? "";
+        const list = byBox.get(key);
+        if (list) list.push(it);
+        else byBox.set(key, [it]);
+      }
+      const boxEntries = Array.from(byBox.entries()).sort(([a], [b]) => a.localeCompare(b));
+      const total = boxEntries.length;
+      boxEntries.forEach(([, items], i) => {
+        const shortLabel = items
+          .map((it) => `${shorts[it.productSkuId ?? ""] ?? it.rawName.slice(0, 12)}×${it.quantity}`)
+          .join("、");
+        const subNumber = total > 1 ? `${total}-${i + 1}` : "";
+        labels.push(buildLabel(o, subNumber, shortLabel, i + 1, total, undefined));
+      });
+      continue;
+    }
+
     // 展開該訂單需要印幾張標籤
     // 每個 item 依 quantity 展開為 N 個 label entry
     const rows: { item_idx: number; sub_of: number; sku_id: string; raw_name: string }[] = [];

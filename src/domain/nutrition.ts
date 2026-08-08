@@ -10,8 +10,8 @@
  *     不是歷史快照，這點跟 COGS 算法故意不同）。
  *   - 散裝單品：同一張訂單裡所有散裝單品併成 1 盒，盒內每種各算一次
  *     （不管數量多少，1 種只算 1 張）。
- *   - 客製單（#2 尚未上線）：預留 box_no 欄位，一旦有值就照 box_no 分組，
- *     現在沒有客製單會產生 box_no，所以目前恆走上面兩條規則。
+ *   - 客製單（#2 順位 11 已上線）：item 帶 box_no 就照 box_no 分組，
+ *     不落上面兩條規則（那兩條規則只吃 box_no 為 null 的一般單）。
  *   - 守恆檢查：推導盒數 vs order.labelCount 不一致 → 進警示清單、
  *     不擋單（人工核對用），一致則不出現在警示清單。
  *
@@ -62,8 +62,7 @@ export function deriveBoxesForOrder(order: Order, menu: Menu): NutritionBox[] {
   let hasExplicitBoxNo = false;
 
   for (const item of order.items) {
-    // box_no 是 #2 客製組合（順位 11）預留欄位，目前 UI 未寫入、item 上不存在此欄位時視為 undefined
-    const boxNo = (item as { box_no?: string | null }).box_no ?? null;
+    const boxNo = item.box_no;
     if (boxNo != null) {
       hasExplicitBoxNo = true;
       if (!explicitBoxes.has(boxNo)) explicitBoxes.set(boxNo, new Set());

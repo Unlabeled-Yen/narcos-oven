@@ -181,6 +181,7 @@ export function parseInPersonRows(
         rawName: headerName,
         quantity: qty,
         subtotal: null, // 面交沒有 per-item subtotal，總額在 c23
+        box_no: null,
         atoms: perUnitAtoms.map((a) => ({
           atomId: a.atomId,
           count: a.count * qty,

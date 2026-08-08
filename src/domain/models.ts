@@ -226,6 +226,9 @@ export const OrderItemSchema = z.object({
       count: z.number(),
     })
   ),
+  // #2 2026-08-06：手打單客製組合的分盒編號（第幾盒）。一般單不使用此欄、維持 null。
+  // 型別沿用順位 3B nutrition.ts 已預留的慣例（string，例："1"/"2"）。
+  box_no: z.string().nullable().default(null),
 });
 export type OrderItem = z.infer<typeof OrderItemSchema>;
 

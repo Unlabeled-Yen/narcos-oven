@@ -28,6 +28,8 @@ export type ManualOrderInput = {
     rawName: string;
     quantity: number;
     subtotal?: number | null;
+    // #2 客製組合分盒編號；一般手打單不填
+    box_no?: string | null;
   }>;
   grossTotal: number;
   freight?: number;
@@ -80,6 +82,7 @@ export function buildManualOrder(input: ManualOrderInput, menu: Menu): Order {
         quantity: raw.quantity,
         subtotal: raw.subtotal ?? null,
         atoms: [],
+        box_no: raw.box_no ?? null,
       });
       continue;
     }
@@ -90,6 +93,7 @@ export function buildManualOrder(input: ManualOrderInput, menu: Menu): Order {
       rawName: raw.rawName,
       quantity: raw.quantity,
       subtotal: raw.subtotal ?? null,
+      box_no: raw.box_no ?? null,
       atoms: perUnitAtoms.map((a) => ({
         atomId: a.atomId,
         count: a.count * raw.quantity,

@@ -214,6 +214,7 @@ async function resolveKolChoice(o: Order, skuId: string, menu: Menu): Promise<vo
     rawName: getDisplayName(skuId, menu),
     quantity: 1,
     subtotal: null,
+    box_no: null,
     atoms,
   }];
   const filteredReasons = o.pendingReasons.filter((r) => r.code !== "KOL_CHOICE_UNRESOLVED");
