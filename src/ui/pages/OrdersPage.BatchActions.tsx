@@ -61,6 +61,7 @@ const STATUS_OPTIONS: OrderStatus[] = [
   "canceled",
   "kol_shipped",
   "disappeared_pending_resolution",
+  "voided",
 ];
 
 export function StatusCell({

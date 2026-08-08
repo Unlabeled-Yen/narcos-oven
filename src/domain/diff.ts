@@ -16,6 +16,20 @@ import type {
   OrderSnapshot,
 } from "./models";
 
+/**
+ * #8 2026-08-06：匯入防呆——這輪 xlsx 跟現有 DB 100% 重疊、完全無變化
+ * （沒有新單、沒有欄位變動、沒有付款翻確認、沒有消失）→ 呼叫端該提示
+ * 「已匯入過、本次無變化」而不是靜默重寫一次 import_run（污染 diff 基準）。
+ */
+export function isNoOpImport(diff: ImportDiff): boolean {
+  return (
+    diff.added.length === 0 &&
+    diff.payment_confirmed.length === 0 &&
+    diff.fields_changed.length === 0 &&
+    diff.disappeared.length === 0
+  );
+}
+
 export type DiffPlan = {
   diff: ImportDiff;
   upserts: Order[]; // 完整訂單（含更新後的 status/snapshot/last_seen_at/changes）
@@ -95,6 +109,7 @@ export function planDiff(
         fields: diffFields,
         resolved: null,
         resolved_at: null,
+        source: "import_diff",
       };
       upserts.push({
         ...existing,

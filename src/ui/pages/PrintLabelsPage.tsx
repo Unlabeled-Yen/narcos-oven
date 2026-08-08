@@ -33,7 +33,7 @@ export function PrintLabelsPage({ orders, menu, currentBatch, setCurrentBatch }:
   const orderBatchMap = useMemo(() => {
     const m = new Map<string, string>();
     for (const o of orders) {
-      if (o.batchDate) m.set(o.id, shippingDayFor(o.batchDate, dayTypeOf));
+      if (o.batchDate && o.status !== "voided") m.set(o.id, shippingDayFor(o.batchDate, dayTypeOf));
     }
     return m;
   }, [orders, dayTypeOf]);

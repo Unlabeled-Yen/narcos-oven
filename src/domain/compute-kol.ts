@@ -112,7 +112,7 @@ function fmtNt(n: number): string {
  * @param menu    menu（查品項顯示名、成本）
  */
 export function computeKolRoi(orders: Order[], menu: Menu): KolRoiResult {
-  const kolOrders = orders.filter((o) => o.channel === "KOL");
+  const kolOrders = orders.filter((o) => o.channel === "KOL" && o.status !== "voided");
 
   if (kolOrders.length === 0) {
     const empty: KolRoiResult = {

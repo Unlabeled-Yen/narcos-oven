@@ -28,7 +28,8 @@ export function isActive(o: Order): boolean {
   return (
     o.status !== "shipped" &&
     o.status !== "canceled" &&
-    o.status !== "kol_shipped"
+    o.status !== "kol_shipped" &&
+    o.status !== "voided"
   );
 }
 

@@ -180,7 +180,7 @@ export function computeKpiCounts(orders: Order[], cal: ShipCalendar): KpiCounts 
   let currentMonthGmv = 0;
 
   for (const o of orders) {
-    if (o.status === "canceled") continue;
+    if (o.status === "canceled" || o.status === "voided") continue;
     active++;
 
     if (o.status === "confirmed") {
@@ -532,7 +532,7 @@ export function codUnsettledSummary(orders: Order[]): CodUnsettledSummary {
 }
 
 export function computeHealthChecks(orders: Order[]): HealthCheck[] {
-  const nonCanceled = orders.filter((o) => o.status !== "canceled");
+  const nonCanceled = orders.filter((o) => o.status !== "canceled" && o.status !== "voided");
 
   // 金額一致：只算「應該有金流」的通路。
   //   KOL 是免費樣品換曝光、天生 grossTotal=0，把它列入分母會永遠報橘燈（就是 2026-07-19 遇到的 bug）。

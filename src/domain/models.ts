@@ -196,6 +196,8 @@ export const OrderStatusSchema = z.enum([
   "change_pending_resolution",
   "shipped",
   "canceled",
+  // #8 2026-08-06：軟刪除（作廢）——保留資料、退出所有統計/排程/工單/標籤
+  "voided",
 ]);
 export type OrderStatus = z.infer<typeof OrderStatusSchema>;
 
@@ -259,6 +261,9 @@ export const OrderChangeSchema = z.object({
   ),
   resolved: z.enum(["accepted", "rejected", "reprint_needed"]).nullable().default(null),
   resolved_at: z.string().nullable().default(null),
+  // #8 2026-08-06：這筆變動從哪來——匯入 diff / 人工編輯 / 作廢 / 復原。
+  //   import_run_id 對人工操作沒有真實 run，統一填 "manual"。
+  source: z.enum(["import_diff", "manual_edit", "void", "restore"]).default("import_diff"),
 });
 export type OrderChange = z.infer<typeof OrderChangeSchema>;
 

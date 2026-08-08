@@ -9,7 +9,7 @@ import { parseSellerBuyHtml } from "./parsers/seller-buy-html";
 import { applyHtmlWishDates } from "./domain/apply-html-wish-dates";
 import { getSheetRows, extractSheetId } from "./google/sheets";
 import { detectFileKind, type FileKind } from "./parsers/detect";
-import { planDiff } from "./domain/diff";
+import { planDiff, isNoOpImport } from "./domain/diff";
 import type { ChannelId, ImportRun, Order } from "./domain/models";
 import { getActiveByChannels, getAll, upsertMany, markDisappeared } from "./db/orders";
 import { sanitizeDirtyDates } from "./db/sanitize";
@@ -91,6 +91,11 @@ export default function App() {
 
     const doImport = async () => {
       const plan = planDiff(newAll, dbActive, runId, nowIso);
+      // #8 2026-08-06：匯入防呆——整批跟現有 DB 100% 重疊且無任何 diff → 提示、不重複寫入
+      if (isNoOpImport(plan.diff)) {
+        setError(`這批已匯入過、本次無變化（${newAll.length} 筆訂單皆與現有資料相同）`);
+        return;
+      }
       await upsertMany(plan.upserts);
       if (plan.markDisappeared.length > 0) {
         await markDisappeared(plan.markDisappeared, nowIso);

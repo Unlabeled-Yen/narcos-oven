@@ -17,7 +17,7 @@ export function LabelsPage({ orders, menu, refreshOrders, currentBatch, setCurre
   const orderBatchMap = useMemo(() => {
     const m = new Map<string, string>();
     for (const o of orders) {
-      if (o.batchDate && o.status !== "shipped") {
+      if (o.batchDate && o.status !== "shipped" && o.status !== "voided") {
         m.set(o.id, shippingDayFor(o.batchDate, dayTypeOf));
       }
     }

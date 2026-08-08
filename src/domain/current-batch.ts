@@ -32,6 +32,7 @@ export function batchListFrom(
   const seen = new Set<string>();
   for (const o of orders) {
     if (!o.batchDate) continue;
+    if (o.status === "voided") continue; // #8：作廢訂單一律不進任何批次清單
     if (opts.excludeFullyShipped && o.status === "shipped") continue;
     seen.add(shippingDayFor(o.batchDate, dayTypeOf));
   }

@@ -129,7 +129,7 @@ export function SchedulePage({ orders, menu, refreshOrders, currentBatch, setCur
     const m = new Map<string, Order[]>();
     for (const iso of weekISO) m.set(iso, []); // 本週 preload 空陣列 · 給週檢視 render 用
     for (const o of orders) {
-      if (o.batchDate && o.assignment_source !== "pending" && o.status !== "shipped") {
+      if (o.batchDate && o.assignment_source !== "pending" && o.status !== "shipped" && o.status !== "voided") {
         if (!m.has(o.batchDate)) m.set(o.batchDate, []);
         m.get(o.batchDate)!.push(o);
       }
@@ -320,7 +320,7 @@ export function SchedulePage({ orders, menu, refreshOrders, currentBatch, setCur
   const weekScheduledCount = useMemo(() => {
     const weekSet = new Set(weekISO);
     return orders.filter(
-      (o) => o.batchDate && weekSet.has(o.batchDate) && o.assignment_source !== "pending" && o.status !== "shipped"
+      (o) => o.batchDate && weekSet.has(o.batchDate) && o.assignment_source !== "pending" && o.status !== "shipped" && o.status !== "voided"
     ).length;
   }, [orders, weekISO.join(",")]);
   async function clearWeekSchedule() {
@@ -331,7 +331,7 @@ export function SchedulePage({ orders, menu, refreshOrders, currentBatch, setCur
         o.batchDate &&
         weekSet.has(o.batchDate) &&
         o.assignment_source !== "pending" &&
-        o.status !== "shipped" &&
+        o.status !== "shipped" && o.status !== "voided" &&
         !dayLocked(o.batchDate),
     );
     const lockedSkipped = orders.filter(
@@ -339,7 +339,7 @@ export function SchedulePage({ orders, menu, refreshOrders, currentBatch, setCur
         o.batchDate &&
         weekSet.has(o.batchDate) &&
         o.assignment_source !== "pending" &&
-        o.status !== "shipped" &&
+        o.status !== "shipped" && o.status !== "voided" &&
         dayLocked(o.batchDate),
     ).length;
     if (targets.length === 0) {
@@ -405,7 +405,7 @@ export function SchedulePage({ orders, menu, refreshOrders, currentBatch, setCur
   const ordersByDate = useMemo(() => {
     const m = new Map<string, Order[]>();
     for (const o of orders) {
-      if (o.batchDate && o.assignment_source !== "pending" && o.status !== "shipped") {
+      if (o.batchDate && o.assignment_source !== "pending" && o.status !== "shipped" && o.status !== "voided") {
         (m.get(o.batchDate) ?? m.set(o.batchDate, []).get(o.batchDate)!).push(o);
       }
     }
@@ -543,7 +543,7 @@ export function SchedulePage({ orders, menu, refreshOrders, currentBatch, setCur
     if (currentBatchRangeISO.length === 0) return [];
     const rangeSet = new Set(currentBatchRangeISO);
     return orders.filter(
-      (o) => o.batchDate && o.assignment_source !== "pending" && o.status !== "shipped" && rangeSet.has(o.batchDate)
+      (o) => o.batchDate && o.assignment_source !== "pending" && o.status !== "shipped" && o.status !== "voided" && rangeSet.has(o.batchDate)
     );
   }, [orders, currentBatchRangeISO]);
   const currentBatchOrderCount = currentBatchOrders.length;

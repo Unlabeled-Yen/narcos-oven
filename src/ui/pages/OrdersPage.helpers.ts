@@ -1,7 +1,19 @@
 /**
  * OrdersPage 純邏輯 helpers — 無 React 依賴
  */
-import type { ChannelId, Order, OrderStatus } from "../../domain/models";
+import type { ChannelId, Order, OrderChange, OrderStatus } from "../../domain/models";
+
+// ── #8：人工改狀態的變更紀錄（一律留痕，跟批次改狀態/匯入 diff 分開來源可查）──
+export function buildManualStatusChange(before: Order, next: OrderStatus, nowIso: string): OrderChange {
+  return {
+    imported_at: nowIso,
+    import_run_id: "manual",
+    fields: { status: { from: before.status, to: next } },
+    resolved: null,
+    resolved_at: null,
+    source: "manual_edit",
+  };
+}
 
 // ── 字型常數 ──────────────────────────────────────────────
 export const F = {
@@ -51,9 +63,10 @@ export const CHAN_COLOR: Record<ChanGroup, string> = {
 
 // ── 狀態分桶 ──────────────────────────────────────────────
 // Yen 2026-07-06：「未付款」抽出獨立 group · 讓雇主一眼看到有幾單卡在等付款
-export type StatusGroup = "全部" | "未付款" | "confirmed" | "待處理" | "已出貨" | "消失";
+export type StatusGroup = "全部" | "未付款" | "confirmed" | "待處理" | "已出貨" | "消失" | "作廢";
 
 export function statusGroup(s: OrderStatus): StatusGroup {
+  if (s === "voided") return "作廢";
   if (s === "pending_payment") return "未付款";
   if (s === "confirmed") return "confirmed";
   if (s === "shipped" || s === "kol_shipped") return "已出貨";
@@ -68,6 +81,7 @@ export function statusLabel(s: OrderStatus): string {
     case "kol_shipped": return "已出貨";
     case "disappeared_pending_resolution": return "消失";
     case "canceled": return "已取消";
+    case "voided": return "已作廢";
     case "pending_payment": return "未付款";
     case "pending_batch_date": return "待排批";
     case "pending_conflict_date": return "日期衝突";
@@ -89,6 +103,7 @@ export const STATUS_STYLE: Record<StatusGroup, StatusStyle> = {
   待處理: { color: "#E5622A", bg: "#2a1a10" },
   已出貨: { color: "#2AC7E8", bg: "#0d2830" },
   消失: { color: "#E5352B", bg: "#2a1010" },
+  作廢: { color: "#6C6C74", bg: "#1a1a1c" },
 };
 
 // ── 批次卡 ─────────────────────────────────────────────────
