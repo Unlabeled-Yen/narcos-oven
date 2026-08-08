@@ -4,18 +4,23 @@
 import { useMemo } from "react";
 import type { Period } from "../domain/period";
 import { getAvailablePeriods, periodLabel } from "../domain/period";
-import type { Order } from "../domain/models";
+import { loadDayOverrides, makeDayTypeOf } from "../domain/day-type";
+import type { Menu, Order } from "../domain/models";
 
 export function PeriodPicker({
   orders,
+  menu,
   period,
   onChange,
 }: {
   orders: Order[];
+  menu: Menu;
   period: Period;
   onChange: (p: Period) => void;
 }) {
-  const avail = useMemo(() => getAvailablePeriods(orders), [orders]);
+  // #6 2026-08-06：期間下拉一律用有效出貨日算可選年月，跟其他頁一致
+  const dayTypeOf = useMemo(() => makeDayTypeOf(menu, loadDayOverrides()), [menu]);
+  const avail = useMemo(() => getAvailablePeriods(orders, dayTypeOf), [orders, dayTypeOf]);
   const currentYear = new Date().getFullYear();
   const years = avail.years.length > 0 ? avail.years : [currentYear];
 

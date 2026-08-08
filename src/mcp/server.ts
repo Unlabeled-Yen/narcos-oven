@@ -196,12 +196,12 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
 
     case "narcos_period_summary": {
       const p = parsePeriod(args);
-      return respond(tools.getPeriodSummary(state.orders, p));
+      return respond(tools.getPeriodSummary(state.orders, p, menu));
     }
 
     case "narcos_get_payout": {
       const p = args.type ? parsePeriod(args) : undefined;
-      return respond(tools.getPayout(state.orders, p));
+      return respond(tools.getPayout(state.orders, menu, p));
     }
 
     case "narcos_search_orders":

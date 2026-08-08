@@ -38,6 +38,11 @@ const tuesdayCal: ShipCalendar = {
     }
     return iso;
   },
+  effectiveShipDateOf: (o) => {
+    if (!o.batchDate) return null;
+    if (o.channel === "駐店") return o.batchDate;
+    return tuesdayCal.shipDayOf(o.batchDate);
+  },
 };
 
 function order(batchDate: string | null, revenue = 100, status: Order["status"] = "confirmed"): Order {
@@ -93,6 +98,7 @@ test("8w 窗：出貨日改成每週一時，軸跟著移動（不是寫死 7 �
       return new Date(y!, m! - 1, d!).getDay() === 1;
     },
     shipDayOf: (iso) => iso,
+    effectiveShipDateOf: (o) => o.batchDate,
   };
   // 2026-07-17 週五 → 往回 8 個週一：07/13(1) 07/06(2) 06/29(3) 06/22(4)
   //   06/15(5) 06/08(6) 06/01(7) 05/25(8)
@@ -178,20 +184,20 @@ test("shipped / kol_shipped 算進出爐量", () => {
 
 test("month 軸補滿空月", () => {
   const w: DateWindow = { from: "2026-02-01", to: "2026-07-31" };
-  const trend = computeMonthTrend([order("2026-07-14", 6900)], w);
+  const trend = computeMonthTrend([order("2026-07-14", 6900)], w, tuesdayCal);
   assert.deepEqual(trend.map((t) => t.month), ["2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07"]);
   assert.deepEqual(trend.map((t) => t.revenue), [0, 0, 0, 0, 0, 6900]);
 });
 
 test("month 軸跨年連續", () => {
   const w: DateWindow = { from: "2025-11-01", to: "2026-02-28" };
-  const trend = computeMonthTrend([], w);
+  const trend = computeMonthTrend([], w, tuesdayCal);
   assert.deepEqual(trend.map((t) => t.month), ["2025-11", "2025-12", "2026-01", "2026-02"]);
 });
 
 test("month 營收加總同月多單", () => {
   const w: DateWindow = { from: "2026-07-01", to: "2026-07-31" };
-  const trend = computeMonthTrend([order("2026-07-07", 100), order("2026-07-14", 250)], w);
+  const trend = computeMonthTrend([order("2026-07-07", 100), order("2026-07-14", 250)], w, tuesdayCal);
   assert.equal(trend.length, 1);
   assert.equal(trend[0]?.orders, 2);
   assert.equal(trend[0]?.revenue, 350);
@@ -209,11 +215,11 @@ test("撐整月後，窗邊緣的月份顯示真實營收而非 0", () => {
   const raw: DateWindow = { from: "2026-05-26", to: "2026-07-17" };
   const may = order("2026-05-12", 34800); // 五月有單、但落在 raw 窗之外
 
-  const wrong = computeMonthTrend([may], raw);
+  const wrong = computeMonthTrend([may], raw, tuesdayCal);
   assert.equal(wrong.find((m) => m.month === "2026-05")?.revenue, 0,
     "沒撐整月時，五月會謊報 0");
 
-  const right = computeMonthTrend([may], monthAlignedWindow(raw));
+  const right = computeMonthTrend([may], monthAlignedWindow(raw), tuesdayCal);
   assert.equal(right.find((m) => m.month === "2026-05")?.revenue, 34800,
     "撐整月後，五月報出真實營收");
 });
@@ -234,7 +240,7 @@ test("TOP 品項只算窗內（原本完全沒過濾、標籤卻寫本月）", (
     items: [{ productSkuId: sku, quantity: qty }],
   }) as unknown as Order;
   const w: DateWindow = { from: "2026-07-01", to: "2026-07-31" };
-  const top = computeTopProducts([mk("2026-07-14", "cinnamon4", 3), mk("2026-06-09", "cinnamon4", 99)], w);
+  const top = computeTopProducts([mk("2026-07-14", "cinnamon4", 3), mk("2026-06-09", "cinnamon4", 99)], w, tuesdayCal);
   assert.equal(top.length, 1);
   assert.equal(top[0]?.qty, 3, "六月那筆 99 份不該混進七月");
 });

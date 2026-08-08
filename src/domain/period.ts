@@ -1,8 +1,15 @@
 /**
  * 期間篩選 helper（純函式）
  * 支援月 / 季 / 年 / 全部
+ *
+ * #6 2026-08-06：一律用「有效出貨日」（effectiveShipDate）分期間，不是原始
+ * batchDate——工單/出貨明細/印標籤本來就用出貨日，這裡跟上，同一張單不會
+ * 出現「這頁歸 7 月、那頁歸 8 月」的落差。dayTypeOf 由呼叫端注入（跟
+ * day-type.ts / compute-dashboard.ts 同一個模式），維持純函式可測。
  */
 import type { Order } from "./models";
+import type { DayType } from "./day-type";
+import { effectiveShipDate } from "./effective-ship-date";
 
 export type PeriodType = "all" | "month" | "quarter" | "year";
 
@@ -35,13 +42,18 @@ export function periodBounds(p: Period): { start: string; end: string } | null {
   };
 }
 
-/** 依 batchDate 過濾。訂單無 batchDate 一律不入期間報表。 */
-export function filterByPeriod(orders: Order[], period: Period): Order[] {
+/** 依有效出貨日過濾。訂單無有效出貨日一律不入期間報表。 */
+export function filterByPeriod(
+  orders: Order[],
+  period: Period,
+  dayTypeOf: (iso: string) => DayType
+): Order[] {
   const bounds = periodBounds(period);
-  if (!bounds) return orders.filter((o) => !!o.batchDate);
-  return orders.filter(
-    (o) => o.batchDate !== null && o.batchDate >= bounds.start && o.batchDate <= bounds.end
-  );
+  if (!bounds) return orders.filter((o) => !!effectiveShipDate(o, dayTypeOf));
+  return orders.filter((o) => {
+    const d = effectiveShipDate(o, dayTypeOf);
+    return d !== null && d >= bounds.start && d <= bounds.end;
+  });
 }
 
 /** 檔名用的期間標籤，例：2026-07 / 2026-Q3 / 2026 / all */
@@ -53,7 +65,10 @@ export function periodLabel(p: Period): string {
 }
 
 /** 掃 orders 給出可選的年份、月份、季度、for UI dropdown */
-export function getAvailablePeriods(orders: Order[]): {
+export function getAvailablePeriods(
+  orders: Order[],
+  dayTypeOf: (iso: string) => DayType
+): {
   years: number[];
   yearMonths: Record<number, number[]>; // year → months (1-12)
   yearQuarters: Record<number, number[]>; // year → quarters (1-4)
@@ -61,8 +76,9 @@ export function getAvailablePeriods(orders: Order[]): {
   const years = new Set<number>();
   const yearMonths: Record<number, Set<number>> = {};
   for (const o of orders) {
-    if (!o.batchDate) continue;
-    const m = /^(\d{4})-(\d{2})/.exec(o.batchDate);
+    const shipDate = effectiveShipDate(o, dayTypeOf);
+    if (!shipDate) continue;
+    const m = /^(\d{4})-(\d{2})/.exec(shipDate);
     if (!m) continue;
     const y = parseInt(m[1]!, 10);
     const mo = parseInt(m[2]!, 10);
@@ -101,16 +117,18 @@ export type PeriodSummaryRow = {
 
 export function summarizeByPeriod(
   orders: Order[],
-  period: Period
+  period: Period,
+  dayTypeOf: (iso: string) => DayType
 ): PeriodSummaryRow[] {
-  const filtered = filterByPeriod(orders, period).filter(
+  const filtered = filterByPeriod(orders, period, dayTypeOf).filter(
     (o) => o.status === "confirmed" || o.status === "kol_shipped"
   );
   const granularity = period.type === "month" ? "day" : "month"; // 月報看日、季/年報看月
   const bucket = new Map<string, PeriodSummaryRow>();
   for (const o of filtered) {
-    if (!o.batchDate) continue;
-    const key = granularity === "day" ? o.batchDate : o.batchDate.slice(0, 7);
+    const shipDate = effectiveShipDate(o, dayTypeOf);
+    if (!shipDate) continue;
+    const key = granularity === "day" ? shipDate : shipDate.slice(0, 7);
     if (!bucket.has(key)) {
       bucket.set(key, {
         key,

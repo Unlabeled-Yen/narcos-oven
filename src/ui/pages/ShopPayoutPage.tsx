@@ -81,20 +81,24 @@ export function ShopPayoutPage({ orders, menu, refreshOrders }: PageProps) {
   }, [period, customFrom, customTo]);
 
   const shopOrders = useMemo(() => {
+    // #6 2026-08-06：期間篩選一律用「有效出貨日」，駐店通路的有效出貨日
+    // 就是 batchDate 本身（到貨日＝出貨日，不用再退回 order_date）。
+    // 沒有 batchDate 的駐店單視為「未排」、不落入任何期間——跟工單/出貨
+    // 明細頁一致，不再用 order_date 頂替造成兩頁月報表對不上。
     return orders
       .filter((o) => o.channel === "駐店")
       .filter((o) => (shopFilter === "all" ? true : o.shop_partner === shopFilter))
       .filter((o) => {
         if (!fromISO && !toISO) return true;
-        const d = o.batchDate ?? o.order_date;
+        const d = o.batchDate;
         if (!d) return false;
         if (fromISO && d < fromISO) return false;
         if (toISO && d > toISO) return false;
         return true;
       })
       .sort((a, b) => {
-        const da = a.batchDate ?? a.order_date ?? "";
-        const db = b.batchDate ?? b.order_date ?? "";
+        const da = a.batchDate ?? "";
+        const db = b.batchDate ?? "";
         return db.localeCompare(da);
       });
   }, [orders, shopFilter, fromISO, toISO]);

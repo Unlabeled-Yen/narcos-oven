@@ -5,14 +5,17 @@
  */
 import type { Menu, Order } from "../domain/models";
 import { periodLabel, summarizeByPeriod, type Period } from "../domain/period";
+import { loadDayOverrides, makeDayTypeOf } from "../domain/day-type";
 import { aoaToSheet, buildWorkbook, writeWorkbookBuffer } from "./utils";
 
 export function buildPeriodSummaryWorkbook(
   orders: Order[],
-  _menu: Menu,
+  menu: Menu,
   period: Period
 ) {
-  const rows = summarizeByPeriod(orders, period);
+  // #6 2026-08-06：期間摘要一律用有效出貨日分組，跟工單/出貨明細/儀表板一致
+  const dayTypeOf = makeDayTypeOf(menu, loadDayOverrides());
+  const rows = summarizeByPeriod(orders, period, dayTypeOf);
   const isDay = period.type === "month";
   const header = [
     isDay ? "日期" : "月份",

@@ -7,6 +7,7 @@
  */
 import type { Menu, Order } from "../domain/models";
 import { aoaToSheet, buildWorkbook, ordersForOutput, pendingBatchLabel, writeWorkbookBuffer } from "./utils";
+import { loadDayOverrides, makeDayTypeOf } from "../domain/day-type";
 
 const BRAND_RATIO = 0.5;
 const CHEF_RATIO = 0.3;
@@ -31,10 +32,12 @@ function logisticsCostFor(o: Order, menu: Menu): number {
 }
 
 export function buildPayoutWorkbook(orders: Order[], menu: Menu) {
+  // #6 2026-08-06：批次分組一律用有效出貨日，跟儀表板/工單/出貨明細一致
+  const dayTypeOf = makeDayTypeOf(menu, loadDayOverrides());
   const outputOrders = ordersForOutput(orders);
   const byDate = new Map<string, Order[]>();
   for (const o of outputOrders) {
-    const d = pendingBatchLabel(o);
+    const d = pendingBatchLabel(o, dayTypeOf);
     if (!byDate.has(d)) byDate.set(d, []);
     byDate.get(d)!.push(o);
   }

@@ -6,6 +6,8 @@
  * 與 stats-excel.ts 平行存在，不修改後者。
  */
 import type { Menu, Order } from "./models";
+import type { DayType } from "./day-type";
+import { effectiveShipDate } from "./effective-ship-date";
 
 // ── 通路型別 ─────────────────────────────────────────────────
 export type Channel = "賣貨便" | "面交" | "宅配" | "KOL" | "其他";
@@ -37,8 +39,9 @@ function isOutputOrder(o: Order): boolean {
   );
 }
 
-function batchLabel(o: Order): string {
-  return o.batchDate ?? "待老闆排";
+/** #6 2026-08-06：批次欄一律用有效出貨日，不是原始 batchDate（同 pendingBatchLabel）*/
+function batchLabel(o: Order, dayTypeOf: (iso: string) => DayType): string {
+  return effectiveShipDate(o, dayTypeOf) ?? "待老闆排";
 }
 
 // ── 核心型別 ──────────────────────────────────────────────────
@@ -105,13 +108,17 @@ export type StatsMatrix = {
 
 // ── 主函式 ───────────────────────────────────────────────────
 
-export function computeStatsMatrix(orders: Order[], menu: Menu): StatsMatrix {
+export function computeStatsMatrix(
+  orders: Order[],
+  menu: Menu,
+  dayTypeOf: (iso: string) => DayType
+): StatsMatrix {
   const outputOrders = orders.filter(isOutputOrder);
 
   // 1. 收集 batchDate → Set<Channel>
   const dateChannels = new Map<string, Set<Channel>>();
   for (const o of outputOrders) {
-    const d = batchLabel(o);
+    const d = batchLabel(o, dayTypeOf);
     const ch = normalizeChannel(o.channel);
     if (!dateChannels.has(d)) dateChannels.set(d, new Set());
     dateChannels.get(d)!.add(ch);
@@ -132,7 +139,7 @@ export function computeStatsMatrix(orders: Order[], menu: Menu): StatsMatrix {
   // 3. 計算 (atom, batchDate, channel) 計數
   const counts = new Map<string, number>(); // key: atomId||batchDate||channel
   for (const o of outputOrders) {
-    const d = batchLabel(o);
+    const d = batchLabel(o, dayTypeOf);
     const ch = normalizeChannel(o.channel);
     for (const it of o.items) {
       for (const a of it.atoms) {

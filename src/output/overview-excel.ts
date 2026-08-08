@@ -11,6 +11,7 @@ import {
   pendingBatchLabel,
   writeWorkbookBuffer,
 } from "./utils";
+import { loadDayOverrides, makeDayTypeOf } from "../domain/day-type";
 
 function last5(orderId: string): string {
   if (orderId.startsWith("CM")) {
@@ -38,10 +39,12 @@ function contactLine(o: Order): string {
 }
 
 export function buildOverviewWorkbook(orders: Order[], menu: Menu) {
+  // #6 2026-08-06：批次分組一律用有效出貨日，跟儀表板/工單/出貨明細一致
+  const dayTypeOf = makeDayTypeOf(menu, loadDayOverrides());
   const outputOrders = ordersForOutput(orders);
   const byDate = new Map<string, Order[]>();
   for (const o of outputOrders) {
-    const d = pendingBatchLabel(o);
+    const d = pendingBatchLabel(o, dayTypeOf);
     if (!byDate.has(d)) byDate.set(d, []);
     byDate.get(d)!.push(o);
   }

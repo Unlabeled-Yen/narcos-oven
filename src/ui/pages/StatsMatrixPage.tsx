@@ -13,6 +13,7 @@ import { PageHeader, PeriodChips } from "../brand/PageHeader";
 import { ExportBtn } from "../brand/ExportBtn";
 import { writeStatsExcel } from "../../output/stats-excel";
 import { computeStatsMatrix, CHANNEL_COLOR, type Channel } from "../../domain/compute-stats";
+import { loadDayOverrides, makeDayTypeOf } from "../../domain/day-type";
 import type { PageProps } from "./types";
 
 const F = { anton: "'Anton',sans-serif", tc: "'Noto Sans TC',sans-serif", mono: "'Space Mono',monospace" } as const;
@@ -32,7 +33,8 @@ const PERIOD_OPTS = [{ key: "5b", label: "近 5 批" }, { key: "all", label: "�
 
 export function StatsMatrixPage({ orders, menu }: PageProps) {
   const [period, setPeriod] = useState("5b");
-  const mx = useMemo(() => computeStatsMatrix(orders, menu), [orders, menu]);
+  const dayTypeOf = useMemo(() => makeDayTypeOf(menu, loadDayOverrides()), [menu]);
+  const mx = useMemo(() => computeStatsMatrix(orders, menu, dayTypeOf), [orders, menu, dayTypeOf]);
 
   const visCols = useMemo(() => {
     if (period === "all") return mx.batchColumns;

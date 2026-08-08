@@ -8,6 +8,7 @@
  */
 import type { Menu, Order } from "../domain/models";
 import { aoaToSheet, buildWorkbook, ordersForOutput, pendingBatchLabel, writeWorkbookBuffer } from "./utils";
+import { loadDayOverrides, makeDayTypeOf } from "../domain/day-type";
 
 type Channel = "賣貨便" | "面交" | "宅配" | "KOL" | "其他";
 
@@ -22,13 +23,15 @@ function normalizeChannel(orderChannel: string): Channel {
 const CHANNEL_ORDER: Channel[] = ["賣貨便", "面交", "宅配", "KOL", "其他"];
 
 export function buildStatsWorkbook(orders: Order[], menu: Menu) {
+  // #6 2026-08-06：批次分組一律用有效出貨日，跟儀表板/工單/出貨明細一致
+  const dayTypeOf = makeDayTypeOf(menu, loadDayOverrides());
   const outputOrders = ordersForOutput(orders);
   const atoms = Object.keys(menu.atoms);
 
   // 收集所有 batch_date × channel 組合（null batchDate → 「待老闆排」欄）
   const dateChannels = new Map<string, Set<Channel>>();
   for (const o of outputOrders) {
-    const d = pendingBatchLabel(o);
+    const d = pendingBatchLabel(o, dayTypeOf);
     const ch = normalizeChannel(o.channel);
     if (!dateChannels.has(d)) dateChannels.set(d, new Set());
     dateChannels.get(d)!.add(ch);
@@ -46,7 +49,7 @@ export function buildStatsWorkbook(orders: Order[], menu: Menu) {
   // 每個 (atom, date, channel) 的計數
   const counts = new Map<string, number>();
   for (const o of outputOrders) {
-    const d = pendingBatchLabel(o);
+    const d = pendingBatchLabel(o, dayTypeOf);
     const ch = normalizeChannel(o.channel);
     for (const it of o.items) {
       for (const a of it.atoms) {

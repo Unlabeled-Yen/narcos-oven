@@ -12,7 +12,20 @@ import {
   summarizeByPeriod,
   type Period,
 } from "../domain/period";
+import { makeDayTypeOf } from "../domain/day-type";
+import { effectiveShipDate } from "../domain/effective-ship-date";
 import { checkReleaseGate } from "../domain/release-gate";
+
+/**
+ * #6 2026-08-06：MCP server 沒有瀏覽器 localStorage，拿不到雇主在網頁上設的
+ * 單日 override（narcos-day-overrides）——只能用 menu.scheduling 的星期幾
+ * 預設規則。這是已知落差、不是這裡能補的（要補得先把 day override 也匯進
+ * state.json），但用「星期幾預設」規則本來就比完全不解析出貨日（純看原始
+ * batchDate）更準，仍是淨改善。
+ */
+function mcpDayTypeOf(menu: Menu) {
+  return makeDayTypeOf(menu, {});
+}
 
 /**
  * get_pending_batches: 找出所有需要排出爐日的訂單
@@ -102,9 +115,10 @@ export function getTimeline(orders: Order[], date: string, menu: Menu) {
 /**
  * period_summary: 期間摘要（月/季/年）
  */
-export function getPeriodSummary(orders: Order[], period: Period) {
-  const summary = summarizeByPeriod(orders, period);
-  const filtered = filterByPeriod(orders, period).filter(
+export function getPeriodSummary(orders: Order[], period: Period, menu: Menu) {
+  const dayTypeOf = mcpDayTypeOf(menu);
+  const summary = summarizeByPeriod(orders, period, dayTypeOf);
+  const filtered = filterByPeriod(orders, period, dayTypeOf).filter(
     (o) => o.status === "confirmed" || o.status === "kol_shipped"
   );
   return {
@@ -122,13 +136,14 @@ export function getPeriodSummary(orders: Order[], period: Period) {
 /**
  * get_payout: 分潤（可加 period filter）
  */
-export function getPayout(orders: Order[], period?: Period) {
+export function getPayout(orders: Order[], menu: Menu, period?: Period) {
+  const dayTypeOf = mcpDayTypeOf(menu);
   const filtered = period
-    ? filterByPeriod(orders, period).filter((o) => o.status === "confirmed")
-    : orders.filter((o) => o.status === "confirmed" && o.batchDate);
+    ? filterByPeriod(orders, period, dayTypeOf).filter((o) => o.status === "confirmed")
+    : orders.filter((o) => o.status === "confirmed" && effectiveShipDate(o, dayTypeOf));
   const byDate = new Map<string, Order[]>();
   for (const o of filtered) {
-    const d = o.batchDate!;
+    const d = effectiveShipDate(o, dayTypeOf)!;
     if (!byDate.has(d)) byDate.set(d, []);
     byDate.get(d)!.push(o);
   }

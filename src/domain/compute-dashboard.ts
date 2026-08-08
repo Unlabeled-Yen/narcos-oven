@@ -73,6 +73,13 @@ export type ShipCalendar = {
   isShipDay: (iso: string) => boolean;
   /** 任一日期 → 它所屬的出貨批（例：07/05 週日 → 07/07 週二） */
   shipDayOf: (iso: string) => string;
+  /**
+   * #6 2026-08-06：訂單的「有效出貨日」——期間篩選/月報表一律用這個，
+   * 不要直接讀 o.batchDate。賣貨便/宅配/面交/KOL 用 shipDayOf(batchDate)，
+   * 駐店直接用 batchDate（駐店到貨日本身就是出貨日），無 batchDate 為 null。
+   * 見 effective-ship-date.ts。
+   */
+  effectiveShipDateOf: (o: Order) => string | null;
 };
 
 /** 近 8 週 = 8 個出貨日（含 today 所屬的那一批） */
@@ -142,9 +149,9 @@ function inWindow(iso: string | null | undefined, w: DateWindow): boolean {
   return !!iso && iso >= w.from && iso <= w.to; // ISO 字串可直接比大小
 }
 
-/** 期間內、且已排定出貨日的 eligible 訂單 */
-function eligibleInWindow(orders: Order[], w: DateWindow): Order[] {
-  return orders.filter((o) => isEligible(o) && inWindow(o.batchDate, w));
+/** 期間內、且已排定出貨日的 eligible 訂單——一律用「有效出貨日」判定，不是原始 batchDate */
+function eligibleInWindow(orders: Order[], w: DateWindow, cal: ShipCalendar): Order[] {
+  return orders.filter((o) => isEligible(o) && inWindow(cal.effectiveShipDateOf(o), w));
 }
 
 // ─── KPI：各狀態計數 ─────────────────────────────────────────────────────────
@@ -162,7 +169,7 @@ export type KpiCounts = {
   currentMonthGmv: number;
 };
 
-export function computeKpiCounts(orders: Order[]): KpiCounts {
+export function computeKpiCounts(orders: Order[], cal: ShipCalendar): KpiCounts {
   const now = new Date();
   const currentYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
@@ -187,8 +194,12 @@ export function computeKpiCounts(orders: Order[]): KpiCounts {
       pending++;
     }
 
-    if (isEligible(o) && o.batchDate && o.batchDate.startsWith(currentYM)) {
-      currentMonthGmv += o.revenue.grossTotal;
+    // #6：本月 GMV 一律用有效出貨日判定，不是原始 batchDate
+    if (isEligible(o)) {
+      const shipDate = cal.effectiveShipDateOf(o);
+      if (shipDate && shipDate.startsWith(currentYM)) {
+        currentMonthGmv += o.revenue.grossTotal;
+      }
     }
   }
 
@@ -284,8 +295,12 @@ export function computeBatchTrend(
     if (cal.isShipDay(cur)) buckets.set(cur, { orders: 0, revenue: 0 });
     cur = addDays(cur, 1);
   }
-  // 再把訂單灌進去
-  for (const o of eligibleInWindow(orders, w)) {
+  // 再把訂單灌進去。這張圖的欄位骨架是「出貨星期幾」網格（先鋪滿 isShipDay
+  // 的格子），駐店可以任何一天到貨、天生不落在這個網格上——是否落進本期間
+  // 由 eligibleInWindow 用有效出貨日判定（駐店不會被誤判漏掉或算錯月份），
+  // 但這張圖本身仍用 shipDayOf 歸到「最近的出貨格」，這是網格圖天生的簡化、
+  // 不是漏算：駐店訂單一樣算進期間總數，只是這張特定圖上跟著最近一批出貨日顯示。
+  for (const o of eligibleInWindow(orders, w, cal)) {
     const slot = cal.shipDayOf(o.batchDate!);
     const b = buckets.get(slot);
     if (!b) continue; // 歸批後落在窗外（窗尾附近才可能）· 不硬塞
@@ -303,8 +318,10 @@ export type MonthTrendEntry = {
   revenue: number;
 };
 
-/** window 內每一個月，沒有訂單的月份也給 0（理由同 computeBatchTrend） */
-export function computeMonthTrend(orders: Order[], w: DateWindow): MonthTrendEntry[] {
+/** window 內每一個月，沒有訂單的月份也給 0（理由同 computeBatchTrend）——
+ *  月份歸屬一律用有效出貨日（#6），不是原始 batchDate，避免出爐 7/31、
+ *  出貨 8/1 的單被算進 7 月、跟工單/出貨明細頁（已用出貨日）對不上。 */
+export function computeMonthTrend(orders: Order[], w: DateWindow, cal: ShipCalendar): MonthTrendEntry[] {
   const byMonth = new Map<string, { orders: number; revenue: number }>();
   let ym = w.from.slice(0, 7);
   const lastYm = w.to.slice(0, 7);
@@ -312,8 +329,10 @@ export function computeMonthTrend(orders: Order[], w: DateWindow): MonthTrendEnt
     byMonth.set(ym, { orders: 0, revenue: 0 });
     ym = addMonths(ym, 1);
   }
-  for (const o of eligibleInWindow(orders, w)) {
-    const m = byMonth.get(o.batchDate!.slice(0, 7));
+  for (const o of eligibleInWindow(orders, w, cal)) {
+    const shipDate = cal.effectiveShipDateOf(o);
+    if (!shipDate) continue;
+    const m = byMonth.get(shipDate.slice(0, 7));
     if (!m) continue;
     m.orders++;
     m.revenue += o.revenue.grossTotal;
@@ -334,8 +353,8 @@ export type TopProductEntry = {
  * Yen 2026-07-17：加上 window。原本完全不過濾時間，UI 卻標「份 · 本月」——
  * 標的是本月、算的是全部，標籤本身就是靜默失效。
  */
-export function computeTopProducts(orders: Order[], w: DateWindow): TopProductEntry[] {
-  const eligible = eligibleInWindow(orders, w);
+export function computeTopProducts(orders: Order[], w: DateWindow, cal: ShipCalendar): TopProductEntry[] {
+  const eligible = eligibleInWindow(orders, w, cal);
   const bySkuQty = new Map<string, number>();
 
   for (const o of eligible) {
@@ -386,8 +405,8 @@ function normalizeChannel(ch: ChannelId): ChannelBucket {
   return "待分類";
 }
 
-export function computeChannelShare(orders: Order[], w: DateWindow): ChannelShareEntry[] {
-  const eligible = eligibleInWindow(orders, w);
+export function computeChannelShare(orders: Order[], w: DateWindow, cal: ShipCalendar): ChannelShareEntry[] {
+  const eligible = eligibleInWindow(orders, w, cal);
   if (eligible.length === 0) return [];
 
   const byCh = new Map<ChannelBucket, number>();
@@ -416,8 +435,8 @@ export type RepeatCustomerStats = {
   topRepeats: Array<{ key: string; count: number }>;
 };
 
-export function computeRepeatCustomers(orders: Order[], w: DateWindow): RepeatCustomerStats {
-  const eligible = eligibleInWindow(orders, w);
+export function computeRepeatCustomers(orders: Order[], w: DateWindow, cal: ShipCalendar): RepeatCustomerStats {
+  const eligible = eligibleInWindow(orders, w, cal);
   const byCustomer = new Map<string, number>();
 
   for (const o of eligible) {
@@ -445,12 +464,13 @@ export type AtomTotalEntry = {
   total: number;
 };
 
-export function computeAtomTotals(orders: Order[]): AtomTotalEntry[] {
+export function computeAtomTotals(orders: Order[], cal: ShipCalendar): AtomTotalEntry[] {
   const now = new Date();
   const currentYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
+  // #6：本月判定一律用有效出貨日
   const eligible = orders.filter(
-    (o) => isEligible(o) && o.batchDate?.startsWith(currentYM)
+    (o) => isEligible(o) && cal.effectiveShipDateOf(o)?.startsWith(currentYM)
   );
 
   const byAtom = new Map<string, number>();

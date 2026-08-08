@@ -35,6 +35,7 @@ import {
   type ShipCalendar,
 } from "../../domain/compute-dashboard";
 import { loadDayOverrides, makeDayTypeOf, shippingDayFor } from "../../domain/day-type";
+import { effectiveShipDate } from "../../domain/effective-ship-date";
 import { checkReleaseGate, type GateStatus } from "../../domain/release-gate";
 import type { PageProps } from "./types";
 
@@ -272,6 +273,7 @@ export function DashboardPage({ orders, menu, refreshOrders }: PageProps) {
     return {
       isShipDay: (iso) => dayTypeOf(iso) === "ship",
       shipDayOf: (iso) => shippingDayFor(iso, dayTypeOf),
+      effectiveShipDateOf: (o) => effectiveShipDate(o, dayTypeOf),
     };
   }, [menu]);
 
@@ -280,14 +282,14 @@ export function DashboardPage({ orders, menu, refreshOrders }: PageProps) {
     [period, orders, todayIso, cal],
   );
 
-  const kpi = useMemo(() => computeKpiCounts(orders), [orders]);
+  const kpi = useMemo(() => computeKpiCounts(orders, cal), [orders, cal]);
   const batchKpi = useMemo(() => computeBatchKpi(orders), [orders]);
   const batchTrend = useMemo(() => computeBatchTrend(orders, win, cal), [orders, win, cal]);
   // 月圖用撐成整月的窗：8w 的窗切在月中間，直接用會讓邊緣月份謊報 0
-  const monthTrend = useMemo(() => computeMonthTrend(orders, monthAlignedWindow(win)), [win, orders]);
-  const topProducts = useMemo(() => computeTopProducts(orders, win), [orders, win]);
-  const channelShare = useMemo(() => computeChannelShare(orders, win), [orders, win]);
-  const repeatStats = useMemo(() => computeRepeatCustomers(orders, win), [orders, win]);
+  const monthTrend = useMemo(() => computeMonthTrend(orders, monthAlignedWindow(win), cal), [win, orders, cal]);
+  const topProducts = useMemo(() => computeTopProducts(orders, win, cal), [orders, win, cal]);
+  const channelShare = useMemo(() => computeChannelShare(orders, win, cal), [orders, win, cal]);
+  const repeatStats = useMemo(() => computeRepeatCustomers(orders, win, cal), [orders, win, cal]);
   const healthChecks = useMemo(() => computeHealthChecks(orders), [orders]);
   const releaseGate = useMemo(() => checkReleaseGate(orders), [orders]);
   const codUnsettled = useMemo(() => codUnsettledSummary(orders), [orders]);

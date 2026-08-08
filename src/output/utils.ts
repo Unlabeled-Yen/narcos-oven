@@ -4,6 +4,8 @@
  */
 import * as XLSX from "xlsx";
 import type { Order } from "../domain/models";
+import type { DayType } from "../domain/day-type";
+import { effectiveShipDate } from "../domain/effective-ship-date";
 
 /**
  * 從 aoa (array of arrays) 產生 worksheet + 自動計算欄寬。
@@ -70,8 +72,13 @@ export function ordersForOutput(orders: Order[]): Order[] {
   );
 }
 
-export function pendingBatchLabel(o: Order): string {
-  return o.batchDate ?? "待老闆排";
+/**
+ * #6 2026-08-06：批次欄位一律用有效出貨日（不是原始 batchDate），
+ * 跟儀表板/工單/出貨明細一致——同一張單不會在 Excel 裡歸到跟畫面
+ * 不同的月份/批次。dayTypeOf 由呼叫端注入（見 domain/day-type.ts）。
+ */
+export function pendingBatchLabel(o: Order, dayTypeOf: (iso: string) => DayType): string {
+  return effectiveShipDate(o, dayTypeOf) ?? "待老闆排";
 }
 
 /**
