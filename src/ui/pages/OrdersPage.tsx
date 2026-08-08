@@ -32,6 +32,7 @@ import {
 } from "./OrdersPage.helpers";
 import { StatusCell, BatchActionBar, FilterChip, SelectAllCheckbox } from "./OrdersPage.BatchActions";
 import { RestoreButton, DuplicatePanel, FindDuplicatesButton, useVoidActions } from "./OrdersPage.DuplicatePanel";
+import { EditModal, useEditModal } from "./OrdersPage.EditModal";
 
 // ── 篩選 state ─────────────────────────────────────────────
 type FilterState = {
@@ -84,8 +85,9 @@ export function OrdersPage({ orders, menu, refreshOrders }: PageProps) {
   const [applying, setApplying] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  // #8：作廢/復原/找重複（抽到 OrdersPage.DuplicatePanel.tsx 維持 500 行以內）
+  // #8：作廢/復原/找重複/單筆編輯（抽到 sibling 檔維持 500 行以內）
   const { dupPanelOpen, setDupPanelOpen, restoreOrder, voidSelectedFromDuplicates } = useVoidActions(orders, refreshOrders, setMsg);
+  const { editing, setEditing, save: saveEdit } = useEditModal(refreshOrders, setMsg);
 
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
@@ -242,6 +244,7 @@ export function OrdersPage({ orders, menu, refreshOrders }: PageProps) {
         }
       />
       {dupPanelOpen && <DuplicatePanel orders={orders} onVoidSelected={(ids) => void voidSelectedFromDuplicates(ids)} onClose={() => setDupPanelOpen(false)} />}
+      {editing && <EditModal order={editing} onSave={(edits) => void saveEdit(editing, edits)} onClose={() => setEditing(null)} />}
 
       {/* 活躍計數 */}
       <div style={{ padding: "0 24px 8px" }}>
@@ -249,7 +252,6 @@ export function OrdersPage({ orders, menu, refreshOrders }: PageProps) {
           {orders.length} 筆活躍
         </span>
       </div>
-
       {/* FILTER BARS */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "0 24px 10px" }}>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
@@ -415,6 +417,9 @@ export function OrdersPage({ orders, menu, refreshOrders }: PageProps) {
                   </span>
                   <span className="flex items-center" style={{ gap: 6, justifyContent: "flex-end" }}>
                     {o.status === "voided" && <RestoreButton onRestore={() => void restoreOrder(o.id)} />}
+                    {unlockedIds.has(o.id) && o.status !== "voided" && (
+                      <button type="button" onClick={() => setEditing(o)} title="編輯出貨批次/收件人/數量/金額" style={{ fontFamily: F.mono, fontSize: 10, color: "#2AC7E8", background: "transparent", border: "1px solid #2AC7E8", padding: "2px 6px", cursor: "pointer" }}>✎</button>
+                    )}
                     <StatusCell order={o} ss={ss} unlocked={unlockedIds.has(o.id)} onToggleLock={() => toggleUnlock(o.id)} onChange={(next) => void updateStatus(o.id, next)} />
                   </span>
                 </div>
