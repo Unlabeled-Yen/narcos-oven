@@ -24,35 +24,12 @@ import {
   statusLabel,
   parseBatchDate,
   weekdayLabel,
+  planStatusBatch,
   type ChanGroup,
   type StatusGroup,
   type BatchCard,
 } from "./OrdersPage.helpers";
-
-// ── Chip 元件 ─────────────────────────────────────────────
-function FilterChip({
-  label, count, active, activeColor, onClick,
-}: {
-  label: string; count: number; active: boolean; activeColor: string; onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        fontFamily: F.tc, fontWeight: 700, fontSize: 12,
-        color: active ? "#111" : "#9A9AA2",
-        background: active ? activeColor : "transparent",
-        border: `1px solid ${active ? activeColor : "#3a3a40"}`,
-        padding: "5px 12px", cursor: "pointer", borderRadius: 0,
-        display: "inline-flex", alignItems: "center", gap: 5,
-      }}
-    >
-      {label}
-      <span style={{ fontFamily: F.mono, fontSize: 10, opacity: 0.75 }}>{count}</span>
-    </button>
-  );
-}
+import { StatusCell, BatchActionBar, FilterChip, SelectAllCheckbox } from "./OrdersPage.BatchActions";
 
 // ── 篩選 state ─────────────────────────────────────────────
 type FilterState = {
@@ -100,6 +77,62 @@ export function OrdersPage({ orders, menu, refreshOrders }: PageProps) {
 
   function toggleFilter<K extends keyof Omit<FilterState, "query">>(key: K, val: FilterState[K]) {
     setFilter((prev) => ({ ...prev, [key]: prev[key] === val ? "全部" : val }));
+    setSelectedIds(new Set()); // #10：篩選一變、選取範圍的基準也變了，清掉避免選到看不見的列
+  }
+
+  // ── #10 批次改狀態 ──────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchStatus, setBatchStatus] = useState<OrderStatusValue>("shipped");
+  const [applying, setApplying] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function applyBatchStatus() {
+    const ids = [...selectedIds];
+    const plan = planStatusBatch(orders, ids, batchStatus);
+    if (!plan.ok) {
+      // 不該發生（ids 全來自目前渲染的列），但真的發生時 loud 拒絕、不猜
+      setMsg({ ok: false, text: `❌ 找不到 ${plan.missingIds.length} 筆訂單，已取消套用（請重新整理再試）` });
+      return;
+    }
+    if (plan.changes.length >= 10) {
+      const ok = window.confirm(`確定要把 ${plan.changes.length} 筆訂單改為「${statusLabel(batchStatus)}」？`);
+      if (!ok) return;
+    }
+    setApplying(true);
+    try {
+      const now = new Date().toISOString();
+      for (const c of plan.changes) {
+        if (c.clearBatchDate) {
+          await db.orders.update(c.id, {
+            status: c.after,
+            last_seen_at: now,
+            batchDate: null,
+            system_suggested_date: null,
+            assignment_source: "pending",
+          });
+        } else {
+          await db.orders.update(c.id, { status: c.after, last_seen_at: now });
+        }
+      }
+      await refreshOrders();
+      const clearedCount = plan.changes.filter((c) => c.clearBatchDate).length;
+      setMsg({
+        ok: true,
+        text: `✓ ${plan.changes.length} 筆已改為 ${statusLabel(batchStatus)}${clearedCount > 0 ? `、其中 ${clearedCount} 筆已清出貨批次` : ""}`,
+      });
+      setSelectedIds(new Set());
+    } finally {
+      setApplying(false);
+    }
   }
 
   const { channelCounts, statusCounts, batchCards, filteredOrders, totalRevenue, grandRevenue } =
@@ -255,21 +288,43 @@ export function OrdersPage({ orders, menu, refreshOrders }: PageProps) {
               {hasFilter && (
                 <button
                   type="button"
-                  onClick={() => setFilter({ channel: "全部", status: "全部", batch: "全部", query: "" })}
+                  onClick={() => { setFilter({ channel: "全部", status: "全部", batch: "全部", query: "" }); setSelectedIds(new Set()); }}
                   style={{ fontFamily: F.mono, fontSize: 11, color: "#E5622A", cursor: "pointer", background: "none", border: "none", padding: 0 }}
                 >
                   ✕ 清除篩選 · {filterParts.join(" · ")}
                 </button>
               )}
             </div>
+
+            {/* #10 批次改狀態 · 浮動 action bar（有選取才出現）*/}
+            <BatchActionBar
+              selectedCount={selectedIds.size}
+              pendingStatus={batchStatus}
+              onPendingStatusChange={setBatchStatus}
+              onApply={() => void applyBatchStatus()}
+              onClear={() => setSelectedIds(new Set())}
+              applying={applying}
+            />
+            {msg && (
+              <div style={{ fontFamily: F.mono, fontSize: 11, color: msg.ok ? "#43B23C" : "#E5352B", padding: "6px 16px", flexShrink: 0 }}>
+                {msg.text}
+              </div>
+            )}
+
             {/* 表頭 */}
             <div style={{
               display: "grid",
-              gridTemplateColumns: "1.5fr 0.8fr 1fr 2fr 0.7fr 0.9fr 0.5fr 0.9fr",
+              gridTemplateColumns: "28px 1.5fr 0.8fr 1fr 2fr 0.7fr 0.9fr 0.5fr 0.9fr",
               gap: 8, padding: "11px 16px", background: "#141417",
               borderBottom: "1px solid #26262C", flexShrink: 0,
               fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".08em",
+              alignItems: "center",
             }}>
+              <SelectAllCheckbox
+                ids={filteredOrders.map((o) => o.id)}
+                selectedIds={selectedIds}
+                onChange={setSelectedIds}
+              />
               <span>訂單編號</span><span>通路</span><span>收件</span><span>品項</span>
               <span>出貨日</span>
               <span style={{ textAlign: "right" }}>金額</span>
@@ -292,7 +347,7 @@ export function OrdersPage({ orders, menu, refreshOrders }: PageProps) {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => setFilter({ channel: "全部", status: "全部", batch: "全部", query: "" })}
+                    onClick={() => { setFilter({ channel: "全部", status: "全部", batch: "全部", query: "" }); setSelectedIds(new Set()); }}
                     style={{ fontFamily: F.mono, fontSize: 11, color: "#E5622A", cursor: "pointer", background: "none", border: "none", marginTop: 10 }}
                   >
                     ✕ 清除所有篩選
@@ -312,11 +367,18 @@ export function OrdersPage({ orders, menu, refreshOrders }: PageProps) {
                   key={o.id}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "1.5fr 0.8fr 1fr 2fr 0.7fr 0.9fr 0.5fr 0.9fr",
+                    gridTemplateColumns: "28px 1.5fr 0.8fr 1fr 2fr 0.7fr 0.9fr 0.5fr 0.9fr",
                     gap: 8, padding: "12px 16px", alignItems: "center",
                     borderBottom: i < filteredOrders.length - 1 ? "1px solid #1c1c20" : "none",
+                    background: selectedIds.has(o.id) ? "#1c1600" : "transparent",
                   }}
                 >
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(o.id)}
+                    onChange={() => toggleSelect(o.id)}
+                    style={{ cursor: "pointer" }}
+                  />
                   <span style={{ fontFamily: F.mono, fontSize: 11, color: "#C9C9CF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {o.id}
                   </span>
@@ -429,71 +491,5 @@ export function OrdersPage({ orders, menu, refreshOrders }: PageProps) {
         </div>
       </div>
     </div>
-  );
-}
-
-// ── 訂單狀態列（預設鎖定 · 點鎖 icon 解鎖後可改）─────────────────
-const STATUS_OPTIONS: OrderStatus[] = [
-  "confirmed",
-  "shipped",
-  "canceled",
-  "kol_shipped",
-  "disappeared_pending_resolution",
-];
-
-function StatusCell({
-  order,
-  ss,
-  unlocked,
-  onToggleLock,
-  onChange,
-}: {
-  order: Order;
-  ss: { color: string; bg: string };
-  unlocked: boolean;
-  onToggleLock: () => void;
-  onChange: (next: OrderStatusValue) => void;
-}) {
-  // 包含當前 status（就算不在常用清單也顯示）
-  const options = STATUS_OPTIONS.includes(order.status)
-    ? STATUS_OPTIONS
-    : [order.status, ...STATUS_OPTIONS];
-  return (
-    <span style={{ textAlign: "right", display: "inline-flex", gap: 4, justifyContent: "flex-end", alignItems: "center" }}>
-      {unlocked ? (
-        <select
-          value={order.status}
-          onChange={(e) => onChange(e.target.value as OrderStatusValue)}
-          style={{
-            fontFamily: F.tc, fontWeight: 700, fontSize: 10, color: ss.color,
-            background: "#0A0A0C", border: `1px solid ${ss.color}`,
-            padding: "2px 6px", cursor: "pointer",
-          }}
-        >
-          {options.map((s) => (
-            <option key={s} value={s} style={{ background: "#0A0A0C", color: "#F5F4EF" }}>
-              {statusLabel(s)}
-            </option>
-          ))}
-        </select>
-      ) : (
-        <span style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 10, color: ss.color, background: ss.bg, padding: "3px 8px", whiteSpace: "nowrap" }}>
-          {statusLabel(order.status)}
-        </span>
-      )}
-      <button
-        type="button"
-        onClick={onToggleLock}
-        title={unlocked ? "鎖回 · 防手殘" : "解鎖 · 允許改狀態"}
-        style={{
-          fontFamily: F.mono, fontSize: 10,
-          color: unlocked ? "#F5D400" : "#6C6C74",
-          background: "transparent", border: "none",
-          padding: "2px 4px", cursor: "pointer", lineHeight: 1,
-        }}
-      >
-        {unlocked ? "🔓" : "🔒"}
-      </button>
-    </span>
   );
 }

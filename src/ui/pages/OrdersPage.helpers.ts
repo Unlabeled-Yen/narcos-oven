@@ -118,3 +118,38 @@ export function weekdayLabel(dateStr: string): string {
   if (!d) return "—";
   return WEEKDAY_ZH[d.getDay()] ?? "—";
 }
+
+// ── #10 2026-08-06：批次改狀態（純函式，不寫 DB）─────────────────────────
+export type StatusBatchChange = {
+  id: string;
+  before: OrderStatus;
+  after: OrderStatus;
+  /** true = 這筆是 shipped → 非 shipped，要一併清 batchDate（跟單筆 updateStatus 同一套補償邏輯）*/
+  clearBatchDate: boolean;
+};
+
+export type StatusBatchPlan =
+  | { ok: true; changes: StatusBatchChange[] }
+  | { ok: false; missingIds: string[] };
+
+/**
+ * 計算批次改狀態的變更計畫。任何一個 id 在 orders 裡找不到 → 整批拒絕
+ * （回傳 ok:false），不部分套用——部分成功比整批失敗更危險（雇主以為
+ * 全部套用了，其實漏了幾筆）。
+ */
+export function planStatusBatch(
+  orders: Order[],
+  ids: string[],
+  newStatus: OrderStatus
+): StatusBatchPlan {
+  const byId = new Map(orders.map((o) => [o.id, o]));
+  const missingIds = ids.filter((id) => !byId.has(id));
+  if (missingIds.length > 0) return { ok: false, missingIds };
+
+  const changes: StatusBatchChange[] = ids.map((id) => {
+    const o = byId.get(id)!;
+    const clearBatchDate = o.status === "shipped" && newStatus !== "shipped";
+    return { id, before: o.status, after: newStatus, clearBatchDate };
+  });
+  return { ok: true, changes };
+}
