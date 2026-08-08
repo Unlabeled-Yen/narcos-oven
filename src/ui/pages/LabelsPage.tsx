@@ -4,13 +4,14 @@
  * 印標籤功能已挪到 PrintLabelsPage · sub-nav 分兩個 tab
  * 這頁：出貨對貨用 · SKU 統計 + 訂單詳情 + 全部確認出貨 button
  */
-import { useState, useMemo, useEffect } from "react";
+import { useMemo } from "react";
 import { BatchDetailPanel } from "./BatchDetail";
 import type { PageProps } from "./types";
 import { F, C } from "./LabelsPage.helpers";
 import { loadDayOverrides, makeDayTypeOf, shippingDayFor } from "../../domain/day-type";
+import { batchListFrom } from "../../domain/current-batch";
 
-export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
+export function LabelsPage({ orders, menu, refreshOrders, currentBatch, setCurrentBatch }: PageProps) {
   const dayTypeOf = useMemo(() => makeDayTypeOf(menu, loadDayOverrides()), [menu]);
   // Yen 2026-07-06：只算「還有非 shipped 訂單」的批次 · 全出貨的批次直接從選項消失
   const orderBatchMap = useMemo(() => {
@@ -22,21 +23,17 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
     }
     return m;
   }, [orders, dayTypeOf]);
-  const shippingBatchDates = useMemo(() => {
-    const seen = new Set<string>();
-    for (const shipDay of orderBatchMap.values()) seen.add(shipDay);
-    return Array.from(seen).sort();
-  }, [orderBatchMap]);
-
-  const [selectedBatch, setSelectedBatch] = useState<string>(
-    shippingBatchDates[shippingBatchDates.length - 1] ?? ""
+  // #11+#14：跟工單/印標籤共用同一顆 batchListFrom；出貨明細語意排除全 shipped 批
+  const shippingBatchDates = useMemo(
+    () => batchListFrom(orders, dayTypeOf, { excludeFullyShipped: true }),
+    [orders, dayTypeOf]
   );
-  useEffect(() => {
-    if (shippingBatchDates.length === 0) return;
-    if (!shippingBatchDates.includes(selectedBatch)) {
-      setSelectedBatch(shippingBatchDates[shippingBatchDates.length - 1]!);
-    }
-  }, [shippingBatchDates.join(",")]);
+
+  // 全域批次存在、但這頁排除了它（全 shipped）→ 顯性提示，不靜默 fallback
+  const batchMissing = currentBatch !== null && !shippingBatchDates.includes(currentBatch);
+  const selectedBatch = currentBatch !== null && shippingBatchDates.includes(currentBatch)
+    ? currentBatch
+    : (shippingBatchDates[shippingBatchDates.length - 1] ?? "");
 
   const batchOrders = useMemo(() => {
     if (!selectedBatch) return [];
@@ -63,6 +60,11 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
             共 {shippingBatchDates.length} 個出貨批 · 印標籤功能移至「印標籤」子頁
           </span>
         </div>
+        {batchMissing && (
+          <div style={{ background: "#2a1010", border: "1px solid #E5352B", padding: "8px 12px", marginBottom: 8, fontFamily: F.mono, fontSize: 12, color: "#E5352B" }}>
+            ⚠ 目前選中的批次已全部出貨、不在出貨明細清單中（顯示改回最近批次）
+          </div>
+        )}
         {isEmpty ? (
           <div style={{ background: C.panel, border: `1px dashed ${C.line}`, padding: "20px 24px", textAlign: "center", fontFamily: F.mono, fontSize: 12, color: C.mut3 }}>
             尚無任何出貨批次
@@ -76,7 +78,7 @@ export function LabelsPage({ orders, menu, refreshOrders }: PageProps) {
                 <button
                   key={d}
                   type="button"
-                  onClick={() => setSelectedBatch(d)}
+                  onClick={() => setCurrentBatch(d)}
                   style={{
                     fontFamily: F.mono, fontSize: 12,
                     color: isActive ? "#111" : C.mut2,

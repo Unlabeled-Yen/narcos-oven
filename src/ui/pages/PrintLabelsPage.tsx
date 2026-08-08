@@ -11,12 +11,13 @@
  *
  * LabelsPage 現在只負責出貨明細（BatchDetailPanel）· 印標籤獨立為此頁
  */
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { extractLabels } from "../../output/label-data";
 import type { PageProps } from "./types";
 import { F, C, LabelPage } from "./LabelsPage.helpers";
 import { labelLayout, pagesFor, LABEL_PRESET_ORDER, type LabelPresetKey } from "../../domain/label-layout";
 import { loadDayOverrides, makeDayTypeOf, shippingDayFor } from "../../domain/day-type";
+import { batchListFrom } from "../../domain/current-batch";
 import { NutritionLabelsPanel } from "./NutritionLabelsPanel";
 
 const INNER_TABS = [
@@ -25,7 +26,7 @@ const INNER_TABS = [
 ] as const;
 type InnerTabKey = (typeof INNER_TABS)[number]["key"];
 
-export function PrintLabelsPage({ orders, menu }: PageProps) {
+export function PrintLabelsPage({ orders, menu, currentBatch, setCurrentBatch }: PageProps) {
   const [innerTab, setInnerTab] = useState<InnerTabKey>("shipping");
 
   const dayTypeOf = useMemo(() => makeDayTypeOf(menu, loadDayOverrides()), [menu]);
@@ -36,22 +37,18 @@ export function PrintLabelsPage({ orders, menu }: PageProps) {
     }
     return m;
   }, [orders, dayTypeOf]);
-  const shippingBatchDates = useMemo(() => {
-    const seen = new Set<string>();
-    for (const shipDay of orderBatchMap.values()) seen.add(shipDay);
-    return Array.from(seen).sort();
-  }, [orderBatchMap]);
-
-  // #15：印標籤跟營養成分表共用同一個批次選擇器
-  const [selectedBatch, setSelectedBatch] = useState<string>(
-    shippingBatchDates[shippingBatchDates.length - 1] ?? ""
+  // #11+#14：跟工單/出貨明細共用同一顆 batchListFrom；印標籤語意不排除全 shipped 批
+  //   （師傅事後可能還要重印歷史批次的標籤）
+  const shippingBatchDates = useMemo(
+    () => batchListFrom(orders, dayTypeOf, { excludeFullyShipped: false }),
+    [orders, dayTypeOf]
   );
-  useEffect(() => {
-    if (shippingBatchDates.length === 0) return;
-    if (!shippingBatchDates.includes(selectedBatch)) {
-      setSelectedBatch(shippingBatchDates[shippingBatchDates.length - 1]!);
-    }
-  }, [shippingBatchDates.join(",")]);
+
+  // #15：印標籤跟營養成分表共用同一個批次選擇器；#11+#14：批次改走全域狀態
+  const batchMissing = currentBatch !== null && !shippingBatchDates.includes(currentBatch);
+  const selectedBatch = currentBatch !== null && shippingBatchDates.includes(currentBatch)
+    ? currentBatch
+    : (shippingBatchDates[shippingBatchDates.length - 1] ?? "");
 
   const batchOrders = useMemo(() => {
     if (!selectedBatch) return [];
@@ -140,6 +137,11 @@ export function PrintLabelsPage({ orders, menu }: PageProps) {
         </div>
         <div style={{ background: C.panel, border: `1px solid ${C.line}`, padding: 16 }}>
           <div style={{ fontFamily: F.mono, fontSize: 10, color: C.mut2, letterSpacing: ".12em", marginBottom: 8 }}>批次</div>
+          {batchMissing && (
+            <div style={{ background: "#2a1010", border: "1px solid #E5352B", padding: "6px 10px", marginBottom: 8, fontFamily: F.mono, fontSize: 11, color: "#E5352B" }}>
+              ⚠ 選中的批次已不存在（顯示改回最近批次）
+            </div>
+          )}
           {shippingBatchDates.length === 0 ? (
             <div style={{ fontFamily: F.mono, fontSize: 12, color: C.mut3 }}>（無批次）</div>
           ) : (
@@ -150,7 +152,7 @@ export function PrintLabelsPage({ orders, menu }: PageProps) {
                   <button
                     key={d}
                     type="button"
-                    onClick={() => { setSelectedBatch(d); setPreviewPage(0); }}
+                    onClick={() => { setCurrentBatch(d); setPreviewPage(0); }}
                     style={{
                       fontFamily: F.mono, fontSize: 12,
                       color: isActive ? "#0B0B0C" : C.mut2,

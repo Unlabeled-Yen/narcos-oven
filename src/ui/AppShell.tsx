@@ -5,6 +5,7 @@ import { WarningTape } from "./brand/WarningTape";
 import { CommandBar, type NavKey, type NavItem } from "./brand/CommandBar";
 import { GoogleSheetSyncModal } from "./GoogleSheetSyncModal";
 import type { PageProps } from "./pages/types";
+import { parseBatchHash, serializeBatchHash } from "../domain/current-batch";
 
 import { DashboardPage } from "./pages/DashboardPage";
 import { SchedulePage } from "./pages/SchedulePage";
@@ -42,10 +43,17 @@ const PAGES: Record<Exclude<NavKey, "capacity">, (p: PageProps) => JSX.Element> 
 
 const ALL_KEYS = Object.keys(PAGES) as NavKey[];
 
+// #11+#14：排程/工單/出貨明細/印標籤四頁共用同一份全域「當前批次」
+const BATCH_AWARE_KEYS: ReadonlySet<NavKey> = new Set(["schedule", "worksheet", "labels", "print-labels"]);
+
 function keyFromHash(): NavKey {
-  const m = /^#\/([a-z-]+)$/.exec(window.location.hash);
-  const k = m?.[1] as NavKey | undefined;
+  const { page } = parseBatchHash(window.location.hash);
+  const k = page as NavKey | null;
   return k && ALL_KEYS.includes(k) ? k : "dashboard";
+}
+
+function batchFromHash(): string | null {
+  return parseBatchHash(window.location.hash).batch;
 }
 
 type Props = {
@@ -70,19 +78,37 @@ export function AppShell({
   error,
 }: Props) {
   const [active, setActive] = useState<NavKey>(keyFromHash);
+  const [currentBatch, setCurrentBatchState] = useState<string | null>(batchFromHash);
   const [sheetSyncOpen, setSheetSyncOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const onHash = () => setActive(keyFromHash());
+    const onHash = () => {
+      setActive(keyFromHash());
+      setCurrentBatchState(batchFromHash());
+    };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  const navigate = useCallback((key: NavKey) => {
-    window.location.hash = `#/${key}`;
-    setActive(key);
-  }, []);
+  // 切到批次頁（排程/工單/出貨明細/印標籤）→ 帶著現有的全域批次一起走；
+  // 切到其他頁 → hash 不帶 batch（但 state 保留，回來時仍記得）
+  const navigate = useCallback(
+    (key: NavKey) => {
+      const nextBatch = BATCH_AWARE_KEYS.has(key) ? currentBatch : null;
+      window.location.hash = serializeBatchHash(key, nextBatch);
+      setActive(key);
+    },
+    [currentBatch]
+  );
+
+  const setCurrentBatch = useCallback(
+    (batch: string | null) => {
+      window.location.hash = serializeBatchHash(active, batch);
+      setCurrentBatchState(batch);
+    },
+    [active]
+  );
 
   const onUploadClick = useCallback(() => fileInputRef.current?.click(), []);
 
@@ -135,6 +161,8 @@ export function AppShell({
     navigate,
     active,
     onUploadClick,
+    currentBatch,
+    setCurrentBatch,
   };
 
   // Yen 2026-07-04：只在「檔案拖曳」時 preventDefault

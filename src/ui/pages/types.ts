@@ -19,6 +19,13 @@ export type PageProps = {
   active: NavKey;
   /** 觸發拖檔上傳（開檔案選擇器） */
   onUploadClick: () => void;
+  /**
+   * #11+#14 全域「當前批次」（ISO 日期或 null）。走 URL hash query（`#/worksheet?batch=…`），
+   * 排程/工單/出貨明細/印標籤四頁共用同一份、雙向連動、重新整理也保留。
+   */
+  currentBatch: string | null;
+  /** 更新全域當前批次（連帶更新 hash） */
+  setCurrentBatch: (batch: string | null) => void;
 };
 
 export type { NavKey };

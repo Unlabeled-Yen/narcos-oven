@@ -7,11 +7,12 @@
  *   列印：瀏覽器 Cmd+P · print CSS 排版
  *   資料源：跟 SchedulePage 同套（accumulateAtoms / day-type / week-locks / batch range）
  */
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { makeDayTypeOf, loadDayOverrides, shippingDayFor } from "../../domain/day-type";
 import { computeBatchRange } from "../../domain/batch-range";
 import { accumulateAtoms } from "../../domain/production-time";
 import { getDisplayName } from "../../domain/menu";
+import { batchListFrom } from "../../domain/current-batch";
 import { isDayLocked } from "../../db/week-locks";
 import type { PageProps } from "./types";
 
@@ -48,7 +49,7 @@ function addDays(d: Date, n: number): Date {
   return r;
 }
 
-export function WorksheetPage({ orders, menu }: PageProps) {
+export function WorksheetPage({ orders, menu, currentBatch, setCurrentBatch }: PageProps) {
   const today = useMemo(() => new Date(), []);
   const [weekOffset, setWeekOffset] = useState(0);
   const weekStart = useMemo(() => mondayOf(today, weekOffset), [today, weekOffset]);
@@ -64,16 +65,19 @@ export function WorksheetPage({ orders, menu }: PageProps) {
     [weekISO.join(","), dayOverrides, menu]
   );
 
-  // 選中的 anchor：預設本週最後一個出貨日、換週時 reset
-  const [selectedAnchor, setSelectedAnchor] = useState<string | null>(null);
-  useEffect(() => {
-    if (weekShipDays.length === 0) {
-      setSelectedAnchor(null);
-    } else if (!selectedAnchor || !weekShipDays.includes(selectedAnchor)) {
-      setSelectedAnchor(weekShipDays[weekShipDays.length - 1]!);
-    }
-  }, [weekShipDays.join(","), weekOffset]);
-  const anchor = selectedAnchor && weekShipDays.includes(selectedAnchor) ? selectedAnchor : (weekShipDays[weekShipDays.length - 1] ?? null);
+  // #11+#14：批次清單改用跨週收斂（複用 LabelsPage 同一顆 batchListFrom）
+  //   ·「上週/本週/下週」保留為快速捲動輔助、不再是資料邊界
+  //   · 不排除全 shipped 批（工單語意跟印標籤一致，見 docs 順位 9 規格 3）
+  const allBatches = useMemo(
+    () => batchListFrom(orders, dayTypeOf, { excludeFullyShipped: false }),
+    [orders, dayTypeOf]
+  );
+  // 全域批次存在但這頁的清單裡沒有（極少見：day-overrides 剛好把它排除掉）
+  //   → 顯性提示，不靜默 fallback 到別的批次
+  const batchMissing = currentBatch !== null && !allBatches.includes(currentBatch);
+  const anchor = currentBatch !== null && allBatches.includes(currentBatch)
+    ? currentBatch
+    : (allBatches[allBatches.length - 1] ?? null);
 
   const locked = anchor ? isDayLocked(anchor) : false;
 
@@ -138,10 +142,13 @@ export function WorksheetPage({ orders, menu }: PageProps) {
             <div style={{ fontFamily: F.mono, fontSize: 11, color: "#7A7A82", marginTop: 4, letterSpacing: ".08em" }}>
               {anchor
                 ? <>批次 {mdOf(anchor)}出貨 · 製作 range {rangeISO[0] ? mdOf(rangeISO[0]) : "—"} – {mdOf(anchor)}（{rangeISO.length} 天）</>
-                : <>本週無出貨日</>}
-              {locked
+                : <>尚無任何批次</>}
+              {anchor && (locked
                 ? <span style={{ color: "var(--acc,#F5D400)", marginLeft: 10 }}>🔒 本批次已鎖定</span>
-                : <span style={{ color: "#E5622A", marginLeft: 10 }}>⚠ 本批次未鎖定 · 排程可能仍在調整</span>}
+                : <span style={{ color: "#E5622A", marginLeft: 10 }}>⚠ 本批次未鎖定 · 排程可能仍在調整</span>)}
+              {batchMissing && (
+                <span style={{ color: "#E5352B", marginLeft: 10 }}>⚠ 選中的批次已不存在（可能被排程日設定變更影響）</span>
+              )}
             </div>
           </div>
           <div className="flex items-center flex-wrap" style={{ gap: 10 }}>
@@ -163,24 +170,27 @@ export function WorksheetPage({ orders, menu }: PageProps) {
           </div>
         </div>
 
-        {/* 批次選 chip · Yen 2026-07-06：出貨日列出來讓雇主直接切換 */}
-        {weekShipDays.length >= 1 && (
+        {/* 批次選 chip · #11+#14：跨週全批次清單（不用按「下週」找兩週後的批次）
+            點選會寫回全域「當前批次」→ 切工單/出貨明細/印標籤/排程自動同步 */}
+        {allBatches.length >= 1 && (
           <div className="no-print" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12, alignItems: "baseline" }}>
             <span style={{ fontFamily: F.mono, fontSize: 10, color: "#7A7A82", letterSpacing: ".14em", marginRight: 4 }}>
-              批次 · 本週 {weekShipDays.length} 個出貨日
+              批次 · 共 {allBatches.length} 個出貨日
             </span>
-            {weekShipDays.map((d) => {
+            {allBatches.map((d) => {
               const isActive = d === anchor;
+              const isThisWeek = weekShipDays.includes(d);
               return (
                 <button
                   key={d}
                   type="button"
-                  onClick={() => setSelectedAnchor(d)}
+                  onClick={() => setCurrentBatch(d)}
+                  title={isThisWeek ? "本週出貨日" : undefined}
                   style={{
                     fontFamily: F.mono, fontSize: 12,
                     color: isActive ? "#111" : "#C9C9CF",
                     background: isActive ? "var(--acc,#F5D400)" : "transparent",
-                    border: `1px solid ${isActive ? "var(--acc,#F5D400)" : "#3a3a40"}`,
+                    border: `1px solid ${isActive ? "var(--acc,#F5D400)" : isThisWeek ? "#7A7A82" : "#3a3a40"}`,
                     padding: "5px 12px", cursor: "pointer",
                     fontWeight: isActive ? 900 : 400,
                     letterSpacing: ".03em",

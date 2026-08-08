@@ -73,10 +73,13 @@ function isPendingSchedule(o: Order): boolean {
   return schedulable && (o.assignment_source === "pending" || o.batchDate === null);
 }
 
-export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
+export function SchedulePage({ orders, menu, refreshOrders, currentBatch, setCurrentBatch }: PageProps) {
   const [viewMode, setViewMode] = useState<"week" | "month">("week");
   const [diagOpen, setDiagOpen] = useState(false);
-  const [weekOffset, setWeekOffset] = useState(0);
+  // #11+#14：若帶著全域批次進來（例如從工單/出貨明細切回），週檢視直接停在該批次所在週
+  const [weekOffset, setWeekOffset] = useState(() =>
+    currentBatch ? weekOffsetForDate(new Date(currentBatch), new Date()) : 0
+  );
   const [monthOffset, setMonthOffset] = useState(0);
   const [dragId, setDragId] = useState<string | null>(null);
 
@@ -705,21 +708,26 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
               const list = assignedByDay.get(iso) ?? [];
               const isOver = overDay === iso;
               const locked = dayLocked(iso);
+              const isCurrentBatch = currentBatch === iso;
               return (
                 <div
                   key={iso}
                   style={{
                     background: "#1c1600",
-                    border: "2px solid var(--acc,#F5D400)",
+                    border: isCurrentBatch ? "2px solid #43B23C" : "2px solid var(--acc,#F5D400)",
                     minHeight: 0,
                     display: "flex",
                     flexDirection: "column",
-                    boxShadow: "0 0 0 3px rgba(245,212,0,.12)",
+                    boxShadow: isCurrentBatch ? "0 0 0 3px rgba(67,178,60,.25)" : "0 0 0 3px rgba(245,212,0,.12)",
                   }}
                 >
-                  <div style={{ padding: "8px 12px", background: "var(--acc,#F5D400)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div
+                    onClick={() => setCurrentBatch(iso)}
+                    title="點擊：設為當前批次 · 切工單/出貨明細/印標籤會自動停在這批"
+                    style={{ padding: "8px 12px", background: isCurrentBatch ? "#43B23C" : "var(--acc,#F5D400)", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}
+                  >
                     <span style={{ fontFamily: F.tc, fontWeight: 900, fontSize: 12, color: "#111" }}>
-                      {mdOf(iso)} · {WD[d.getDay()]} · 出貨批
+                      {mdOf(iso)} · {WD[d.getDay()]} · 出貨批{isCurrentBatch ? " · ✓ 當前批次" : ""}
                     </span>
                     <div className="flex items-center" style={{ gap: 8 }}>
                       <span className="flex items-baseline" style={{ gap: 4 }}>
@@ -728,7 +736,7 @@ export function SchedulePage({ orders, menu, refreshOrders }: PageProps) {
                       </span>
                       <button
                         type="button"
-                        onClick={() => toggleDayLock(iso)}
+                        onClick={(e) => { e.stopPropagation(); toggleDayLock(iso); }}
                         title={locked ? `解鎖 ${mdOf(iso)}` : `鎖定 ${mdOf(iso)} · 排定後防手殘`}
                         style={{
                           fontFamily: F.mono, fontSize: 11,
