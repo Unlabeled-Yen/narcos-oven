@@ -17,7 +17,8 @@ import { buildManualOrder } from "../../domain/manual-order";
 import { upsertOrder } from "../../db/orders";
 import { listShops } from "../../db/shops";
 import { exportManualOrders, filterManualOrders, type ManualExportFilter } from "../../output/manual-orders-excel";
-import { CustomComboForm } from "./ManualOrderPage.CustomComboForm";
+import { CustomComboBoxesEditor, emptyBox, toComboBoxes, type BoxState } from "./ManualOrderPage.CustomComboForm";
+import { validateCustomCombo, customComboItemsInput } from "../../domain/custom-combo";
 
 const F = {
   anton: "'Anton',sans-serif",
@@ -71,7 +72,7 @@ const nextKey = () => ++itemKeyCounter;
 
 const EXPORT_FILTERS: ManualExportFilter[] = ["全部手打", "KOL", "駐店", "彈性", "宅配", "面交_中壢", "面交_台中", "面交_其他"];
 
-type Mode = "consumer" | "shop" | "custom";
+type Mode = "consumer" | "shop";
 
 export function ManualOrderPage({ menu, orders, refreshOrders }: PageProps) {
   const [mode, setMode] = useState<Mode>("consumer");
@@ -88,6 +89,9 @@ export function ManualOrderPage({ menu, orders, refreshOrders }: PageProps) {
   const [grossOverride, setGrossOverride] = useState(""); // 空 = 自動加總
   const [notes, setNotes] = useState("");
   const [items, setItems] = useState<ItemInput[]>([{ key: nextKey(), skuId: "", quantity: 1, subtotalOverride: "" }]);
+  // #2 2026-08-09 併入手打單：品項區可切「一般品項 / 客製組合（分盒）」
+  const [isCustomCombo, setIsCustomCombo] = useState(false);
+  const [boxes, setBoxes] = useState<BoxState[]>(() => [emptyBox()]);
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -139,7 +143,12 @@ export function ManualOrderPage({ menu, orders, refreshOrders }: PageProps) {
   }, [items, menu]);
 
   const autoGross = computedItems.reduce((s, it) => s + it.subtotal, 0);
-  const gross = grossOverride === "" ? autoGross : Number(grossOverride) || 0;
+  // 客製組合沒有單品定價可加總 · 總價一律老闆手輸（合計欄）
+  const gross = isCustomCombo
+    ? Number(grossOverride) || 0
+    : grossOverride === ""
+      ? autoGross
+      : Number(grossOverride) || 0;
 
   function addItem() {
     setItems((prev) => [...prev, { key: nextKey(), skuId: "", quantity: 1, subtotalOverride: "" }]);
@@ -163,13 +172,21 @@ export function ManualOrderPage({ menu, orders, refreshOrders }: PageProps) {
     setGrossOverride("");
     setNotes("");
     setItems([{ key: nextKey(), skuId: "", quantity: 1, subtotalOverride: "" }]);
+    setBoxes([emptyBox()]);
   }
 
   async function handleSave() {
     if (saving) return;
-    // 基本檢查
+    // 基本檢查 · 客製組合走 validateCustomCombo（不存在 SKU / 空盒 / 總價非正數一律拒絕）
     const validItems = computedItems.filter((it) => it.skuId && it.quantity > 0);
-    if (validItems.length === 0) {
+    const comboBoxes = toComboBoxes(boxes);
+    if (isCustomCombo) {
+      const validation = validateCustomCombo(comboBoxes, gross, menu);
+      if (!validation.ok) {
+        setSavedMsg({ ok: false, text: `❌ ${validation.error}` });
+        return;
+      }
+    } else if (validItems.length === 0) {
       setSavedMsg({ ok: false, text: "❌ 至少要有一個品項" });
       return;
     }
@@ -187,16 +204,20 @@ export function ManualOrderPage({ menu, orders, refreshOrders }: PageProps) {
             address: address.trim() || null,
             convStore: convStore.trim() || null,
           },
-          items: validItems.map((it) => ({
-            skuId: it.skuId,
-            rawName: it.product?.display_name ?? it.skuId,
-            quantity: it.quantity,
-            subtotal: it.subtotal,
-          })),
+          items: isCustomCombo
+            ? customComboItemsInput(comboBoxes, menu)
+            : validItems.map((it) => ({
+                skuId: it.skuId,
+                rawName: it.product?.display_name ?? it.skuId,
+                quantity: it.quantity,
+                subtotal: it.subtotal,
+              })),
           grossTotal: gross,
           freight: Number(freight) || 0,
           discount: Number(discount) || 0,
-          notes: notes.trim() || undefined,
+          // #2b：客製組合標籤張數自動 = 盒數；一般單維持 buildManualOrder 預設（= items 總 quantity）
+          labelCount: isCustomCombo ? comboBoxes.length : undefined,
+          notes: notes.trim() || (isCustomCombo ? "客製組合" : undefined),
         },
         menu
       );
@@ -232,9 +253,8 @@ export function ManualOrderPage({ menu, orders, refreshOrders }: PageProps) {
         <div style={{ display: "flex", gap: 4, marginBottom: 14, borderBottom: `1px solid ${C.line}` }}>
           {(
             [
-              { key: "consumer" as Mode, label: "消費者手打", hint: "KOL / 彈性 / 面交 / 宅配" },
+              { key: "consumer" as Mode, label: "消費者手打", hint: "KOL / 彈性 / 面交 / 宅配 · 品項區可切客製組合" },
               { key: "shop" as Mode, label: "駐店訂單", hint: "合作店家批發、附運費 + 結清狀態" },
-              { key: "custom" as Mode, label: "客製組合", hint: "自由組合單品、分盒、自訂總價" },
             ]
           ).map((t) => {
             const active = mode === t.key;
@@ -260,10 +280,6 @@ export function ManualOrderPage({ menu, orders, refreshOrders }: PageProps) {
 
         {mode === "shop" && (
           <ShopModeForm menu={menu} refreshOrders={refreshOrders} />
-        )}
-
-        {mode === "custom" && (
-          <CustomComboForm menu={menu} refreshOrders={refreshOrders} />
         )}
 
         {mode === "consumer" && savedMsg && (
@@ -324,8 +340,38 @@ export function ManualOrderPage({ menu, orders, refreshOrders }: PageProps) {
           </div>
         </Section>
 
-        {/* ── Section 3 · 品項 ── */}
+        {/* ── Section 3 · 品項（一般 SKU or #2 客製組合分盒 · 2026-08-09 併入）── */}
         <Section title="3 · 品項" color={C.acc}>
+          <div style={{ display: "flex", gap: 2, marginBottom: 12 }}>
+            {([
+              { v: false, label: "一般品項", hint: "menu 現成 SKU + 數量" },
+              { v: true, label: "客製組合（分盒）", hint: "自由組合單品、一盒一張標籤、總價手輸" },
+            ] as const).map((t) => {
+              const active = isCustomCombo === t.v;
+              return (
+                <button
+                  key={String(t.v)}
+                  type="button"
+                  onClick={() => setIsCustomCombo(t.v)}
+                  title={t.hint}
+                  style={{
+                    fontFamily: F.tc, fontWeight: active ? 900 : 400, fontSize: 12,
+                    color: active ? "#111" : C.mut,
+                    background: active ? C.acc : C.line2,
+                    border: "none", padding: "7px 14px", cursor: "pointer",
+                  }}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {isCustomCombo && (
+            <CustomComboBoxesEditor menu={menu} boxes={boxes} onChange={setBoxes} grossTotal={gross} />
+          )}
+
+          {!isCustomCombo && (<>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 8 }}>
             {computedItems.map((it) => (
               <div
@@ -398,17 +444,18 @@ export function ManualOrderPage({ menu, orders, refreshOrders }: PageProps) {
           >
             ＋ 加一列品項
           </button>
+          </>)}
         </Section>
 
         {/* ── Section 4 · 金額 ── */}
         <Section title="4 · 金額" color={C.acc}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
-            <Field label={`合計（自動 $${autoGross}）· 可覆蓋`}>
+            <Field label={isCustomCombo ? "合計（客製組合 · 老闆報價必填）" : `合計（自動 $${autoGross}）· 可覆蓋`}>
               <input
                 type="number"
                 value={grossOverride}
                 onChange={(e) => setGrossOverride(e.target.value)}
-                placeholder={String(autoGross)}
+                placeholder={isCustomCombo ? "1500" : String(autoGross)}
                 style={inputStyle}
               />
             </Field>
