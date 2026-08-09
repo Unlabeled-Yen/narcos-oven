@@ -48,11 +48,17 @@
     padding: 0 !important;
   }
 
-  /* ── 預設流程（Cmd+P / 對帳單 button）：印 .print-area ── */
+  /* ── 預設流程（Cmd+P / 對帳單 button）：印 .print-area ──
+     守衛：兩個特殊列印流程（printing-labels / printing-nutrition）都必須
+     排除。2026-08-09 修正：原本只排除 printing-labels，導致印成分表時
+     這批預設規則整組生效——規則 2 的「全部 display:none」把成分表的
+     列印內容一起藏掉，印出來永遠空白（headless Chromium 印 PDF 重現
+     並驗證：補上 :not(.printing-nutrition) 前 946 bytes 空白頁、補上後
+     完整內容）。之後若再加第三種列印流程，這裡的守衛也要跟著加。 */
 
   /* 1. 祖先鏈：保留 display 但把所有「會撐空間」的樣式歸零 ·
         含 h-screen / flex-1 / padding / max-width / grid / overflow-hidden · 全部清乾淨 */
-  body:not(.printing-labels) :has(.print-area) {
+  body:not(.printing-labels):not(.printing-nutrition) :has(.print-area) {
     display: block !important;
     height: auto !important;
     min-height: 0 !important;
@@ -70,12 +76,12 @@
   }
 
   /* 2. 非祖先、非 print-area 本體、非 print-area 子孫：display:none · 徹底移出 flow */
-  body:not(.printing-labels) *:not(:has(.print-area)):not(.print-area):not(.print-area *) {
+  body:not(.printing-labels):not(.printing-nutrition) *:not(:has(.print-area)):not(.print-area):not(.print-area *) {
     display: none !important;
   }
 
   /* 3. print-area 本體：就地渲染、自然分頁 · absolute 曾讓內容卡在單頁印不完 */
-  body:not(.printing-labels) .print-area {
+  body:not(.printing-labels):not(.printing-nutrition) .print-area {
     position: static !important;
     display: block !important;
     width: 100% !important;
@@ -89,7 +95,7 @@
   }
 
   /* 4. print-area 內部：背景刷白、顏色刷黑、邊框刷黑 · 深色 UI → 乾淨紙本 */
-  body:not(.printing-labels) .print-area * {
+  body:not(.printing-labels):not(.printing-nutrition) .print-area * {
     background: transparent !important;
     background-color: transparent !important;
     background-image: none !important;
@@ -103,7 +109,7 @@
   }
 
   /* 5. print-area 內部的互動控制（.no-print 例：🖨 列印按鈕）· 不印 */
-  body:not(.printing-labels) .print-area .no-print { display: none !important; }
+  body:not(.printing-labels):not(.printing-nutrition) .print-area .no-print { display: none !important; }
 
   /* ── 印標籤 / 印成分表流程（body.printing-labels / body.printing-nutrition）
      2026-08-09 改版：原本跟 .print-area 一樣用 :has() 爬祖先鏈，但
