@@ -12,7 +12,7 @@ import { useCallback, useMemo, useState } from "react";
 import type { Menu, Order } from "../../domain/models";
 import { nutritionSheetsFor } from "../../domain/nutrition";
 import { labelLayout } from "../../domain/label-layout";
-import { F, C } from "./LabelsPage.helpers";
+import { F, C, waitForNextPaint } from "./LabelsPage.helpers";
 
 // Vite：一次性把 nutrition 資產夾下全部圖檔解成 URL，key 是完整相對路徑
 const NUTRITION_ASSETS = import.meta.glob<string>("../../assets/nutrition/*.jpg", {
@@ -123,6 +123,7 @@ export function NutritionLabelsPanel({
       const urls = [...new Set(allSheets.map((s) => resolveNutritionUrl(s.nutritionLabel)).filter((u): u is string => !!u))];
       await preloadImages(urls);
       document.body.classList.add("printing-nutrition");
+      await waitForNextPaint();
       window.print();
     } catch (err) {
       console.error("[NutritionLabelsPanel] print failed:", err);

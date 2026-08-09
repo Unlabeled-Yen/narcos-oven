@@ -15,6 +15,20 @@
 import type { LabelData } from "../../output/label-data";
 import { type LabelLayout, mmToPx, truncateForLabel } from "../../domain/label-layout";
 
+/**
+ * 印表機 CSS 開關（body.printing-labels / .printing-nutrition）跟
+ * window.print() 在同一個 event loop tick 裡連續呼叫時，瀏覽器不保證
+ * 「display:none → block」那次 DOM 切換已經真的 reflow/paint 完——
+ * 結果印出來/存 PDF 是空白頁（2026-08-09 老闆回報的成分表列印空白）。
+ * 修法：切完 class 後至少等兩次 requestAnimationFrame（等瀏覽器真的
+ * 畫完那一輪），才觸發 window.print()。
+ */
+export function waitForNextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+}
+
 // ── 字型常數 ──────────────────────────────────────────────────
 export const F = {
   anton: "'Anton',sans-serif",

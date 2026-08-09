@@ -14,7 +14,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { extractLabels } from "../../output/label-data";
 import type { PageProps } from "./types";
-import { F, C, LabelPage } from "./LabelsPage.helpers";
+import { F, C, LabelPage, waitForNextPaint } from "./LabelsPage.helpers";
 import { labelLayout, LABEL_PRESET_ORDER, type LabelPresetKey } from "../../domain/label-layout";
 import { loadDayOverrides, makeDayTypeOf, shippingDayFor } from "../../domain/day-type";
 import { batchListFrom } from "../../domain/current-batch";
@@ -78,8 +78,9 @@ export function PrintLabelsPage({ orders, menu, currentBatch, setCurrentBatch }:
   const handlePrint = useCallback(async () => {
     if (allLabels.length === 0) return;
     setPrinting(true);
-    document.body.classList.add("printing-labels");
     try {
+      document.body.classList.add("printing-labels");
+      await waitForNextPaint();
       window.print();
     } catch (err) {
       console.error("[PrintLabelsPage] print failed:", err);
