@@ -81,6 +81,7 @@ export default function App() {
   const runImport = useCallback(async (
     parsed: { orders: Order[]; fileName: string }[],
     channelsTouched: Set<ChannelId>,
+    afterImport?: () => Promise<void>,
   ) => {
     if (parsed.length === 0) return;
     const nowIso = new Date().toISOString();
@@ -90,34 +91,40 @@ export default function App() {
     const report = checkImportSanity(newAll, dbActive);
 
     const doImport = async () => {
-      const plan = planDiff(newAll, dbActive, runId, nowIso);
-      // #8 2026-08-06：匯入防呆——整批跟現有 DB 100% 重疊且無任何 diff → 提示、不重複寫入
-      if (isNoOpImport(plan.diff)) {
-        setError(`這批已匯入過、本次無變化（${newAll.length} 筆訂單皆與現有資料相同）`);
-        return;
+      try {
+        const plan = planDiff(newAll, dbActive, runId, nowIso);
+        // #8 2026-08-06：匯入防呆——整批跟現有 DB 100% 重疊且無任何 diff → 提示、不重複寫入
+        if (isNoOpImport(plan.diff)) {
+          setError(`這批已匯入過、本次無變化（${newAll.length} 筆訂單皆與現有資料相同）`);
+          return;
+        }
+        await upsertMany(plan.upserts);
+        if (plan.markDisappeared.length > 0) {
+          await markDisappeared(plan.markDisappeared, nowIso);
+        }
+        const run: ImportRun = {
+          id: runId,
+          imported_at: nowIso,
+          source_files: parsed.map((p) => p.fileName),
+          channels_touched: [...channelsTouched],
+          diff: plan.diff,
+          resolutions: {},
+          fully_resolved_at:
+            plan.diff.disappeared.length + plan.diff.fields_changed.length === 0
+              ? nowIso
+              : null,
+        };
+        await saveImportRun(run);
+        setSyncLabel(`SYNC ${nowIso.slice(5, 16).replace("T", " ")}`);
+        if (run.fully_resolved_at === null) {
+          setPendingRun(run);
+        }
+        await refreshOrders();
+      } finally {
+        // xlsx 訂單（不管是真的寫入還是 no-op）都已經在 DB 裡了，這時候
+        // html 才比對得到——#12 順序 bug 修復：html 一律等 xlsx import 完成才跑
+        if (afterImport) await afterImport();
       }
-      await upsertMany(plan.upserts);
-      if (plan.markDisappeared.length > 0) {
-        await markDisappeared(plan.markDisappeared, nowIso);
-      }
-      const run: ImportRun = {
-        id: runId,
-        imported_at: nowIso,
-        source_files: parsed.map((p) => p.fileName),
-        channels_touched: [...channelsTouched],
-        diff: plan.diff,
-        resolutions: {},
-        fully_resolved_at:
-          plan.diff.disappeared.length + plan.diff.fields_changed.length === 0
-            ? nowIso
-            : null,
-      };
-      await saveImportRun(run);
-      setSyncLabel(`SYNC ${nowIso.slice(5, 16).replace("T", " ")}`);
-      if (run.fully_resolved_at === null) {
-        setPendingRun(run);
-      }
-      await refreshOrders();
     };
 
     if (report.severity !== "ok") {
@@ -200,8 +207,16 @@ export default function App() {
         setError(`檔 "${file.name}" parse error: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
-    if (htmlFiles.length > 0) await applyHtmlFiles(htmlFiles);
-    await runImport(parsed, channelsTouched);
+    // #12 順序修復：xlsx 訂單要先真的寫進 DB，html 才比對得到訂單編號——
+    // 一起拖進來的情況（parsed 非空）讓 html 掛在 runImport 完成之後跑（含
+    // 匯入防呆彈窗那條路徑，afterImport 在 doImport 內部才會觸發）；
+    // 只拖 html、沒有 xlsx 的情況（parsed 為空）維持舊行為：直接比對現有 DB。
+    const runHtml = htmlFiles.length > 0 ? () => applyHtmlFiles(htmlFiles) : undefined;
+    if (parsed.length > 0) {
+      await runImport(parsed, channelsTouched, runHtml);
+    } else if (runHtml) {
+      await runHtml();
+    }
   }, [runImport, applyHtmlFiles]);
 
   /**
