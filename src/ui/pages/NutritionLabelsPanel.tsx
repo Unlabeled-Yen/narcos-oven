@@ -12,7 +12,7 @@ import { useCallback, useMemo, useState } from "react";
 import type { Menu, Order } from "../../domain/models";
 import { nutritionSheetsFor } from "../../domain/nutrition";
 import { labelLayout } from "../../domain/label-layout";
-import { F, C, waitForNextPaint } from "./LabelsPage.helpers";
+import { F, C, PrintPortal, waitForNextPaint } from "./LabelsPage.helpers";
 
 // Vite：一次性把 nutrition 資產夾下全部圖檔解成 URL，key 是完整相對路徑
 const NUTRITION_ASSETS = import.meta.glob<string>("../../assets/nutrition/*.jpg", {
@@ -145,8 +145,8 @@ export function NutritionLabelsPanel({
         minHeight: 0,
       }}
     >
-      {/* 「只印 .nutrition-print-area、其餘區塊移出 flow」的規則在 index.css
-          （body.printing-nutrition 那段、跟 .print-area 同一套 :has() 技巧）。 */}
+      {/* 「只印 #print-portal-nutrition、其餘區塊藏起來」的規則在 index.css
+          （body.printing-nutrition 那段，PrintPortal 見 LabelsPage.helpers.tsx）。 */}
       <style>{`
         @media print {
           @page { ${layout.pageCss} }
@@ -276,14 +276,14 @@ export function NutritionLabelsPanel({
         )}
       </div>
 
-      {/* Print Area */}
-      <div className="nutrition-print-area" style={{ display: "none" }} aria-hidden="true">
+      {/* Print Area · 透過 PrintPortal 掛在 <body> 下，印時 body.printing-nutrition 顯示 */}
+      <PrintPortal id="print-portal-nutrition">
         {allSheets.map((s, i) => {
           const url = resolveNutritionUrl(s.nutritionLabel);
           if (!url) return null;
           return <NutritionSheetPage key={`${s.atomId}-${i}`} imageUrl={url} layout={layout} />;
         })}
-      </div>
+      </PrintPortal>
     </div>
   );
 }

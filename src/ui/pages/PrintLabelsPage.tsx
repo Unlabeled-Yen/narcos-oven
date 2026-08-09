@@ -14,7 +14,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { extractLabels } from "../../output/label-data";
 import type { PageProps } from "./types";
-import { F, C, LabelPage, waitForNextPaint } from "./LabelsPage.helpers";
+import { F, C, LabelPage, PrintPortal, waitForNextPaint } from "./LabelsPage.helpers";
 import { labelLayout, LABEL_PRESET_ORDER, type LabelPresetKey } from "../../domain/label-layout";
 import { loadDayOverrides, makeDayTypeOf, shippingDayFor } from "../../domain/day-type";
 import { batchListFrom } from "../../domain/current-batch";
@@ -94,8 +94,8 @@ export function PrintLabelsPage({ orders, menu, currentBatch, setCurrentBatch }:
 
   return (
     <div className="h-full flex flex-col min-h-0" style={{ overflowY: "auto" }}>
-      {/* 「只印 .label-print-area、其餘區塊移出 flow」的規則在 index.css
-          （body.printing-labels 那段、跟 .print-area 同一套 :has() 技巧）。
+      {/* 「只印 #print-portal-labels、其餘區塊藏起來」的規則在 index.css
+          （body.printing-labels 那段，PrintPortal 見 LabelsPage.helpers.tsx）。
           這裡只放版面相關、隨選擇的尺寸而變的規則。 */}
       <style>{`
         @media print {
@@ -293,12 +293,12 @@ export function PrintLabelsPage({ orders, menu, currentBatch, setCurrentBatch }:
       </div>
       )}
 
-      {/* Label Print Area · 螢幕隱藏、印時透過 body.printing-labels 顯示 */}
-      <div className="label-print-area" style={{ display: "none" }} aria-hidden="true">
+      {/* Label Print Area · 透過 PrintPortal 掛在 <body> 下，印時 body.printing-labels 顯示 */}
+      <PrintPortal id="print-portal-labels">
         {allLabels.map((label, i) => (
           <LabelPage key={`${label.order_id}-${label.index}-${i}`} label={label} layout={layout} />
         ))}
-      </div>
+      </PrintPortal>
     </div>
   );
 }

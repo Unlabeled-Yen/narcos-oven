@@ -106,58 +106,25 @@
   body:not(.printing-labels) .print-area .no-print { display: none !important; }
 
   /* ── 印標籤 / 印成分表流程（body.printing-labels / body.printing-nutrition）
-     跟上面 .print-area 一樣的 :has() 技巧、只是目標子樹換成
-     .label-print-area / .nutrition-print-area。
-     2026-08-06 補：原本只有 visibility:visible + absolute，沒有真的把
-     其他區塊移出 flow，印出來可能疊到控制欄——比照 .print-area 流程補齊。 */
-  body.printing-labels :has(.label-print-area) {
+     2026-08-09 改版：原本跟 .print-area 一樣用 :has() 爬祖先鏈，但
+     :has() 在真正列印時不可靠地生效（印出來空白，畫面渲染邏輯本身沒錯）
+     ——見 PrintPortal（src/ui/pages/LabelsPage.helpers.tsx）。列印內容
+     現在是 React Portal 直接掛在 <body> 下、跟 #root 平行的獨立節點
+     （#print-portal-labels / #print-portal-nutrition），所以只要單純
+     藏 #root、show 對應節點，完全不需要 :has()。 */
+  #print-portal-labels,
+  #print-portal-nutrition {
+    display: none;
+  }
+  body.printing-labels #root { display: none !important; }
+  body.printing-labels #print-portal-labels {
     display: block !important;
-    height: auto !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    width: auto !important;
-    max-width: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    overflow: visible !important;
-    position: static !important;
-    flex: initial !important;
+    background: #fff !important;
   }
-  body.printing-labels *:not(:has(.label-print-area)):not(.label-print-area):not(.label-print-area *) {
-    display: none !important;
-  }
-  body.printing-labels .label-print-area {
+  body.printing-nutrition #root { display: none !important; }
+  body.printing-nutrition #print-portal-nutrition {
     display: block !important;
-    position: static !important;
-    width: 100% !important;
-  }
-
-  body.printing-nutrition :has(.nutrition-print-area) {
-    display: block !important;
-    height: auto !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    width: auto !important;
-    max-width: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    overflow: visible !important;
-    position: static !important;
-    flex: initial !important;
-  }
-  body.printing-nutrition *:not(:has(.nutrition-print-area)):not(.nutrition-print-area):not(.nutrition-print-area *) {
-    display: none !important;
-  }
-  body.printing-nutrition .nutrition-print-area {
-    display: block !important;
-    position: static !important;
-    width: 100% !important;
+    background: #fff !important;
   }
 }
 

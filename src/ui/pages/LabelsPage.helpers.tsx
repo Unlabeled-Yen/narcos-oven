@@ -12,21 +12,44 @@
  *   KOL:    top=KOL | mid=@IG | bottom=分盒編號+品項簡稱
  *   宅配/待分類：走面交同版式
  */
+import { useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { LabelData } from "../../output/label-data";
 import { type LabelLayout, mmToPx, truncateForLabel } from "../../domain/label-layout";
 
 /**
- * 印表機 CSS 開關（body.printing-labels / .printing-nutrition）跟
- * window.print() 在同一個 event loop tick 裡連續呼叫時，瀏覽器不保證
- * 「display:none → block」那次 DOM 切換已經真的 reflow/paint 完——
- * 結果印出來/存 PDF 是空白頁（2026-08-09 老闆回報的成分表列印空白）。
- * 修法：切完 class 後至少等兩次 requestAnimationFrame（等瀏覽器真的
- * 畫完那一輪），才觸發 window.print()。
+ * 保險：切 body.printing-* class 後至少等兩次 requestAnimationFrame
+ * 再觸發 window.print()，確保瀏覽器至少畫過一輪。
  */
 export function waitForNextPaint(): Promise<void> {
   return new Promise((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
   });
+}
+
+/**
+ * 印標籤/成分表空白畫面根因（2026-08-09 老闆回報）：原本用
+ * `body.printing-* :has(.xxx-print-area) {...}` 這種 :has() 選擇器把
+ * 「其他區塊藏起來、只留列印子樹」——這套邏輯本身沒錯（用 media="screen"
+ * 複製同一批規則測試過、畫面渲染完全正常），但瀏覽器**真正列印**時
+ * 這批 :has() 規則不可靠地生效，印出來/存 PDF 是空白頁。
+ *
+ * 修法：改用 React Portal，把要印的內容直接掛到 <body> 底下、跟
+ * #root 平行的一個獨立節點——列印時只要單純 `#root{display:none}` +
+ * `#這個節點{display:block}`，完全不需要 :has() 去爬祖先鏈，就沒有
+ * 上面那個不可靠的行為可以踩。
+ */
+export function PrintPortal({ id, children }: { id: string; children: ReactNode }) {
+  const [node] = useState<HTMLDivElement>(() => {
+    let el = document.getElementById(id) as HTMLDivElement | null;
+    if (!el) {
+      el = document.createElement("div");
+      el.id = id;
+      document.body.appendChild(el);
+    }
+    return el;
+  });
+  return createPortal(children, node);
 }
 
 // ── 字型常數 ──────────────────────────────────────────────────
