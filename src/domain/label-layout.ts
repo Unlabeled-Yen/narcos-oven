@@ -94,9 +94,11 @@ export const LABEL_PRESETS: Record<LabelPresetKey, LabelLayout> = {
   },
 };
 
-/** 出貨標籤尺寸選單順序——5x8cm 是營養成分表專用 preset，不列入這裡，
- *  不會出現在出貨標籤的尺寸選擇器（兩個功能各自用 labelLayout() 取自己的 key）。 */
-export const LABEL_PRESET_ORDER: LabelPresetKey[] = ["4x3cm", "60x90mm", "75x120mm"];
+/** 出貨標籤尺寸選單順序——老闆只用 4x3cm 熱感應標籤機，60x90mm/75x120mm
+ *  兩個舊 preset 保留在 LABEL_PRESETS（測試仍驗證其規格），但 2026-08-09
+ *  起不再出現在出貨標籤的尺寸選擇器裡。5x8cm 是營養成分表專用 preset，
+ *  也不列入這裡（兩個功能各自用 labelLayout() 取自己的 key）。 */
+export const LABEL_PRESET_ORDER: LabelPresetKey[] = ["4x3cm"];
 
 export function labelLayout(preset: LabelPresetKey): LabelLayout {
   const layout = LABEL_PRESETS[preset];

@@ -11,7 +11,7 @@
 import { useCallback, useMemo, useState } from "react";
 import type { Menu, Order } from "../../domain/models";
 import { nutritionSheetsFor } from "../../domain/nutrition";
-import { labelLayout, pagesFor } from "../../domain/label-layout";
+import { labelLayout } from "../../domain/label-layout";
 import { F, C } from "./LabelsPage.helpers";
 
 // Vite：一次性把 nutrition 資產夾下全部圖檔解成 URL，key 是完整相對路徑
@@ -78,7 +78,6 @@ export function NutritionLabelsPanel({
   menu: Menu;
   selectedBatch: string;
 }) {
-  const [previewPage, setPreviewPage] = useState(0);
   const [printing, setPrinting] = useState(false);
   const layout = labelLayout(SHEET_PRESET);
 
@@ -95,18 +94,35 @@ export function NutritionLabelsPanel({
     return out;
   }, [result.sheets]);
 
-  const totalPages = pagesFor(allSheets.length, layout);
-  const safePageIdx = Math.min(previewPage, Math.max(0, totalPages - 1));
-  const currentSheet = allSheets[safePageIdx];
-  const currentUrl = currentSheet ? resolveNutritionUrl(currentSheet.nutritionLabel) : null;
-
   const isEmpty = !selectedBatch || allSheets.length === 0;
+
+  // #15 2026-08-09 修復：印/存 PDF 空白畫面——列印區的 <img> 是跟畫面預覽
+  // 分開的 DOM 節點，若瀏覽器還沒真的抓過某張圖（例如那張成分表使用者
+  // 還沒捲到過），window.print() 當下圖還沒載完，印出來/存 PDF 就是空白。
+  // 修法：印之前先把本批會用到的圖全部 preload、等全部 decode 完成才觸發
+  // window.print()——不是「畫面看起來有就好」，是真的確認每張都能印。
+  const preloadImages = useCallback(async (urls: string[]) => {
+    await Promise.all(
+      urls.map(
+        (url) =>
+          new Promise<void>((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve();
+            img.onerror = () => resolve(); // 載入失敗不要卡住列印，畫面上已有 ⚠ 找不到圖檔提示
+            img.src = url;
+            if (img.complete) resolve();
+          })
+      )
+    );
+  }, []);
 
   const handlePrint = useCallback(async () => {
     if (allSheets.length === 0) return;
     setPrinting(true);
-    document.body.classList.add("printing-nutrition");
     try {
+      const urls = [...new Set(allSheets.map((s) => resolveNutritionUrl(s.nutritionLabel)).filter((u): u is string => !!u))];
+      await preloadImages(urls);
+      document.body.classList.add("printing-nutrition");
       window.print();
     } catch (err) {
       console.error("[NutritionLabelsPanel] print failed:", err);
@@ -116,7 +132,7 @@ export function NutritionLabelsPanel({
       setTimeout(cleanup, 2000);
       setPrinting(false);
     }
-  }, [allSheets]);
+  }, [allSheets, preloadImages]);
 
   return (
     <div
@@ -217,10 +233,10 @@ export function NutritionLabelsPanel({
         )}
       </div>
 
-      {/* 右預覽 */}
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 10, minHeight: 0, overflowY: "auto" }}>
-        <div style={{ fontFamily: F.mono, fontSize: 11, color: C.mut3 }}>
-          {isEmpty ? "（無成分表）" : `預覽 · 第 ${safePageIdx + 1} 張 / 共 ${totalPages} 張 · ${currentSheet?.atomId ?? ""}`}
+      {/* 右預覽 · 整批成分表一次全部堆疊顯示、用滾輪/拖動捲動看完（不再一張一張翻頁） */}
+      <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+        <div style={{ fontFamily: F.mono, fontSize: 11, color: C.mut3, marginBottom: 10, flexShrink: 0 }}>
+          {isEmpty ? "（無成分表）" : `預覽 · 共 ${allSheets.length} 張`}
         </div>
 
         {isEmpty && (
@@ -232,34 +248,27 @@ export function NutritionLabelsPanel({
           </div>
         )}
 
-        {!isEmpty && currentSheet && currentUrl && <NutritionSheetPage imageUrl={currentUrl} layout={layout} />}
-        {!isEmpty && currentSheet && !currentUrl && (
-          <div style={{ width: 400, background: "#2A1A0E", border: `1px solid ${C.orange}`, padding: 24, textAlign: "center" }}>
-            <div style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 13, color: C.orange }}>
-              ⚠ 找不到 {currentSheet.atomId} 的圖檔（{currentSheet.nutritionLabel}）
-            </div>
-          </div>
-        )}
-
-        {!isEmpty && totalPages > 1 && (
-          <div style={{ display: "flex", gap: 6, alignSelf: "center", marginTop: 4, flexWrap: "wrap", maxWidth: 590 }}>
-            {Array.from({ length: totalPages }).map((_, i) => {
-              const isActive = i === safePageIdx;
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setPreviewPage(i)}
-                  style={{
-                    fontFamily: F.mono, fontSize: 11,
-                    color: isActive ? "#0B0B0C" : C.mut2,
-                    background: isActive ? C.acc : C.line2,
-                    padding: "5px 11px", border: "none",
-                    cursor: "pointer", fontWeight: isActive ? 700 : 400,
-                  }}
+        {!isEmpty && (
+          <div
+            style={{
+              flex: 1, minHeight: 0, overflowY: "auto",
+              display: "flex", flexWrap: "wrap", alignContent: "flex-start",
+              gap: 14, paddingRight: 4,
+            }}
+          >
+            {allSheets.map((s, i) => {
+              const url = resolveNutritionUrl(s.nutritionLabel);
+              return url ? (
+                <NutritionSheetPage key={`${s.atomId}-${i}`} imageUrl={url} layout={layout} />
+              ) : (
+                <div
+                  key={`${s.atomId}-${i}`}
+                  style={{ width: 400, background: "#2A1A0E", border: `1px solid ${C.orange}`, padding: 24, textAlign: "center" }}
                 >
-                  {i + 1}
-                </button>
+                  <div style={{ fontFamily: F.tc, fontWeight: 700, fontSize: 13, color: C.orange }}>
+                    ⚠ 找不到 {s.atomId} 的圖檔（{s.nutritionLabel}）
+                  </div>
+                </div>
               );
             })}
           </div>
