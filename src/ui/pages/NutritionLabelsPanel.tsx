@@ -146,16 +146,11 @@ export function NutritionLabelsPanel({
       }}
     >
       {/* 「只印 #print-portal-nutrition、其餘區塊藏起來」的規則在 index.css
-          （body.printing-nutrition 那段，PrintPortal 見 LabelsPage.helpers.tsx）。 */}
-      <style>{`
-        @media print {
-          @page { ${layout.pageCss} }
-          .label-page { box-shadow: none !important; width: auto !important; height: auto !important; page-break-after: always; }
-          .label-page:last-child { page-break-after: auto; }
-          .label-page-zoom { transform: none !important; }
-          .nutrition-sheet-img { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-        }
-      `}</style>
+          （body.printing-nutrition 那段，PrintPortal 見 LabelsPage.helpers.tsx）。
+          @page 版面規則本身則搬進 PrintPortal 裡面（見下方）——這個
+          <style> 標籤本來跟 #root 一起被印時藏起來，@page 這種版面規則
+          在部分瀏覽器列印管線裡疑似不會從隱藏子樹裡的 <style> 生效，
+          搬進 portal 徹底排除這個疑慮。 */}
 
       {/* 左控制欄 */}
       <div className="no-print" style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0, overflowY: "auto" }}>
@@ -276,8 +271,18 @@ export function NutritionLabelsPanel({
         )}
       </div>
 
-      {/* Print Area · 透過 PrintPortal 掛在 <body> 下，印時 body.printing-nutrition 顯示 */}
+      {/* Print Area · 透過 PrintPortal 掛在 <body> 下，印時 body.printing-nutrition 顯示。
+          @page 版面規則跟著搬進來，確保列印當下這個 <style> 一定在「沒被藏起來」的子樹裡。 */}
       <PrintPortal id="print-portal-nutrition">
+        <style>{`
+          @media print {
+            @page { ${layout.pageCss} }
+            .label-page { box-shadow: none !important; width: auto !important; height: auto !important; page-break-after: always; }
+            .label-page:last-child { page-break-after: auto; }
+            .label-page-zoom { transform: none !important; }
+            .nutrition-sheet-img { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          }
+        `}</style>
         {allSheets.map((s, i) => {
           const url = resolveNutritionUrl(s.nutritionLabel);
           if (!url) return null;

@@ -96,16 +96,10 @@ export function PrintLabelsPage({ orders, menu, currentBatch, setCurrentBatch }:
     <div className="h-full flex flex-col min-h-0" style={{ overflowY: "auto" }}>
       {/* 「只印 #print-portal-labels、其餘區塊藏起來」的規則在 index.css
           （body.printing-labels 那段，PrintPortal 見 LabelsPage.helpers.tsx）。
-          這裡只放版面相關、隨選擇的尺寸而變的規則。 */}
-      <style>{`
-        @media print {
-          @page { ${layout.pageCss} }
-          .label-page { box-shadow: none !important; width: auto !important; height: auto !important; page-break-after: always; }
-          .label-page:last-child { page-break-after: auto; }
-          .label-page-zoom { transform: none !important; }
-          .label-card { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-        }
-      `}</style>
+          這裡只放版面相關、隨選擇的尺寸而變的規則——2026-08-09 移到
+          PrintPortal 裡面（見下方）：這個 <style> 標籤本來跟 #root 一起
+          被印時藏起來，@page 這種版面規則在部分瀏覽器列印管線裡疑似
+          不會從隱藏子樹裡的 <style> 生效，搬進 portal 徹底排除這個疑慮。 */}
 
       {/* 分頁切換 + 共用批次選擇器（#15：出貨標籤/營養成分表共用同一個批次） */}
       <div className="no-print" style={{ padding: "16px 24px 0", display: "flex", flexDirection: "column", gap: 12 }}>
@@ -293,8 +287,18 @@ export function PrintLabelsPage({ orders, menu, currentBatch, setCurrentBatch }:
       </div>
       )}
 
-      {/* Label Print Area · 透過 PrintPortal 掛在 <body> 下，印時 body.printing-labels 顯示 */}
+      {/* Label Print Area · 透過 PrintPortal 掛在 <body> 下，印時 body.printing-labels 顯示。
+          @page 版面規則跟著搬進來，確保列印當下這個 <style> 一定在「沒被藏起來」的子樹裡。 */}
       <PrintPortal id="print-portal-labels">
+        <style>{`
+          @media print {
+            @page { ${layout.pageCss} }
+            .label-page { box-shadow: none !important; width: auto !important; height: auto !important; page-break-after: always; }
+            .label-page:last-child { page-break-after: auto; }
+            .label-page-zoom { transform: none !important; }
+            .label-card { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          }
+        `}</style>
         {allLabels.map((label, i) => (
           <LabelPage key={`${label.order_id}-${label.index}-${i}`} label={label} layout={layout} />
         ))}
