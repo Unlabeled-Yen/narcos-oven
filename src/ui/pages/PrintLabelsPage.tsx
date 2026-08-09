@@ -15,7 +15,7 @@ import { useState, useMemo, useCallback } from "react";
 import { extractLabels } from "../../output/label-data";
 import type { PageProps } from "./types";
 import { F, C, LabelPage } from "./LabelsPage.helpers";
-import { labelLayout, pagesFor, LABEL_PRESET_ORDER, type LabelPresetKey } from "../../domain/label-layout";
+import { labelLayout, LABEL_PRESET_ORDER, type LabelPresetKey } from "../../domain/label-layout";
 import { loadDayOverrides, makeDayTypeOf, shippingDayFor } from "../../domain/day-type";
 import { batchListFrom } from "../../domain/current-batch";
 import { NutritionLabelsPanel } from "./NutritionLabelsPanel";
@@ -56,7 +56,6 @@ export function PrintLabelsPage({ orders, menu, currentBatch, setCurrentBatch }:
   }, [orders, orderBatchMap, selectedBatch]);
 
   const [sizeKey, setSizeKey] = useState<LabelPresetKey>("4x3cm");
-  const [previewPage, setPreviewPage] = useState(0);
   const [printing, setPrinting] = useState(false);
 
   const layout = labelLayout(sizeKey);
@@ -70,11 +69,6 @@ export function PrintLabelsPage({ orders, menu, currentBatch, setCurrentBatch }:
     }
     return out;
   }, [batchOrders, menu, selectedBatch]);
-
-  // 一標一頁：頁數 = 標籤數，不再分批分組
-  const totalPages = pagesFor(allLabels.length, layout);
-  const safePageIdx = Math.min(previewPage, Math.max(0, totalPages - 1));
-  const currentLabel = allLabels[safePageIdx];
 
   const orderCount = useMemo(() => new Set(allLabels.map((l) => l.order_id)).size, [allLabels]);
   const nonSellerBuyCount = useMemo(() => allLabels.filter((l) => l.kind !== "賣貨便").length, [allLabels]);
@@ -121,7 +115,7 @@ export function PrintLabelsPage({ orders, menu, currentBatch, setCurrentBatch }:
               <button
                 key={t.key}
                 type="button"
-                onClick={() => { setInnerTab(t.key); setPreviewPage(0); }}
+                onClick={() => setInnerTab(t.key)}
                 style={{
                   fontFamily: F.tc, fontWeight: 700, fontSize: 13,
                   color: isActive ? "#0B0B0C" : C.mut2,
@@ -152,7 +146,7 @@ export function PrintLabelsPage({ orders, menu, currentBatch, setCurrentBatch }:
                   <button
                     key={d}
                     type="button"
-                    onClick={() => { setCurrentBatch(d); setPreviewPage(0); }}
+                    onClick={() => setCurrentBatch(d)}
                     style={{
                       fontFamily: F.mono, fontSize: 12,
                       color: isActive ? "#0B0B0C" : C.mut2,
@@ -196,7 +190,7 @@ export function PrintLabelsPage({ orders, menu, currentBatch, setCurrentBatch }:
                   <button
                     key={key}
                     type="button"
-                    onClick={() => { setSizeKey(key); setPreviewPage(0); }}
+                    onClick={() => setSizeKey(key)}
                     style={{
                       fontFamily: F.mono, fontSize: 12,
                       color: isActive ? "#0B0B0C" : C.mut2,
@@ -258,10 +252,10 @@ export function PrintLabelsPage({ orders, menu, currentBatch, setCurrentBatch }:
           )}
         </div>
 
-        {/* 右預覽 */}
-        <div className="labels-preview" style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 10, minHeight: 0, overflowY: "auto" }}>
-          <div style={{ fontFamily: F.mono, fontSize: 11, color: C.mut3 }}>
-            {isEmpty ? "（無標籤）" : `預覽 · 第 ${safePageIdx + 1} 張 / 共 ${totalPages} 張 · ${layout.displayLabel}`}
+        {/* 右預覽 · 整批標籤一次全部堆疊顯示、用滾輪/拖動捲動看完（不再一張一張翻頁） */}
+        <div className="labels-preview" style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+          <div style={{ fontFamily: F.mono, fontSize: 11, color: C.mut3, marginBottom: 10, flexShrink: 0 }}>
+            {isEmpty ? "（無標籤）" : `預覽 · 共 ${allLabels.length} 張 · ${layout.displayLabel}`}
           </div>
 
           {isEmpty && (
@@ -281,29 +275,17 @@ export function PrintLabelsPage({ orders, menu, currentBatch, setCurrentBatch }:
             </div>
           )}
 
-          {!isEmpty && currentLabel && <LabelPage label={currentLabel} layout={layout} />}
-
-          {!isEmpty && totalPages > 1 && (
-            <div style={{ display: "flex", gap: 6, alignSelf: "center", marginTop: 4, flexWrap: "wrap", maxWidth: 590 }}>
-              {Array.from({ length: totalPages }).map((_, i) => {
-                const isActive = i === safePageIdx;
-                return (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setPreviewPage(i)}
-                    style={{
-                      fontFamily: F.mono, fontSize: 11,
-                      color: isActive ? "#0B0B0C" : C.mut2,
-                      background: isActive ? C.acc : C.line2,
-                      padding: "5px 11px", border: "none",
-                      cursor: "pointer", fontWeight: isActive ? 700 : 400,
-                    }}
-                  >
-                    {i + 1}
-                  </button>
-                );
-              })}
+          {!isEmpty && (
+            <div
+              style={{
+                flex: 1, minHeight: 0, overflowY: "auto",
+                display: "flex", flexWrap: "wrap", alignContent: "flex-start",
+                gap: 14, paddingRight: 4,
+              }}
+            >
+              {allLabels.map((label, i) => (
+                <LabelPage key={`${label.order_id}-${label.index}-${i}`} label={label} layout={layout} />
+              ))}
             </div>
           )}
         </div>
